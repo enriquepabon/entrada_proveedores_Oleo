@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pesaje Tara</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .info-section {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .weighing-section {
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .preview-image {
+            max-width: 100%;
+            height: auto;
+            margin-top: 15px;
+            border-radius: 4px;
+        }
+        #loadingOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.9);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <!-- Overlay de carga -->
+    <div id="loadingOverlay">
+        <div class="text-center">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Procesando...</span>
+            </div>
+            <h4 class="mt-3">Procesando pesaje de tara...</h4>
+        </div>
+    </div>
+
+    <div class="container py-4">
+        <h2 class="text-center mb-2">Pesaje de Tara</h2>
+        <h4 class="text-center mb-2">{{ datos.codigo_guia }}</h4>
+        <h4 class="text-center mb-4">{{ datos.nombre }}</h4>
+        
+        <!-- Información General -->
+        <div class="info-section">
+            <div class="row">
+                <div class="col-md-6">
+                    <p><strong>Código:</strong> {{ datos.codigo }}</p>
+                    <p><strong>Guía:</strong> {{ datos.codigo_guia }}</p>
+                    <p><strong>Proveedor:</strong> {{ datos.nombre }}</p>
+                    <p><strong>Cantidad de Racimos:</strong> {{ datos.cantidad_racimos }}</p>
+                    <p><strong>Peso Bruto:</strong> {{ datos.peso_bruto }} kg</p>
+                </div>
+                <div class="col-md-6">
+                    <p><strong>Tipo de Pesaje Bruto:</strong> {{ datos.tipo_pesaje }}</p>
+                    <p><strong>Fecha de Registro:</strong> {{ datos.fecha_registro }}</p>
+                    <p><strong>Hora de Registro:</strong> {{ datos.hora_registro }}</p>
+                    <p><strong>Transportador:</strong> {{ datos.transportador }}</p>
+                    <p><strong>Placa:</strong> {{ datos.placa }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tipo de Pesaje -->
+        <div class="weighing-section mb-4">
+            <h4 class="mb-3">Tipo de Pesaje de Tara</h4>
+            <div class="mb-3">
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="tipoPesaje" id="pesajeDirecto" value="directo" checked>
+                    <label class="form-check-label" for="pesajeDirecto">
+                        Pesaje Directo (Báscula)
+                    </label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="tipoPesaje" id="pesajeVirtual" value="virtual">
+                    <label class="form-check-label" for="pesajeVirtual">
+                        Pesaje Virtual
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pesaje Directo -->
+        <div id="seccionDirecta" class="weighing-section mb-4">
+            <h4 class="mb-3">Pesaje Directo</h4>
+            <form id="directForm">
+                <div class="mb-3">
+                    <label class="form-label">Foto de la báscula:</label>
+                    <input type="file" class="form-control" id="pesajeFoto" accept="image/*">
+                    <img id="previewImage" class="preview-image hidden">
+                </div>
+                <button type="button" class="btn btn-primary" onclick="procesarPesajeDirecto()">
+                    Procesar Pesaje Directo
+                </button>
+            </form>
+        </div>
+
+        <!-- Pesaje Virtual -->
+        <div id="seccionVirtual" class="weighing-section hidden">
+            <h4 class="mb-3">Pesaje Virtual</h4>
+            <form id="virtualForm">
+                <div class="mb-3">
+                    <label class="form-label">Peso Tara (kg):</label>
+                    <input type="number" class="form-control" id="pesoTaraVirtual" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Comentarios:</label>
+                    <textarea class="form-control" id="comentariosTara" rows="3" required></textarea>
+                </div>
+                <button type="button" class="btn btn-primary" onclick="solicitarAutorizacionTara()">
+                    Solicitar Autorización
+                </button>
+            </form>
+            <!-- Sección de autorización -->
+            <div id="autorizacionSection" class="mt-3 hidden">
+                <div class="mb-3">
+                    <label class="form-label">Código de Autorización:</label>
+                    <input type="text" class="form-control" id="codigoAutorizacionTara">
+                </div>
+                <button type="button" class="btn btn-success" onclick="validarAutorizacionTara()">
+                    Validar Código
+                </button>
+            </div>
+        </div>
+
+        <!-- Botones de acción -->
+        <div class="d-flex justify-content-end gap-2 mt-4">
+            <button onclick="window.location.href=`/ver_guia/{{ datos.codigo_guia }}`" class="btn btn-secondary">
+                Cancelar
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Manejo de la visualización de secciones según tipo de pesaje
+        document.querySelectorAll('input[name="tipoPesaje"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                document.getElementById('seccionDirecta').classList.toggle('hidden', this.value !== 'directo');
+                document.getElementById('seccionVirtual').classList.toggle('hidden', this.value !== 'virtual');
+            });
+        });
+
+        // Preview de la imagen
+        document.getElementById('pesajeFoto').addEventListener('change', function(e) {
+            const preview = document.getElementById('previewImage');
+            const file = e.target.files[0];
+            
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    preview.src = e.target.result;
+                    preview.classList.remove('hidden');
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+
+        function mostrarCarga(mostrar) {
+            document.getElementById('loadingOverlay').style.display = mostrar ? 'flex' : 'none';
+        }
+
+        // Funciones para el pesaje directo y virtual
+        // Estas funciones deberán implementarse según la lógica de negocio requerida
+        async function procesarPesajeDirecto() {
+            // Implementar lógica de pesaje directo
+        }
+
+        async function solicitarAutorizacionTara() {
+            // Implementar lógica de solicitud de autorización
+        }
+
+        async function validarAutorizacionTara() {
+            // Implementar lógica de validación de autorización
+        }
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> 

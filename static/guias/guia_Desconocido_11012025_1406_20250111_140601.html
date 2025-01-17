@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guía de Proceso</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .status-bar { 
+            padding: 15px; 
+            margin: 15px 0; 
+            border-radius: 5px; 
+        }
+        .pending { 
+            background-color: #ffc107; 
+        }
+        .completed { 
+            background-color: #28a745; 
+            color: white; 
+        }
+        .current { 
+            background-color: #007bff; 
+            color: white; 
+        }
+        .process-info { 
+            font-size: 0.9em; 
+            margin-top: 5px;
+        }
+        .error-message {
+            background-color: #fff3cd;
+            border: 1px solid #ffecb5;
+            color: #664d03;
+            padding: 15px;
+            border-radius: 4px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-4">
+        <h2 class="text-center mb-4">Guía de Proceso</h2>
+        <h4 class="text-center mb-4">Desconocido_11012025_1406</h4>
+
+        <!-- Información General -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Información General</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Proveedor:</strong> Gonzalez Martinez Vicente</p>
+                        <p><strong>Código:</strong> Desconocido_11012025_1406</p>
+                        <p><strong>Fecha de Emisión:</strong> </p>
+                        <p><strong>Placa:</strong> 50B810</p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Racimos:</strong> 77</p>
+                        <p><strong>Transportador:</strong> Luis Gonzalez</p>
+                        <p><strong>Estado:</strong> <span class="badge bg-primary">En Proceso</span></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Estado del Proceso -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Estado del Proceso</h5>
+            </div>
+            <div class="card-body">
+                <div class="status-bar completed">
+                    ✓ Registro en Portería - Completado
+                    <div class="process-info">
+                        <span>Fecha: </span>
+                        
+                    </div>
+                </div>
+                
+                <div class="status-bar pending">
+                     Pesaje Inicial
+                    <div class="process-info">
+                        <button class="btn btn-sm btn-warning" 
+                                onclick="window.location.href='/pesaje/Desconocido_11012025_1406'">
+                            Iniciar Pesaje
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="status-bar pending">
+                    Clasificación de Fruta
+                </div>
+                
+                <div class="status-bar pending">
+                    Pesaje Tara
+                </div>
+                
+                <div class="status-bar pending">
+                    Salida
+                </div>
+            </div>
+        </div>
+
+        <!-- Tiquete Original -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Tiquete Original</h5>
+            </div>
+            <div class="card-body text-center">
+                
+                    <div class="error-message">
+                        Error al cargar la imagen. Por favor, intente subir el tiquete nuevamente.
+                    </div>
+                
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Revalidación Exitosa</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .success-container {
+            max-width: 800px;
+            margin: 50px auto;
+            text-align: center;
+            padding: 30px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .success-icon {
+            color: #28a745;
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+        .buttons-container {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-top: 30px;
+        }
+        .btn {
+            padding: 12px 24px;
+            font-weight: 500;
+        }
+        .info-table {
+            margin: 30px auto;
+            width: 100%;
+            max-width: 700px;
+            text-align: left;
+        }
+        .info-table td {
+            padding: 8px 15px;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .info-table td:first-child {
+            font-weight: 500;
+            width: 40%;
+        }
+        .modified-value {
+            background-color: #fff3cd;
+            padding: 2px 8px;
+            border-radius: 4px;
+            position: relative;
+        }
+        .modified-value::after {
+            content: '(modificado)';
+            font-size: 0.8em;
+            color: #856404;
+            margin-left: 8px;
+        }
+        .tiquete-image {
+            max-width: 100%;
+            height: auto;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        #loadingOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.9);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .loading-content {
+            text-align: center;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <!-- Overlay de carga -->
+    <div id="loadingOverlay">
+        <div class="loading-content">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Procesando...</span>
+            </div>
+            <h4 class="mt-3">Generando registro y QR...</h4>
+            <p>Por favor espere un momento.</p>
+        </div>
+    </div>
+
+    <div class="success-container">
+        <div class="success-icon">
+            <i class="fas fa-check-circle"></i>
+        </div>
+        <h2 class="mb-4">¡Revalidación Exitosa!</h2>
+        
+        <!-- Imagen del tiquete -->
+        <img src="{{ url_for('static', filename='uploads/' ~ image_filename) }}" 
+             alt="Tiquete" class="tiquete-image">
+        
+        <!-- Tabla de información -->
+        <table class="info-table">
+            <tr>
+                <td>Nombre Agricultor:</td>
+                <td {% if nombre_del_agricultor_modificado %}class="modified-value"{% endif %}>
+                    {{ nombre_agricultor }}
+                </td>
+            </tr>
+            <tr>
+                <td>Código Agricultor:</td>
+                <td {% if codigo_modificado %}class="modified-value"{% endif %}>
+                    {{ codigo }}
+                </td>
+            </tr>
+            <tr>
+                <td>Racimos:</td>
+                <td {% if racimos_modificado %}class="modified-value"{% endif %}>
+                    {{ racimos }}
+                </td>
+            </tr>
+            <tr>
+                <td>Placa:</td>
+                <td {% if placa_modificado %}class="modified-value"{% endif %}>
+                    {{ placa }}
+                </td>
+            </tr>
+            <tr>
+                <td>Acarreo:</td>
+                <td {% if acarreo_modificado %}class="modified-value"{% endif %}>
+                    {{ acarreo }}
+                </td>
+            </tr>
+            <tr>
+                <td>Se Cargó:</td>
+                <td {% if cargo_modificado %}class="modified-value"{% endif %}>
+                    {{ cargo }}
+                </td>
+            </tr>
+            <tr>
+                <td>Nombre Transportador:</td>
+                <td {% if transportador_modificado %}class="modified-value"{% endif %}>
+                    {{ transportador }}
+                </td>
+            </tr>
+            <tr>
+                <td>Fecha:</td>
+                <td>{{ fecha_tiquete }}</td>
+            </tr>
+            <tr>
+                <td>Hora:</td>
+                <td>{{ hora_registro }}</td>
+            </tr>
+            <tr>
+                <td>Nota:</td>
+                <td>{{ nota }}</td>
+            </tr>
+        </table>
+
+        <div class="buttons-container">
+            <button onclick="window.history.back()" class="btn btn-secondary">
+                <i class="fas fa-arrow-left me-2"></i>Volver
+            </button>
+            <button onclick="generarQRyRegistrar()" class="btn btn-success">
+                <i class="fas fa-qrcode me-2"></i>Generar QR y Registrar Entrada
+            </button>
+            <button onclick="window.location.href='/'" class="btn btn-primary">
+                <i class="fas fa-camera me-2"></i>Escanear Otro Tiquete
+            </button>
+        </div>
+    </div>
+
+    <script>
+        function showLoading() {
+            document.getElementById('loadingOverlay').style.display = 'flex';
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingOverlay').style.display = 'none';
+        }
+
+        async function generarQRyRegistrar() {
+            try {
+                showLoading();
+                
+                const response = await fetch('/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    // Redirigir a la página de revisión del PDF y QR
+                    window.location.href = '/review_pdf';
+                } else {
+                    hideLoading();
+                    alert('Error en el registro: ' + data.message);
+                }
+            } catch (error) {
+                hideLoading();
+                console.error('Error:', error);
+                alert('Error al procesar el registro');
+            }
+        }
+    </script>
+
+    <script src="https://kit.fontawesome.com/your-font-awesome-kit.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> 

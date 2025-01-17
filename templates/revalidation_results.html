@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Resultados de Revalidación</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { 
+            background-color: #f8f9fa; 
+        }
+        .container {
+            max-width: 800px;
+            padding: 2rem;
+        }
+        .card {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        .alert {
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            padding: 1.5rem;
+        }
+        .alert-success {
+            background-color: #f0fff4;
+            border-color: #198754;
+            color: #198754;
+        }
+        .alert-danger {
+            background-color: #fff5f5;
+            border-color: #dc3545;
+            color: #dc3545;
+        }
+        .btn {
+            padding: 0.5rem 1rem;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.9);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+        .validation-details {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-top: 1.5rem;
+        }
+        .validation-details h5 {
+            color: #0d6efd;
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-4">
+        <div class="card">
+            <div class="card-body">
+                <div id="validationContent">
+                    <!-- El contenido se llenará dinámicamente -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-content">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Enviando notificación...</span>
+            </div>
+            <h2>Enviando notificación...</h2>
+            <p>Por favor espere.</p>
+        </div>
+    </div>
+
+    <script>
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const validationContent = document.getElementById('validationContent');
+        
+        // Obtener datos de la respuesta del webhook
+        const revalidationData = JSON.parse(sessionStorage.getItem('revalidationData'));
+        
+        console.log('Datos de revalidación:', revalidationData);
+        
+        function renderContent() {
+            console.log('Datos de revalidación:', revalidationData);
+            
+            // Validar que tenemos una respuesta válida
+            if (!revalidationData || typeof revalidationData !== 'object') {
+                showErrorState('No se recibieron datos de validación válidos');
+                return;
+            }
+
+            // Extraer datos de la respuesta de forma segura
+            const responseData = {
+                status: revalidationData.status,
+                message: revalidationData.message || '',
+                codigo: revalidationData.data?.codigo || '',
+                nombre: revalidationData.data?.nombre || '',
+                nota: revalidationData.data?.nota || ''
+            };
+
+            // Renderizar contenido basado en el estado de la respuesta
+            switch (responseData.status) {
+                case 'error_not_found':
+                    showNotFoundState();
+                    break;
+                case 'success':
+                    showSuccessState(responseData);
+                    break;
+                case 'error':
+                    showErrorState(responseData.message);
+                    break;
+                default:
+                    showErrorState('Respuesta no reconocida del servidor');
+            }
+        }
+
+        function showNotFoundState() {
+            validationContent.innerHTML = `
+                <div class="alert alert-danger mb-4">
+                    <h4 class="alert-heading mb-3">¡Validación No Exitosa!</h4>
+                    <p class="mb-2">El código ingresado no se encuentra en nuestra base de datos.</p>
+                    <p class="mb-0">Por favor, verifique el código o contacte al administrador para asistencia.</p>
+                </div>
+
+                <div class="d-flex justify-content-center gap-3 mt-4">
+                    <button onclick="window.history.back()" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i>
+                        Volver
+                    </button>
+                    
+                    <button id="avisoAdmin" class="btn btn-warning">
+                        <i class="fas fa-envelope"></i>
+                        Notificar Administrador
+                    </button>
+                    
+                    <button onclick="window.location.href='/'" class="btn btn-primary">
+                        <i class="fas fa-home"></i>
+                        Inicio
+                    </button>
+                </div>
+            `;
+
+            document.getElementById('avisoAdmin')?.addEventListener('click', notifyAdmin);
+        }
+
+        function showSuccessState(data) {
+            validationContent.innerHTML = `
+                <div class="alert alert-success mb-4">
+                    <h4 class="alert-heading mb-3">¡Validación Exitosa!</h4>
+                    <p class="mb-0">Se ha encontrado una coincidencia en la base de datos.</p>
+                </div>
+
+                <div class="validation-details">
+                    <h5>Detalles de la Validación:</h5>
+                    <div class="row mb-3">
+                        <div class="col-md-4"><strong>Código:</strong></div>
+                        <div class="col-md-8">${escapeHtml(data.codigo)}</div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-4"><strong>Nombre:</strong></div>
+                        <div class="col-md-8">${escapeHtml(data.nombre)}</div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4"><strong>Nota:</strong></div>
+                        <div class="col-md-8">${escapeHtml(data.nota)}</div>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-end gap-3 mt-4">
+                    <button onclick="window.history.back()" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i>
+                        Volver
+                    </button>
+                    <button onclick="window.location.href='/'" class="btn btn-primary">
+                        <i class="fas fa-check"></i>
+                        Continuar
+                    </button>
+                </div>
+            `;
+        }
+
+        function showErrorState(message) {
+            validationContent.innerHTML = `
+                <div class="alert alert-danger mb-4">
+                    <h4 class="alert-heading mb-3">Error en la Validación</h4>
+                    <p class="mb-0">Ha ocurrido un error inesperado. Por favor, intente nuevamente.</p>
+                    <p class="mt-2"><small>Detalles: ${escapeHtml(message)}</small></p>
+                </div>
+                <div class="d-flex justify-content-center gap-3 mt-4">
+                    <button onclick="window.history.back()" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i>
+                        Volver
+                    </button>
+                    <button onclick="window.location.href='/'" class="btn btn-primary">
+                        <i class="fas fa-home"></i>
+                        Inicio
+                    </button>
+                </div>
+            `;
+        }
+
+        // Función de utilidad para escapar HTML y prevenir XSS
+        function escapeHtml(unsafe) {
+            if (typeof unsafe !== 'string') return '';
+            return unsafe
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        async function notifyAdmin() {
+            try {
+                const codigo = sessionStorage.getItem('codigo_validacion');
+                if (!codigo) {
+                    throw new Error('No se encontró el código de validación');
+                }
+
+                loadingOverlay.style.display = 'flex';
+                
+                const response = await fetch('/notify-admin', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        codigo: codigo,
+                        mensaje: "Código no encontrado en la base de datos",
+                        tipo_error: "validacion_codigo"
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Error en la respuesta del servidor');
+                }
+
+                const data = await response.json();
+                
+                loadingOverlay.style.display = 'none';
+                
+                if (data.status === 'success') {
+                    alert('Se ha notificado al administrador exitosamente.');
+                } else {
+                    throw new Error(data.message || 'Error al notificar');
+                }
+            } catch (error) {
+                loadingOverlay.style.display = 'none';
+                console.error('Error:', error);
+                alert('Error al notificar al administrador: ' + error.message);
+            }
+        }
+
+        // Renderizar el contenido inicial
+        renderContent();
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://kit.fontawesome.com/your-code.js"></script>
+</body>
+</html>

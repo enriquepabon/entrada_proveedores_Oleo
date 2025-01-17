@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comprobante de Pesaje</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            line-height: 1.6;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .info-section {
+            margin-bottom: 20px;
+        }
+        .info-row {
+            margin-bottom: 10px;
+        }
+        .weight-image {
+            max-width: 100%;
+            height: auto;
+            margin: 20px 0;
+        }
+        .qr-code {
+            text-align: center;
+            margin-top: 20px;
+        }
+        .qr-code img {
+            max-width: 150px;
+        }
+        .footer {
+            margin-top: 30px;
+            text-align: center;
+            font-size: 0.9em;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Comprobante de Pesaje</h1>
+        <p>Fecha de Generación: {{ fecha_generacion }} - {{ hora_generacion }}</p>
+    </div>
+
+    <div class="info-section">
+        <div class="info-row">
+            <strong>Código:</strong> {{ codigo }}
+        </div>
+        <div class="info-row">
+            <strong>Proveedor:</strong> {{ nombre }}
+        </div>
+        <div class="info-row">
+            <strong>Fecha de Pesaje:</strong> {{ fecha_pesaje }}
+        </div>
+        <div class="info-row">
+            <strong>Hora de Pesaje:</strong> {{ hora_pesaje }}
+        </div>
+        <div class="info-row">
+            <strong>Peso Bruto:</strong> {{ peso_bruto }} kg
+        </div>
+        <div class="info-row">
+            <strong>Tipo de Pesaje:</strong> {{ tipo_pesaje|title }}
+        </div>
+    </div>
+
+    <div class="weight-image">
+        <img src="{{ url_for('static', filename='uploads/' + imagen_peso) }}" alt="Imagen del Peso">
+    </div>
+
+    {% if qr_filename %}
+    <div class="qr-code">
+        <img src="{{ url_for('static', filename='qr/' + qr_filename) }}" alt="Código QR">
+    </div>
+    {% endif %}
+
+    <div class="footer">
+        <p>Este documento es un comprobante digital de pesaje.</p>
+    </div>
+</body>
+</html> 

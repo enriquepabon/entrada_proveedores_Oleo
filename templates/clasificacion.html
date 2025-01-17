@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clasificación de Fruta</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .info-section {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .classification-section {
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .preview-image {
+            max-width: 100%;
+            height: auto;
+            margin-top: 15px;
+            border-radius: 4px;
+        }
+        #loadingOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.9);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <!-- Overlay de carga -->
+    <div id="loadingOverlay">
+        <div class="text-center">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Procesando...</span>
+            </div>
+            <h4 class="mt-3">Procesando clasificación...</h4>
+        </div>
+    </div>
+
+    <div class="container py-4">
+        <h2 class="text-center mb-4">Clasificación de Fruta</h2>
+        
+        <!-- Información General -->
+        <div class="info-section">
+            <div class="row">
+                <div class="col-md-6">
+                    <p><strong>Código:</strong> {{ codigo }}</p>
+                    <p><strong>Guía:</strong> {{ codigo_guia }}</p>
+                    <p><strong>Proveedor:</strong> {{ nombre }}</p>
+                    <p><strong>Cantidad de Racimos:</strong> {{ cantidad_racimos }}</p>
+                    <p><strong>Peso Bruto:</strong> {{ peso_bruto }} kg</p>
+                </div>
+                <div class="col-md-6">
+                    <p><strong>Tipo de Pesaje:</strong> {{ tipo_pesaje }}</p>
+                    <p><strong>Fecha de Registro:</strong> {{ fecha_registro }}</p>
+                    <p><strong>Hora de Registro:</strong> {{ hora_registro }}</p>
+                    <p><strong>Transportador:</strong> {{ transportador }}</p>
+                    <p><strong>Placa:</strong> {{ placa }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Clasificación Automática -->
+        <div class="classification-section mb-4">
+            <h4 class="mb-3">Tipo de Clasificación</h4>
+            <div class="mb-3">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="clasificacionAutomatica" checked>
+                    <label class="form-check-label" for="clasificacionAutomatica">
+                        Clasificación Automática
+                    </label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="clasificacionManual" checked>
+                    <label class="form-check-label" for="clasificacionManual">
+                        Clasificación Manual
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modificar la sección de Clasificación Automática -->
+        <div id="seccionAutomatica" class="classification-section mb-4">
+            <h4 class="mb-3">Clasificación Automática</h4>
+            <form id="automaticForm">
+                <div class="mb-3">
+                    <label class="form-label">Foto para clasificación automática:</label>
+                    <input type="file" class="form-control" id="clasificacionFoto" accept="image/*">
+                    <img id="previewImage" class="preview-image hidden">
+                </div>
+                <div id="resultadoAutomatico" class="alert hidden"></div>
+                <button type="button" class="btn btn-primary" onclick="procesarClasificacionAutomatica()">
+                    Procesar Clasificación Automática
+                </button>
+            </form>
+        </div>
+
+        <!-- Modificar la sección de Clasificación Manual -->
+        <div id="seccionManual" class="classification-section">
+            <h4 class="mb-3">Clasificación Manual</h4>
+            <form id="manualForm">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Racimos Sobremaduros:</label>
+                        <input type="number" class="form-control" id="racimo_sobremaduro" min="0">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Racimos con Daño en Corona:</label>
+                        <input type="number" class="form-control" id="racimo_danio_corona" min="0">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Racimos Pendúnculo Largo:</label>
+                        <input type="number" class="form-control" id="racimo_pendunculo_largo" min="0">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Racimos Podridos:</label>
+                        <input type="number" class="form-control" id="racimo_podrido" min="0">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Racimos Verdes:</label>
+                        <input type="number" class="form-control" id="racimo_verde" min="0">
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- Botones de acción -->
+        <div class="d-flex justify-content-end gap-2 mt-4">
+            <button onclick="window.location.href=`/ver_guia/{{ codigo }}`" class="btn btn-secondary">
+                Cancelar
+            </button>
+            <button onclick="guardarClasificacion()" class="btn btn-success">
+                Guardar Clasificación
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Preview de la imagen
+        document.getElementById('clasificacionFoto').addEventListener('change', function(e) {
+            const preview = document.getElementById('previewImage');
+            const file = e.target.files[0];
+            
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    preview.src = e.target.result;
+                    preview.classList.remove('hidden');
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+
+        function mostrarCarga(mostrar) {
+            document.getElementById('loadingOverlay').style.display = mostrar ? 'flex' : 'none';
+        }
+
+        async function procesarClasificacionAutomatica() {
+            const fileInput = document.getElementById('clasificacionFoto');
+            if (!fileInput.files[0]) {
+                alert('Por favor seleccione una imagen para la clasificación');
+                return;
+            }
+
+            mostrarCarga(true);
+            const formData = new FormData();
+            formData.append('foto', fileInput.files[0]);
+            formData.append('codigo', '{{ codigo }}');
+
+            try {
+                const response = await fetch('/procesar_clasificacion_automatica', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                const resultadoDiv = document.getElementById('resultadoAutomatico');
+                resultadoDiv.classList.remove('hidden', 'alert-success', 'alert-danger');
+                
+                if (data.success) {
+                    resultadoDiv.classList.add('alert-success');
+                    // Aquí puedes llenar automáticamente los campos del formulario manual
+                    llenarFormularioManual(data.clasificacion);
+                } else {
+                    resultadoDiv.classList.add('alert-danger');
+                    resultadoDiv.innerHTML = `Error: ${data.message}`;
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error procesando la clasificación');
+            } finally {
+                mostrarCarga(false);
+            }
+
+            window.clasificacionAutomaticaResultado = data.clasificacion;
+        }
+
+        function llenarFormularioManual(clasificacion) {
+            // Llenar los campos del formulario manual con los resultados automáticos
+            document.getElementById('racimo_sobremaduro').value = clasificacion.sobremaduro || 0;
+            document.getElementById('racimo_danio_corona').value = clasificacion.danio_corona || 0;
+            document.getElementById('racimo_pendunculo_largo').value = clasificacion.pendunculo_largo || 0;
+            document.getElementById('racimo_podrido').value = clasificacion.podrido || 0;
+            document.getElementById('racimo_verde').value = clasificacion.verde || 0;
+        }
+
+        async function guardarClasificacion() {
+            const automatica = document.getElementById('clasificacionAutomatica').checked;
+            const manual = document.getElementById('clasificacionManual').checked;
+            
+            if (!automatica && !manual) {
+                alert('Debe realizar al menos una clasificación (automática o manual)');
+                return;
+            }
+
+            mostrarCarga(true);
+            try {
+                const datosGuardar = {
+                    codigo: '{{ codigo }}',
+                    tipo_clasificacion: {
+                        automatica: automatica,
+                        manual: manual
+                    }
+                };
+
+                if (manual) {
+                    datosGuardar.clasificacion_manual = obtenerDatosManuales();
+                }
+
+                if (automatica) {
+                    const fileInput = document.getElementById('clasificacionFoto');
+                    if (!fileInput.files[0]) {
+                        alert('Debe seleccionar una imagen para la clasificación automática');
+                        mostrarCarga(false);
+                        return;
+                    }
+                    // La clasificación automática ya se habrá procesado previamente
+                    datosGuardar.clasificacion_automatica = window.clasificacionAutomaticaResultado;
+                }
+
+                const response = await fetch('/guardar_clasificacion', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(datosGuardar)
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    window.location.href = `/ver_guia/{{ codigo }}`;
+                } else {
+                    alert('Error guardando la clasificación: ' + data.message);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error guardando la clasificación');
+            } finally {
+                mostrarCarga(false);
+            }
+        }
+
+        function obtenerDatosManuales() {
+            return {
+                sobremaduro: parseInt(document.getElementById('racimo_sobremaduro').value) || 0,
+                danio_corona: parseInt(document.getElementById('racimo_danio_corona').value) || 0,
+                pendunculo_largo: parseInt(document.getElementById('racimo_pendunculo_largo').value) || 0,
+                podrido: parseInt(document.getElementById('racimo_podrido').value) || 0,
+                verde: parseInt(document.getElementById('racimo_verde').value) || 0
+            };
+        }
+
+        // Agregar funciones para manejar la visibilidad de las secciones
+        document.getElementById('clasificacionAutomatica').addEventListener('change', function() {
+            document.getElementById('seccionAutomatica').style.display = this.checked ? 'block' : 'none';
+            validarSeleccion();
+        });
+
+        document.getElementById('clasificacionManual').addEventListener('change', function() {
+            document.getElementById('seccionManual').style.display = this.checked ? 'block' : 'none';
+            validarSeleccion();
+        });
+
+        function validarSeleccion() {
+            const automatica = document.getElementById('clasificacionAutomatica').checked;
+            const manual = document.getElementById('clasificacionManual').checked;
+            const btnGuardar = document.querySelector('button.btn-success');
+            
+            if (!automatica && !manual) {
+                alert('Debe seleccionar al menos un tipo de clasificación');
+                btnGuardar.disabled = true;
+            } else {
+                btnGuardar.disabled = false;
+            }
+        }
+
+        // Variable global para almacenar el resultado de la clasificación automática
+        window.clasificacionAutomaticaResultado = null;
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
