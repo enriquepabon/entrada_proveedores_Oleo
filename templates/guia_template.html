@@ -6,255 +6,321 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Guía de Proceso</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet">
     <style>
-        .status-bar { 
-            padding: 15px; 
-            margin: 15px 0; 
-            border-radius: 5px; 
+        :root {
+            --primary-color: #0d6efd;
+            --success-color: #28a745;
+            --warning-color: #ffc107;
+            --light-gray: #f8f9fa;
+            --border-color: #dee2e6;
+        }
+        
+        body {
+            background-color: #f5f6fa;
+            color: #2c3e50;
+        }
+
+        .main-container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+
+        .header-section {
+            background: white;
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+
+        .ticket-image {
+            width: 100%;
+            max-width: 600px;
+            height: auto;
+            border-radius: 10px;
+            margin: 1rem auto;
+            display: block;
+        }
+
+        .info-card {
+            background: white;
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+
+        .info-card .card-title {
+            color: #2c3e50;
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--light-gray);
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .info-item {
+            margin-bottom: 1rem;
+        }
+
+        .info-label {
+            font-size: 0.9rem;
+            color: #6c757d;
+            margin-bottom: 0.25rem;
+        }
+
+        .info-value {
+            font-size: 1rem;
+            color: #2c3e50;
+            font-weight: 500;
+        }
+
+        .process-timeline {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1rem;
+        }
+
+        .timeline-item {
+            background: white;
+            border-radius: 10px;
+            padding: 1.25rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
             transition: all 0.3s ease;
         }
-        .pending { 
-            background-color: #ffc107; 
-            color: #000;
+
+        .timeline-item.completed {
+            background-color: #e8f5e9;
+            border-left: 4px solid var(--success-color);
         }
-        .completed { 
-            background-color: #28a745; 
-            color: white; 
+
+        .timeline-item.current {
+            background-color: #e3f2fd;
+            border-left: 4px solid var(--primary-color);
         }
-        .current { 
-            background-color: #0d6efd; 
-            color: white; 
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+
+        .timeline-item.pending {
+            background-color: #fff3e0;
+            border-left: 4px solid var(--warning-color);
         }
-        .process-info { 
-            font-size: 0.9em; 
-            margin-top: 8px;
+
+        .timeline-content {
+            flex: 1;
         }
-        .btn-process {
+
+        .timeline-title {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .timeline-info {
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+
+        .btn-action {
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+
+        .btn-download {
             background-color: white;
-            color: #0d6efd;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 4px;
-            transition: all 0.3s ease;
+            color: var(--primary-color);
+            border: 1px solid var(--primary-color);
         }
-        .btn-process:hover {
-            background-color: #0d6efd;
+
+        .btn-download:hover {
+            background-color: var(--primary-color);
             color: white;
         }
-        .info-card {
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            border-radius: 8px;
-            border: none;
+
+        .btn-register {
+            background-color: var(--primary-color);
+            color: white;
         }
-        .card-header {
-            background-color: #f8f9fa;
-            border-bottom: 1px solid #dee2e6;
-            padding: 1rem;
+
+        .btn-register:hover {
+            background-color: #0056b3;
         }
-        /* Agregar estilos para los íconos */
-        .fa-check-circle {
-            color: #fff;
+
+        .status-icon {
+            font-size: 1.25rem;
+            margin-right: 0.5rem;
         }
-        .fa-arrow-right {
-            color: #fff;
+
+        .completed .status-icon {
+            color: var(--success-color);
         }
-        /* Estilo para el botón de descarga PDF */
-        .btn-light {
-            background-color: white;
-            border: 1px solid #dee2e6;
+
+        .current .status-icon {
+            color: var(--primary-color);
         }
-        .btn-light:hover {
-            background-color: #f8f9fa;
+
+        .pending .status-icon {
+            color: var(--warning-color);
         }
     </style>
 </head>
-<body class="bg-light">
-   <!-- Encabezado principal -->
-<div class="container py-4">
-    <h2 class="text-center mb-2">Guía de Proceso</h2>
-    <h4 class="text-center mb-2">{{ codigo_guia }}</h4>
-    <h4 class="text-center mb-2">{{ nombre }}</h4>
-
-    <!-- Información General -->
-    <div class="card info-card mb-4">
-        <div class="card-header bg-light">
-            <h5 class="mb-0">Información General</h5>
+<body>
+    <div class="main-container">
+        <!-- Encabezado -->
+        <div class="header-section text-center">
+            <h2 class="mb-3">Guía de Proceso</h2>
+            <h4 class="text-primary mb-2">{{ codigo_guia }}</h4>
+            <h5 class="text-secondary">{{ nombre }}</h5>
+            
+            <!-- Imagen del tiquete -->
+            {% if image_filename %}
+            <img src="{{ url_for('static', filename='uploads/' + image_filename) }}" 
+                 alt="Tiquete escaneado" 
+                 class="ticket-image">
+            {% endif %}
         </div>
-        <div class="card-body">
-            <div class="row">
-                <div class="col-md-6">
-                    <p><strong>Fecha del Tiquete:</strong> {{ fecha_tiquete if fecha_tiquete else 'No disponible' }}</p>
-                    <p><strong>Fecha de Registro:</strong> {{ fecha_registro }}</p>
-                    <p><strong>Hora de Registro:</strong> {{ hora_registro }}</p>
-                    <p><strong>Código:</strong> {{ codigo if codigo else 'No disponible' }}</p>
-                    <p><strong>Placa:</strong> {{ placa if placa else 'No disponible' }}</p>
-                    <p><strong>Se Acarreó:</strong> {{ acarreo if acarreo else 'No disponible' }}</p>
-                    <p><strong>Se Cargó:</strong> {{ cargo if cargo else 'No disponible' }}</p>
+
+        <!-- Información del Tiquete -->
+        <div class="info-card">
+            <h3 class="card-title">Información del Tiquete</h3>
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="info-label">Código</div>
+                    <div class="info-value">{{ codigo }}</div>
                 </div>
-                <div class="col-md-6">
-                    <p><strong>Racimos:</strong> {{ racimos if racimos else cantidad_racimos if cantidad_racimos else 'No disponible' }}</p>
-                    <p><strong>Transportador:</strong> {{ transportador if transportador else 'No disponible' }}</p>
-                    <p><strong>Peso Bruto:</strong> {{ peso_bruto if peso_bruto else 'Pendiente' }} kg</p>
-                    <p><strong>Tipo de Pesaje:</strong> {{ tipo_pesaje if tipo_pesaje else 'Pendiente' }}</p>
-                    <p><strong>Hora de Pesaje:</strong> {{ hora_pesaje if hora_pesaje else 'Pendiente' }}</p>
+                <div class="info-item">
+                    <div class="info-label">Nombre del Agricultor</div>
+                    <div class="info-value">{{ nombre }}</div>
                 </div>
-                {% if clasificacion_data %}
-                <div class="col-md-6">
-                    <h6 class="mb-3">Información de Clasificación</h6>
-                    <p><strong>Fecha de Clasificación:</strong> {{ clasificacion_data.fecha_clasificacion }}</p>
-                    <p><strong>Hora de Clasificación:</strong> {{ clasificacion_data.hora_clasificacion }}</p>
-                    <p><strong>Tipo de Clasificación:</strong>
-                        {% if clasificacion_data.tipo_clasificacion.automatica and clasificacion_data.tipo_clasificacion.manual %}
-                            Automática y Manual
-                        {% elif clasificacion_data.tipo_clasificacion.automatica %}
-                            Automática
-                        {% else %}
-                            Manual
-                        {% endif %}
-                    </p>
-                    {% if clasificacion_data.clasificacion_manual %}
-                    <div class="mt-2">
-                        <h6>Resultados Clasificación Manual:</h6>
-                        <ul>
-                            <li>Sobremaduros: {{ clasificacion_data.clasificacion_manual.sobremaduro }}</li>
-                            <li>Daño Corona: {{ clasificacion_data.clasificacion_manual.danio_corona }}</li>
-                            <li>Pendúnculo Largo: {{ clasificacion_data.clasificacion_manual.pendunculo_largo }}</li>
-                            <li>Podridos: {{ clasificacion_data.clasificacion_manual.podrido }}</li>
-                            <li>Verdes: {{ clasificacion_data.clasificacion_manual.verde }}</li>
-                        </ul>
-                    </div>
-                    {% endif %}
-                    {% if clasificacion_data.clasificacion_automatica %}
-                    <div class="mt-2">
-                        <h6>Resultados Clasificación Automática:</h6>
-                        <ul>
-                            <li>Sobremaduros: {{ clasificacion_data.clasificacion_automatica.sobremaduro }}</li>
-                            <li>Daño Corona: {{ clasificacion_data.clasificacion_automatica.danio_corona }}</li>
-                            <li>Pendúnculo Largo: {{ clasificacion_data.clasificacion_automatica.pendunculo_largo }}</li>
-                            <li>Podridos: {{ clasificacion_data.clasificacion_automatica.podrido }}</li>
-                            <li>Verdes: {{ clasificacion_data.clasificacion_automatica.verde }}</li>
-                        </ul>
-                    </div>
-                    {% endif %}
+                <div class="info-item">
+                    <div class="info-label">Cantidad de Racimos</div>
+                    <div class="info-value">{{ cantidad_racimos }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Placa</div>
+                    <div class="info-value">{{ placa }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Se Acarreó</div>
+                    <div class="info-value">{{ acarreo }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Se Cargó</div>
+                    <div class="info-value">{{ cargo }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Transportador</div>
+                    <div class="info-value">{{ transportador }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Fecha del Tiquete</div>
+                    <div class="info-value">{{ fecha_tiquete }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Hora de Registro</div>
+                    <div class="info-value">{{ hora_registro }}</div>
+                </div>
+                {% if nota %}
+                <div class="info-item">
+                    <div class="info-label">Nota</div>
+                    <div class="info-value">{{ nota }}</div>
                 </div>
                 {% endif %}
             </div>
         </div>
-    </div>
 
-    <!-- Estado del Proceso -->
-    <div class="card info-card mb-4">
-        <div class="card-header">
-            <h5 class="mb-0">Estado del Proceso</h5>
-        </div>
-        <div class="card-body">
-            <!-- Registro en Portería -->
-            <div class="status-bar completed">
-                <i class="fas fa-check-circle"></i> Registro en Portería - Completado
-                <div class="process-info">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
+        <!-- Estado del Proceso -->
+        <div class="info-card">
+            <h3 class="card-title">Estado del Proceso</h3>
+            <div class="process-timeline">
+                <!-- Registro Inicial -->
+                <div class="timeline-item completed">
+                    <div class="timeline-content">
+                        <div class="timeline-title">
+                            <i class="fas fa-check-circle status-icon"></i>
+                            Registro Inicial
+                        </div>
+                        <div class="timeline-info">
                             <span class="me-3">Fecha: {{ fecha_registro }}</span>
                             <span>Hora: {{ hora_registro }}</span>
                         </div>
-                        {% if pdf_filename %}
-                            <a href="{{ url_for('static', filename='pdfs/' + pdf_filename) }}" 
-                               class="btn btn-light btn-sm" 
-                               download>
-                                <i class="fas fa-file-pdf"></i> Descargar PDF Registro
-                            </a>
+                    </div>
+                    {% if pdf_filename %}
+                    <a href="{{ url_for('static', filename='pdfs/' + pdf_filename) }}" 
+                       class="btn-action btn-download" 
+                       download>
+                        <i class="fas fa-file-pdf"></i> Descargar PDF
+                    </a>
+                    {% endif %}
+                </div>
+
+                <!-- Pesaje -->
+                <div class="timeline-item {% if peso_bruto %}completed{% else %}current{% endif %}">
+                    <div class="timeline-content">
+                        <div class="timeline-title">
+                            <i class="fas {% if peso_bruto %}fa-check-circle{% else %}fa-clock{% endif %} status-icon"></i>
+                            Pesaje
+                        </div>
+                        {% if peso_bruto %}
+                        <div class="timeline-info">
+                            <span class="me-3">Peso: {{ peso_bruto }} kg</span>
+                            <span class="me-3">Hora: {{ hora_pesaje }}</span>
+                            <span>Tipo: {{ tipo_pesaje|title }}</span>
+                        </div>
                         {% endif %}
                     </div>
+                    {% if peso_bruto and pesaje_pdf %}
+                    <a href="{{ url_for('static', filename='pdfs/' + pesaje_pdf) }}" 
+                       class="btn-action btn-download" 
+                       download>
+                        <i class="fas fa-file-pdf"></i> Descargar PDF
+                    </a>
+                    {% elif not peso_bruto %}
+                    <a href="{{ url_for('pesaje', codigo=codigo) }}" 
+                       class="btn-action btn-register">
+                        Registrar Peso
+                    </a>
+                    {% endif %}
                 </div>
-            </div>
 
-            <!-- Pesaje -->
-            <div class="status-bar {% if peso_bruto %}completed{% else %}pending{% endif %}">
-                {% if peso_bruto %}
-                    <i class="fas fa-check-circle"></i> Pesaje - Completado
-                    <div class="process-info">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <span class="me-3">Peso: {{ peso_bruto }} kg</span>
-                                <span class="me-3">Hora: {{ hora_pesaje }}</span>
-                                <span>Tipo: {{ tipo_pesaje|title }}</span>
-                            </div>
-                            {% if pesaje_pdf %}
-                                <a href="{{ url_for('static', filename='pdfs/' + pesaje_pdf) }}" 
-                                   class="btn btn-light btn-sm" 
-                                   download>
-                                    <i class="fas fa-file-pdf"></i> Descargar PDF Pesaje
-                                </a>
-                            {% endif %}
+                <!-- Clasificación de Fruta -->
+                <div class="timeline-item {% if estado_actual == 'clasificacion_completada' %}completed{% elif estado_actual == 'pesaje_completado' %}current{% else %}pending{% endif %}">
+                    <div class="timeline-content">
+                        <div class="timeline-title">
+                            <i class="fas {% if estado_actual == 'clasificacion_completada' %}fa-check-circle{% elif estado_actual == 'pesaje_completado' %}fa-clock{% else %}fa-hourglass-start{% endif %} status-icon"></i>
+                            Clasificación de Fruta
                         </div>
-                    </div>
-                {% else %}
-                    <i class="fas fa-circle"></i> Pesaje - Pendiente
-                    <div class="process-info">
-                        <a href="{{ url_for('pesaje', codigo=codigo) }}" 
-                           class="btn btn-primary btn-sm">
-                            Registrar Peso
-                        </a>
-                    </div>
-                {% endif %}
-            </div>
-
-            <!-- Clasificación de Fruta -->
-            <div class="status-bar {% if estado_actual == 'clasificacion_completada' %}completed{% elif estado_actual == 'pesaje_completado' %}current{% else %}pending{% endif %}">
-                {% if estado_actual == 'clasificacion_completada' %}
-                    <i class="fas fa-check-circle"></i> Clasificación de Fruta - Completado
-                    <div class="process-info">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <span class="me-3">Fecha: {{ clasificacion_data.fecha_clasificacion }}</span>
-                                <span>Hora: {{ clasificacion_data.hora_clasificacion }}</span>
-                            </div>
-                            {% if clasificacion_data.pdf_clasificacion %}
-                                <a href="{{ url_for('static', filename='pdfs/' + clasificacion_data.pdf_clasificacion) }}" 
-                                   class="btn btn-light btn-sm" 
-                                   download>
-                                    <i class="fas fa-file-pdf"></i> Descargar PDF Clasificación
-                                </a>
-                            {% endif %}
+                        {% if estado_actual == 'clasificacion_completada' %}
+                        <div class="timeline-info">
+                            <span class="me-3">Fecha: {{ clasificacion_data.fecha_clasificacion }}</span>
+                            <span>Hora: {{ clasificacion_data.hora_clasificacion }}</span>
                         </div>
+                        {% endif %}
                     </div>
-                {% elif estado_actual == 'pesaje_completado' %}
-                    <i class="fas fa-arrow-right"></i> Clasificación de Fruta
-                    <div class="process-info">
-                        <a href="{{ url_for('clasificacion_fruta', codigo=codigo) }}" 
-                           class="btn btn-primary btn-sm">
-                            Iniciar Clasificación
-                        </a>
-                    </div>
-                {% else %}
-                    <i class="fas fa-circle"></i> Clasificación de Fruta - Pendiente
-                {% endif %}
-            </div>
-            
-            <!-- Pesaje Tara -->
-            <div class="status-bar {% if estado_actual == 'clasificacion_completada' %}current{% else %}pending{% endif %}">
-                {% if estado_actual == 'clasificacion_completada' %}
-                    <i class="fas fa-arrow-right"></i> Pesaje Tara
-                    <div class="process-info">
-                        <a href="{{ url_for('pesaje_tara', codigo=codigo) }}" 
-                           class="btn btn-primary btn-sm">
-                            Iniciar Pesaje Tara
-                        </a>
-                    </div>
-                {% else %}
-                    <i class="fas fa-circle"></i> Pesaje Tara - Pendiente
-                {% endif %}
-            </div>
-            
-            <!-- Salida -->
-            <div class="status-bar pending">
-                Salida
+                    {% if estado_actual == 'clasificacion_completada' and clasificacion_data.pdf_clasificacion %}
+                    <a href="{{ url_for('static', filename='pdfs/' + clasificacion_data.pdf_clasificacion) }}" 
+                       class="btn-action btn-download" 
+                       download>
+                        <i class="fas fa-file-pdf"></i> Descargar PDF
+                    </a>
+                    {% endif %}
+                </div>
             </div>
         </div>
     </div>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

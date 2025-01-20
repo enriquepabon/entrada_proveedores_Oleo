@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify, send_from_directory, current_app
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, send_from_directory, current_app, flash
 import os
 import requests
 from werkzeug.utils import secure_filename
@@ -229,11 +229,12 @@ def update_data():
         # Obtener datos del request
         request_data = request.get_json()
         if not request_data or 'table_data' not in request_data:
+            logger.error("Datos inválidos recibidos en el request")
             return jsonify({
                 "status": "error",
                 "message": "Datos inválidos",
                 "redirect": url_for('review', _external=True)
-            })
+            }), 400
 
         table_data = request_data['table_data']
         
@@ -241,6 +242,14 @@ def update_data():
         codigo = next((row.get('sugerido', row.get('original', '')) 
                      for row in table_data if row.get('campo') == 'Código'), '')
         
+        if not codigo:
+            logger.error("Código faltante en los datos")
+            return jsonify({
+                "status": "error",
+                "message": "Código faltante en los datos",
+                "redirect": url_for('review', _external=True)
+            }), 400
+
         # Preparar datos para el webhook
         payload = {
             "codigo": codigo,
@@ -264,9 +273,32 @@ def update_data():
         response_text = response.text
         logger.info(f"Respuesta del webhook (raw): {response_text}")
         
+        # Validar respuesta del webhook
+        if response.status_code != 200:
+            logger.error(f"Error del webhook: {response_text}")
+            return jsonify({
+                "status": "error",
+                "message": "Error en la comunicación con el webhook",
+                "redirect": url_for('review', _external=True)
+            }), 500
+        
         try:
-            response_data = json.loads(response_text)
-            logger.info(f"Respuesta parseada: {response_data}")
+            # Limpiar la respuesta de caracteres de escape
+            cleaned_response = response_text.replace('\\"', '"').strip()
+            if cleaned_response.startswith('"') and cleaned_response.endswith('"'):
+                cleaned_response = cleaned_response[1:-1]
+            
+            logger.info(f"Respuesta limpia antes de parsear: {cleaned_response}")
+            
+            try:
+                response_data = json.loads(cleaned_response)
+                logger.info(f"Respuesta parseada exitosamente: {response_data}")
+            except json.JSONDecodeError as je:
+                # Intentar un segundo método de limpieza si el primero falla
+                cleaned_response = response_text.encode('utf-8').decode('unicode_escape')
+                logger.info(f"Segundo intento de limpieza: {cleaned_response}")
+                response_data = json.loads(cleaned_response)
+                logger.info(f"Respuesta parseada en segundo intento: {response_data}")
             
             if response_data.get('status') == 'success':
                 # Guardar datos en la sesión
@@ -277,36 +309,37 @@ def update_data():
                 logger.info("Datos guardados en sesión, redirigiendo a revalidation_success")
                 
                 success_url = url_for('revalidation_success', _external=True)
-                logger.info(f"URL de redirección: {success_url}")
-                
                 return jsonify({
                     "status": "success",
                     "message": "Validación exitosa",
                     "redirect": success_url
                 })
             else:
+                logger.error("El webhook devolvió un error en la validación")
                 error_url = url_for('revalidation_results', _external=True)
                 return jsonify({
                     "status": "error",
                     "message": response_data.get('message', 'Error en la validación'),
                     "redirect": error_url
-                })
+                }), 400
                 
         except json.JSONDecodeError as e:
             logger.error(f"Error al parsear JSON: {str(e)}")
+            logger.error(f"JSON con error: {cleaned_response}")
             return jsonify({
                 "status": "error",
                 "message": "Error al procesar la respuesta del servidor",
                 "redirect": url_for('review', _external=True)
-            })
+            }), 500
             
     except Exception as e:
         logger.error(f"Error en update_data: {str(e)}")
+        logger.error(traceback.format_exc())
         return jsonify({
             "status": "error",
             "message": str(e),
             "redirect": url_for('review', _external=True)
-        })
+        }), 500
 
 @app.route('/processing', methods=['GET'])
 def processing_screen():
@@ -1120,46 +1153,67 @@ def notify_admin():
 
 @app.route('/revalidation_success')
 def revalidation_success():
-    """Displays the success page when revalidation is successful."""
+    """
+    Muestra la página de éxito después de la revalidación.
+    """
     try:
-        # Obtener datos de la sesión
-        webhook_response = session.get('webhook_response', {})
-        data = webhook_response.get('data', {})
-        image_filename = session.get('image_filename', '')
+        logger.info("Iniciando revalidation_success")
+        logger.info(f"Contenido de session: {dict(session)}")
+
+        if 'webhook_response' not in session:
+            logger.error("No hay datos de webhook en la sesión")
+            flash('No hay datos de validación disponibles', 'error')
+            return redirect(url_for('review'))
+
+        webhook_data = session.get('webhook_response', {})
+        table_data = session.get('table_data', [])
         
-        if not data:
-            return redirect(url_for('error', message="No hay datos de validación disponibles"))
-        
-        # Buscar el campo nombre_agricultor con o sin el texto adicional
-        nombre_agricultor = data.get('nombre_agricultor', '')
-        if not nombre_agricultor:
-            nombre_agricultor = data.get('nombre_agricultor (en tu base de datos)', '')
-        
-        # Preparar datos para el template usando directamente la respuesta del webhook
+        logger.info(f"webhook_data: {webhook_data}")
+        logger.info(f"table_data: {table_data}")
+
+        # Extraer datos del webhook_data
+        data = webhook_data.get('data', {})
+        if not data and isinstance(webhook_data, str):
+            try:
+                # Intentar parsear si es una cadena JSON
+                webhook_data = json.loads(webhook_data)
+                data = webhook_data.get('data', {})
+            except json.JSONDecodeError:
+                logger.error(f"Error parseando webhook_data como JSON: {webhook_data}")
+                data = {}
+
+        # Preparar datos para la plantilla
         template_data = {
-            'image_filename': image_filename,
-            'nombre_agricultor': nombre_agricultor.strip(),  # Eliminar espacios extra
-            'codigo': data.get('codigo', ''),
-            'racimos': data.get('racimos', ''),
-            'placa': data.get('placa', ''),
-            'acarreo': data.get('acarreo', ''),
-            'cargo': data.get('cargo', ''),
-            'transportador': data.get('transportador', ''),
-            'fecha_tiquete': data.get('fecha_tiquete', ''),
-            'fecha_registro': datetime.now().strftime('%Y-%m-%d'),
-            'hora_registro': datetime.now().strftime('%H:%M:%S'),
-            'nota': data.get('nota', ''),
-            # Campos modificados
-            'nombre_del_agricultor_modificado': True,  # Siempre true porque viene de la base de datos
-            'transportador_modificado': True if data.get('transportador') else False
+            'image_filename': session.get('image_filename'),
+            'nombre_agricultor': data.get('nombre_agricultor', 'No disponible'),
+            'codigo': data.get('codigo', 'No disponible'),
+            'racimos': data.get('racimos', 'No disponible'),
+            'placa': data.get('placa', 'No disponible'),
+            'acarreo': data.get('acarreo', 'No disponible'),
+            'cargo': data.get('cargo', 'No disponible'),
+            'transportador': data.get('transportador', 'No disponible'),
+            'fecha_tiquete': data.get('fecha_tiquete', 'No disponible'),
+            'hora_registro': datetime.now().strftime("%H:%M:%S"),
+            'nota': data.get('nota', 'Sin notas')
         }
 
-        logger.info(f"Datos enviados al template: {template_data}")
+        # Verificar si hay campos modificados comparando con table_data
+        for campo in table_data:
+            original = campo.get('original', '')
+            sugerido = campo.get('sugerido', '')
+            if original != sugerido and sugerido != 'No disponible':
+                campo_key = campo['campo'].lower().replace(' ', '_')
+                template_data[f"{campo_key}_modificado"] = True
+                logger.info(f"Campo modificado: {campo_key} (original: {original}, sugerido: {sugerido})")
+
+        logger.info(f"template_data preparado: {template_data}")
         return render_template('revalidation_success.html', **template_data)
-        
+
     except Exception as e:
         logger.error(f"Error en revalidation_success: {str(e)}")
-        return redirect(url_for('error', message=f"Error al mostrar resultados: {str(e)}"))
+        logger.error(traceback.format_exc())
+        flash('Error al mostrar la página de éxito', 'error')
+        return redirect(url_for('review'))
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5002)

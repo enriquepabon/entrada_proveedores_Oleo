@@ -54,19 +54,40 @@ class Utils:
             qr_dir = os.path.join(self.app.static_folder, 'qr')
             os.makedirs(qr_dir, exist_ok=True)
             
-            # Obtener el código y código de guía
-            codigo = qr_data.get('codigo', '').strip()
-            codigo_guia = qr_data.get('codigo_guia', '').strip()
+            # Obtener datos del webhook response
+            data = {}
+            if 'webhook_response' in session and session['webhook_response'].get('data'):
+                webhook_data = session['webhook_response']['data']
+                data = {
+                    'codigo': webhook_data.get('codigo', ''),
+                    'nombre': webhook_data.get('nombre_agricultor', ''),
+                    'fecha_tiquete': webhook_data.get('fecha_tiquete', ''),
+                    'placa': webhook_data.get('placa', ''),
+                    'transportador': webhook_data.get('transportador', ''),
+                    'racimos': webhook_data.get('racimos', ''),
+                    'acarreo': webhook_data.get('acarreo', 'No'),
+                    'cargo': webhook_data.get('cargo', 'No'),
+                    'nota': webhook_data.get('nota', '')
+                }
+            else:
+                logger.warning("No se encontró webhook_response en la sesión")
+                data = qr_data
             
-            if not codigo or not codigo_guia:
-                raise ValueError("Código o código de guía no proporcionado")
+            # Generar nuevo código de guía usando el código validado
+            now = datetime.now()
+            codigo = data.get('codigo', '').strip()
+            fecha_formateada = now.strftime('%Y%m%d')
+            hora_formateada = now.strftime('%H%M%S')
+            codigo_guia = f"{codigo}_{fecha_formateada}_{hora_formateada}"
+            
+            if not codigo:
+                raise ValueError("Código no proporcionado")
             
             # Generar el nombre del archivo HTML de la guía
             html_filename = f"guia_{codigo_guia}.html"
             
             # Obtener la hora actual si no viene en los datos
-            now = datetime.now()
-            hora_registro = qr_data.get('hora_registro', now.strftime("%H:%M:%S"))
+            hora_registro = session.get('hora_registro', now.strftime("%H:%M:%S"))
             
             # Obtener datos de pesaje de la sesión o base de datos
             peso_data = session.get('peso_data', {})
@@ -74,13 +95,16 @@ class Utils:
             # Generar contenido HTML para la guía
             html_content = render_template(
                 'guia_template.html',
-                codigo=codigo,
-                nombre=qr_data.get('nombre', ''),
-                fecha_registro=qr_data.get('fecha', ''),
+                codigo=data.get('codigo', ''),
+                nombre=data.get('nombre', ''),
+                fecha_registro=session.get('fecha_registro', ''),
                 hora_registro=hora_registro,
-                placa=qr_data.get('placa', ''),
-                transportador=qr_data.get('transportador', ''),
-                cantidad_racimos=qr_data.get('cantidad_racimos', ''),
+                fecha_tiquete=data.get('fecha_tiquete', ''),
+                placa=data.get('placa', ''),
+                transportador=data.get('transportador', ''),
+                cantidad_racimos=data.get('racimos', ''),
+                acarreo=data.get('acarreo', 'No'),
+                cargo=data.get('cargo', 'No'),
                 estado_actual='pesaje',
                 codigo_guia=codigo_guia,
                 pdf_filename=session.get('pdf_filename', ''),
@@ -88,7 +112,8 @@ class Utils:
                 peso_bruto=peso_data.get('peso_bruto'),
                 tipo_pesaje=peso_data.get('tipo_pesaje'),
                 hora_pesaje=peso_data.get('hora_pesaje'),
-                pesaje_pdf=peso_data.get('pesaje_pdf')
+                pesaje_pdf=peso_data.get('pesaje_pdf'),
+                nota=data.get('nota', '')
             )
             
             # Guardar el archivo HTML
@@ -133,57 +158,72 @@ class Utils:
         Genera un PDF a partir de los datos del tiquete.
         """
         try:
-            now = datetime.now()  # Definir now al inicio
+            now = datetime.now()
             
-            # Obtener el código del revalidation_data o del código de guía
-            codigo = None
-            if revalidation_data and 'Código' in revalidation_data:
-                codigo = revalidation_data['Código'].strip('"')
-            elif codigo_guia:
-                codigo = codigo_guia.split('_')[0]  # Obtener la parte del código del código_guia
-            
-            if not codigo:
-                # Si aún no tenemos código, intentar obtenerlo de parsed_data
-                codigo = next((row['sugerido'] if row['sugerido'] != 'No disponible' else row['original']
-                             for row in parsed_data.get('table_data', [])
-                             if row['campo'] == 'Código'), 'SIN_CODIGO')
-            
-            # Obtener fecha del tiquete formateada
-            fecha_tiquete = self.get_ticket_date(parsed_data)
-            
-            # Obtener el nombre del archivo QR y asegurarnos de que la ruta sea correcta
+            # Extraer datos del webhook response
+            data = {}
+            if 'webhook_response' in session and session['webhook_response'].get('data'):
+                webhook_data = session['webhook_response']['data']
+                data = {
+                    'codigo': webhook_data.get('codigo', ''),
+                    'nombre_agricultor': webhook_data.get('nombre_agricultor', ''),
+                    'racimos': webhook_data.get('racimos', ''),
+                    'placa': webhook_data.get('placa', ''),
+                    'acarreo': webhook_data.get('acarreo', 'No'),
+                    'cargo': webhook_data.get('cargo', 'No'),
+                    'transportador': webhook_data.get('transportador', 'No registrado'),
+                    'fecha_tiquete': webhook_data.get('fecha_tiquete', ''),
+                    'nota': webhook_data.get('nota', '')
+                }
+            else:
+                logger.warning("No se encontró webhook_response en la sesión")
+
+            # Obtener el QR filename de la sesión
             qr_filename = session.get('qr_filename')
             if qr_filename:
-                # Verificar si el archivo existe en la carpeta qr
+                # Verificar si el archivo existe
                 qr_path = os.path.join(self.app.static_folder, 'qr', qr_filename)
-                if os.path.exists(qr_path):
-                    qr_filename = os.path.join('qr', qr_filename)
-                else:
+                if not os.path.exists(qr_path):
                     logger.warning(f"Archivo QR no encontrado en: {qr_path}")
                     qr_filename = None
-            
-            # Renderizar plantilla con todos los datos necesarios
+
+            # Log para debugging
+            logger.info(f"Datos validados para PDF: {data}")
+            logger.info(f"Datos de revalidación: {revalidation_data}")
+            logger.info(f"Datos originales del tiquete: {parsed_data}")
+
+            # Preparar datos para el template
+            template_data = {
+                'image_filename': image_filename,
+                'codigo': data.get('codigo', ''),
+                'nombre_agricultor': data.get('nombre_agricultor', ''),
+                'racimos': data.get('racimos', ''),
+                'placa': data.get('placa', ''),
+                'acarreo': data.get('acarreo', 'No'),
+                'cargo': data.get('cargo', 'No'),
+                'transportador': data.get('transportador', 'No registrado'),
+                'fecha_tiquete': data.get('fecha_tiquete', ''),
+                'hora_registro': hora_procesamiento,
+                'fecha_emision': now.strftime("%d/%m/%Y"),
+                'hora_emision': now.strftime("%H:%M:%S"),
+                'nota': data.get('nota', ''),
+                'qr_filename': qr_filename
+            }
+
+            # Renderizar plantilla
             rendered = render_template(
                 'pdf_template.html',
-                parsed_data=parsed_data,
-                image_filename=image_filename,
-                fecha_procesamiento=fecha_procesamiento,
-                hora_procesamiento=hora_procesamiento,
-                fecha_emision=now.strftime("%d/%m/%Y"),
-                hora_emision=now.strftime("%H:%M:%S"),
-                revalidation_data=revalidation_data,
-                codigo_guia=codigo_guia,
-                qr_filename=qr_filename,
-                logo_exists=os.path.exists(os.path.join(self.app.static_folder, 'images', 'logo-oleoflores.png'))
+                **template_data
             )
             
             # Generar nombre del archivo
-            pdf_filename = f'tiquete_{codigo}_{now.strftime("%Y%m%d_%H%M%S")}.pdf'
+            pdf_filename = f'tiquete_{data["codigo"]}_{now.strftime("%Y%m%d_%H%M%S")}.pdf'
             pdf_path = os.path.join(self.app.config['PDF_FOLDER'], pdf_filename)
 
             # Asegurar que el directorio existe
             os.makedirs(os.path.dirname(pdf_path), exist_ok=True)
             
+            # Generar PDF
             HTML(
                 string=rendered,
                 base_url=self.app.static_folder
@@ -226,12 +266,21 @@ class Utils:
 
     def generar_codigo_guia(self, codigo_proveedor):
         """
-        Genera un código único para la guía
+        Genera un código único para la guía usando el código validado del webhook
         """
-        now = datetime.now()
-        fecha_formateada = now.strftime('%d%m%Y')
-        hora_formateada = now.strftime('%H%M')
-        return f"{codigo_proveedor}_{fecha_formateada}_{hora_formateada}"
+        try:
+            # Intentar obtener el código del webhook response
+            if 'webhook_response' in session and session['webhook_response'].get('data'):
+                webhook_data = session['webhook_response']['data']
+                codigo_proveedor = webhook_data.get('codigo', codigo_proveedor)
+            
+            now = datetime.now()
+            fecha_formateada = now.strftime('%Y%m%d')
+            hora_formateada = now.strftime('%H%M%S')
+            return f"{codigo_proveedor}_{fecha_formateada}_{hora_formateada}"
+        except Exception as e:
+            logger.error(f"Error generando código de guía: {str(e)}")
+            return f"{codigo_proveedor}_{int(time.time())}"
 
     def registrar_fecha_porteria(self):
         """
@@ -280,46 +329,45 @@ class Utils:
 
     def get_datos_guia(self, codigo):
         """
-        Obtiene los datos de la guía desde la sesión
+        Obtiene los datos necesarios para generar la guía de proceso
         """
         try:
-            # Obtener datos básicos
-            parsed_data = session.get('parsed_data', {})
-            table_data = parsed_data.get('table_data', [])
+            data = {}
             
-            # Obtener datos del webhook
-            webhook_response = session.get('webhook_response', {})
-            webhook_body = webhook_response.get('Body', {})
-            
-            # Procesar datos de la tabla
-            data_dict = {}
-            for row in table_data:
-                campo = row.get('campo', '')
-                original = row.get('original', '')
-                sugerido = row.get('sugerido', '')
-                
-                # Si el valor sugerido existe y es diferente del original
-                if sugerido and sugerido != original and sugerido != 'No disponible':
-                    data_dict[campo] = sugerido
-                else:
-                    data_dict[campo] = original
+            # Obtener datos del webhook response
+            if 'webhook_response' in session and session['webhook_response'].get('data'):
+                webhook_data = session['webhook_response']['data']
+                data = {
+                    'codigo': webhook_data.get('codigo', codigo),
+                    'nombre': webhook_data.get('nombre_agricultor', ''),
+                    'fecha_tiquete': webhook_data.get('fecha_tiquete', ''),
+                    'placa': webhook_data.get('placa', ''),
+                    'transportador': webhook_data.get('transportador', ''),
+                    'racimos': webhook_data.get('racimos', ''),
+                    'acarreo': webhook_data.get('acarreo', 'No'),
+                    'cargo': webhook_data.get('cargo', 'No'),
+                    'nota': webhook_data.get('nota', '')
+                }
+            else:
+                logger.warning("No se encontró webhook_response en la sesión")
 
-            # Preparar datos
+            # Preparar datos finales
             datos = {
-                'codigo': webhook_body.get('Codigo', codigo),
-                'nombre': webhook_body.get('Nombre', ''),
+                'codigo': data.get('codigo', codigo),
+                'nombre': data.get('nombre', ''),
                 'fecha_registro': session.get('fecha_registro', ''),
                 'hora_registro': session.get('hora_registro', ''),
-                'fecha_tiquete': data_dict.get('Fecha', ''),
-                'placa': data_dict.get('Placa', ''),
-                'transportador': data_dict.get('Nombre Transportador', ''),
-                'racimos': data_dict.get('Cantidad de Racimos', ''),
-                'acarreo': data_dict.get('Se Acarreó', ''),
-                'cargo': data_dict.get('Se Cargó', ''),
+                'fecha_tiquete': data.get('fecha_tiquete', ''),
+                'placa': data.get('placa', ''),
+                'transportador': data.get('transportador', ''),
+                'cantidad_racimos': data.get('racimos', ''),
+                'acarreo': data.get('acarreo', ''),
+                'cargo': data.get('cargo', ''),
                 'estado_actual': session.get('estado_actual', ''),
                 'image_filename': session.get('image_filename', ''),
                 'pdf_filename': session.get('pdf_filename', ''),
-                'codigo_guia': session.get('codigo_guia', '')
+                'codigo_guia': session.get('codigo_guia', ''),
+                'nota': data.get('nota', '')
             }
 
             # Obtener datos de pesaje

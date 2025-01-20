@@ -13,205 +13,260 @@
         }
         .header {
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
             border-bottom: 2px solid #2c3e50;
-            padding-bottom: 20px;
+            padding-bottom: 15px;
         }
         .logo {
-            max-width: 200px;
-            margin-bottom: 15px;
+            max-width: 180px;
+            margin-bottom: 10px;
         }
         .title {
             color: #2c3e50;
-            font-size: 24px;
-            margin: 10px 0;
+            font-size: 22px;
+            margin: 5px 0;
+            font-weight: bold;
         }
         .subtitle {
             color: #34495e;
-            font-size: 18px;
+            font-size: 16px;
+            margin: 5px 0;
         }
         .image-container {
             text-align: center;
-            margin: 20px 0;
+            margin: 15px 0;
             padding: 10px;
             border: 1px solid #ddd;
             border-radius: 4px;
+            background-color: #f8f9fa;
         }
         .image-container img {
             max-width: 100%;
             height: auto;
+            border-radius: 4px;
         }
         .data-table {
             width: 100%;
             border-collapse: collapse;
-            margin: 20px 0;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            margin: 15px 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
         .data-table th {
             background-color: #2c3e50;
             color: white;
-            padding: 12px;
+            padding: 10px;
             text-align: left;
-            font-weight: normal;
+            font-weight: 500;
+            width: 35%;
+            font-size: 14px;
         }
         .data-table td {
-            padding: 12px;
-            border: 1px solid #ddd;
+            padding: 10px;
+            border: 1px solid #dee2e6;
+            font-size: 14px;
         }
         .data-table tr:nth-child(even) {
             background-color: #f8f9fa;
         }
         .modified-field {
-            background-color: #e8f4ff;
+            background-color: #fff3cd;
             position: relative;
         }
         .modified-indicator {
             position: absolute;
-            top: 4px;
-            right: 4px;
-            font-size: 10px;
-            color: #0066cc;
+            top: 2px;
+            right: 2px;
+            font-size: 9px;
+            color: #856404;
             font-style: italic;
+            background-color: #fff3cd;
+            padding: 1px 4px;
+            border-radius: 2px;
         }
         .validation-note {
-            margin: 20px 0;
-            padding: 15px;
+            margin: 15px 0;
+            padding: 12px;
             background-color: #f8f9fa;
             border-left: 4px solid #2c3e50;
             border-radius: 4px;
+            font-size: 14px;
         }
         .note-title {
             color: #2c3e50;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
             font-weight: bold;
+            font-size: 14px;
         }
         .footer {
-            margin-top: 30px;
-            padding-top: 20px;
-            border-top: 1px solid #ddd;
-            font-size: 12px;
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid #dee2e6;
+            font-size: 11px;
             color: #666;
+            text-align: center;
         }
         .qr-section {
             text-align: center;
-            margin: 30px 0;
+            margin: 20px 0;
             page-break-inside: avoid;
         }
         .qr-code {
-            width: 150px;
-            height: 150px;
+            width: 120px;
+            height: 120px;
             margin: 0 auto;
         }
         .qr-text {
-            font-size: 12px;
+            font-size: 11px;
             color: #666;
-            margin-top: 10px;
+            margin-top: 5px;
         }
         .process-status {
-            margin: 20px 0;
+            margin: 15px 0;
             padding: 10px;
             background-color: #f8f9fa;
             border-radius: 4px;
+            font-size: 13px;
         }
         .status-item {
+            margin: 3px 0;
+            padding: 3px 0;
             display: flex;
             align-items: center;
-            margin: 5px 0;
         }
-        .status-icon {
-            width: 20px;
-            height: 20px;
-            margin-right: 10px;
+        .status-item:before {
+            content: "";
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            margin-right: 8px;
+            border-radius: 50%;
+        }
+        .status-completed:before {
+            background-color: #28a745;
+        }
+        .status-pending:before {
+            background-color: #ffc107;
+        }
+        .info-section {
+            display: flex;
+            justify-content: space-between;
+            margin: 15px 0;
+            font-size: 14px;
+        }
+        .info-group {
+            flex: 1;
+            margin: 0 10px;
         }
     </style>
 </head>
 <body>
-    <!-- En templates/pdf_template.html -->
-<div class="header">
-    {% if logo_exists %}
+    <div class="header">
         <img src="{{ url_for('static', filename='images/logo.png', _external=True) }}" 
              alt="Oleoflores Logo" class="logo">
-    {% endif %}
-    <h1 class="title">Registro de Entrada Proveedores</h1>
-    <h2 class="subtitle">Extractora Maria la Baja</h2>
-    <h2 class="subtitle">Código de Guía: {{ codigo_guia }}</h2>
-</div>
+        <h1 class="title">Registro de Entrada Proveedores</h1>
+        <h2 class="subtitle">Extractora Maria la Baja</h2>
+        <h2 class="subtitle">Código de Guía: {{ codigo }}</h2>
+    </div>
 
     <div class="image-container">
-        <img src="{{ url_for('static', filename='uploads/' ~ image_filename, _external=True) }}" alt="Tiquete">
+        <img src="{{ url_for('static', filename='uploads/' + image_filename, _external=True) }}" 
+             alt="Tiquete">
     </div>
 
-    <table class="data-table">
-        <thead>
-            <tr>
-                <th>Campo</th>
-                <th>Información Original</th>
-                <th>Registro Final</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for row in parsed_data.table_data %}
-            <tr>
-                <td><strong>{{ row.campo }}</strong></td>
-                <td>{{ row.original }}</td>
-                {% if row.campo in ['Nombre del Agricultor', 'Código'] and row.sugerido != row.original %}
-                    <td class="modified-field">
-                        {{ revalidation_data.get(row.campo, row.sugerido) }}
-                        <span class="modified-indicator">modificado manual</span>
-                    </td>
-                {% else %}
-                    <td>{{ row.sugerido }}</td>
-                {% endif %}
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-
-    {% if parsed_data.nota %}
-    <div class="validation-note">
-        <div class="note-title">Nota de Validación:</div>
-        <p>{{ parsed_data.nota }}</p>
+    <div class="info-section">
+        <div class="info-group">
+            <table class="data-table">
+                <tbody>
+                    <tr>
+                        <th>Nombre del Agricultor:</th>
+                        <td {% if nombre_del_agricultor_modificado %}class="modified-field"{% endif %}>
+                            {{ nombre_agricultor }}
+                            {% if nombre_del_agricultor_modificado %}
+                            <span class="modified-indicator">modificado</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Código:</th>
+                        <td {% if código_modificado %}class="modified-field"{% endif %}>
+                            {{ codigo }}
+                            {% if código_modificado %}
+                            <span class="modified-indicator">modificado</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Cantidad de Racimos:</th>
+                        <td>{{ racimos }}</td>
+                    </tr>
+                    <tr>
+                        <th>Placa:</th>
+                        <td>{{ placa }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="info-group">
+            <table class="data-table">
+                <tbody>
+                    <tr>
+                        <th>Se Acarreó:</th>
+                        <td>{{ acarreo }}</td>
+                    </tr>
+                    <tr>
+                        <th>Se Cargó:</th>
+                        <td>{{ cargo }}</td>
+                    </tr>
+                    <tr>
+                        <th>Transportador:</th>
+                        <td>{{ transportador }}</td>
+                    </tr>
+                    <tr>
+                        <th>Fecha:</th>
+                        <td>{{ fecha_tiquete }}</td>
+                    </tr>
+                    <tr>
+                        <th>Hora de Registro:</th>
+                        <td>{{ hora_registro }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
     </div>
-    {% endif %}
 
-    {% if revalidation_data and revalidation_data.nota %}
+    {% if nota and nota != 'No disponible' %}
     <div class="validation-note">
-        <div class="note-title">Nota de Revalidación:</div>
-        <p>{{ revalidation_data.nota }}</p>
+        <div class="note-title">Nota:</div>
+        <p>{{ nota }}</p>
     </div>
     {% endif %}
 
     <div class="process-status">
         <div class="note-title">Estado del Proceso:</div>
-        <div class="status-item">
-            ✓ Registro inicial completado
+        <div class="status-item status-completed">
+            Registro inicial completado
         </div>
-        <div class="status-item">
-            ◯ Pendiente: Peso bruto
+        <div class="status-item status-pending">
+            Pendiente: Peso bruto
         </div>
-        <div class="status-item">
-            ◯ Pendiente: Clasificación de fruta
+        <div class="status-item status-pending">
+            Pendiente: Clasificación de fruta
         </div>
-        <div class="status-item">
-            ◯ Pendiente: Cierre de proceso
+        <div class="status-item status-pending">
+            Pendiente: Cierre de proceso
         </div>
-    </div>
-
-    <div class="footer">
-        <p>Fecha de Procesamiento: {{ fecha_procesamiento }}</p>
-        <p>Hora de Procesamiento: {{ hora_procesamiento }}</p>
-        <p>Fecha de Emisión: {{ fecha_emision }}</p>
-        <p>Hora de Emisión: {{ hora_emision }}</p>
     </div>
 
     <div class="qr-section">
-        {% if qr_filename %}
-            <img src="{{ url_for('static', filename='qr/' ~ qr_filename, _external=True) }}" 
-                 alt="Código QR" 
-                 class="qr-code"
-                 onerror="this.style.display='none'">
-            <p class="qr-text">Escanea para seguimiento del proceso</p>
-        {% endif %}
+        <img src="{{ url_for('static', filename='qr/' + qr_filename, _external=True) }}" 
+             alt="Código QR" 
+             class="qr-code">
+        <p class="qr-text">Escanea para seguimiento del proceso</p>
+    </div>
+
+    <div class="footer">
+        <p>Fecha de Emisión: {{ fecha_emision }} - Hora: {{ hora_emision }}</p>
+        <p>Documento generado automáticamente por el sistema de registro</p>
     </div>
 </body>
 </html>

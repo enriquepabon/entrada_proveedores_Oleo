@@ -3,98 +3,48 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Revisión del Tiquete</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Revisión de Datos</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        body { 
-            background-color: #f8f9fa; 
+        body {
+            background-color: #f8f9fa;
         }
-        .container {
+        .review-container {
             max-width: 1200px;
-            padding: 2rem;
+            margin: 50px auto;
+            padding: 30px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-        .card {
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            padding: 1.5rem;
-            margin-bottom: 2rem;
-        }
-        .table {
-            margin-bottom: 0;
+        .tiquete-image {
+            max-width: 100%;
+            height: auto;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         .table th {
             background-color: #f8f9fa;
-            font-weight: 500;
-            padding: 1rem;
-            border-bottom: 2px solid #dee2e6;
         }
-        .table td {
-            padding: 1rem;
-            vertical-align: middle;
-        }
-        .edited-cell {
+        .modified {
             background-color: #fff3cd;
-            border-left: 3px solid #ffc107;
         }
-        .btn-toolbar {
-            gap: 0.5rem;
+        .btn-container {
+            margin-top: 30px;
+            display: flex;
+            gap: 15px;
+            justify-content: center;
         }
-        .btn {
-            padding: 0.5rem 1rem;
-            font-weight: 500;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        .btn-primary {
-            background-color: #0d6efd;
-            border: none;
-        }
-        .btn-success {
-            background-color: #198754;
-            border: none;
-        }
-        .image-preview {
-            max-width: 100%;
-            border-radius: 8px;
-            margin-bottom: 1.5rem;
-        }
-        .status-badge {
-            padding: 0.35rem 0.75rem;
-            border-radius: 50px;
-            font-size: 0.875rem;
-            font-weight: 500;
-        }
-        .status-modified {
-            background-color: #fff3cd;
-            color: #997404;
-        }
-        .validation-note {
+        .form-control[readonly] {
             background-color: #f8f9fa;
-            border-left: 4px solid #0d6efd;
-            padding: 1.5rem;
-            margin: 1.5rem 0;
-            border-radius: 4px;
+            cursor: not-allowed;
         }
-        .action-buttons {
-            border-top: 1px solid #dee2e6;
-            padding-top: 1.5rem;
-            margin-top: 1.5rem;
-        }
-        .table td input.form-control {
-            background-color: transparent;
-            border: 1px solid transparent;
-            padding: 0.375rem 0.75rem;
-            transition: all 0.2s;
-        }
-        .table td input.form-control:not([readonly]) {
-            border-color: #dee2e6;
+        .form-control:not([readonly]) {
             background-color: #fff;
-        }
-        .table td input.form-control:focus {
-            border-color: #86b7fe;
-            box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+            cursor: text;
         }
         /* Estilos para el overlay de carga */
         .loading-overlay {
@@ -125,50 +75,51 @@
             color: #6c757d;
             margin-top: 0.5rem;
         }
-        .spinner-border {
-            width: 3rem;
-            height: 3rem;
-            color: #0d6efd;
-        }
     </style>
 </head>
 <body>
+    <!-- Overlay de carga -->
     <div id="loadingOverlay" class="loading-overlay">
         <div class="loading-content">
-            <div class="spinner-border" role="status">
+            <div class="spinner-border text-primary" role="status">
                 <span class="visually-hidden">Procesando...</span>
             </div>
-            <h2>Procesando revalidación...</h2>
-            <p>Por favor espere mientras validamos los cambios.</p>
+            <h2>Procesando datos...</h2>
+            <p>Por favor espere mientras validamos la información.</p>
         </div>
     </div>
 
-    <div class="container py-4">
-        <h2 class="mb-4">Revisión del Tiquete</h2>
+    <div class="review-container">
+        <h2 class="text-center mb-4">Revisión de Datos</h2>
+        
+        {% if image_filename %}
+        <div class="text-center">
+            <img src="{{ url_for('static', filename='uploads/' + image_filename) }}?{{ timestamp }}" 
+                 alt="Tiquete" class="tiquete-image">
+        </div>
+        {% endif %}
 
-        <div class="card">
-            <!-- Imagen del tiquete -->
-            <img src="{{ url_for('static', filename='uploads/' ~ image_filename) }}?{{ timestamp }}" 
-                 class="image-preview" alt="Imagen del Tiquete">
-
-            <!-- Tabla de datos -->
+        <form id="reviewForm" class="mt-4">
             <div class="table-responsive">
-                <table class="table table-hover">
+                <table id="dataTable" class="table table-bordered">
                     <thead>
                         <tr>
-                            <th style="width: 25%">Campo</th>
-                            <th style="width: 37.5%">Información Original</th>
-                            <th style="width: 37.5%">Registro Sugerido</th>
+                            <th>Campo</th>
+                            <th>Valor Original</th>
+                            <th>Valor Sugerido</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for item in parsed_data.table_data %}
-                        <tr data-field="{{ item.campo }}">
-                            <th>{{ item.campo }}</th>
-                            <td class="original">{{ item.original }}</td>
-                            <td class="sugerido">
-                                <input type="text" class="form-control" 
-                                       value="{{ item.sugerido }}" readonly>
+                        {% for row in parsed_data.table_data %}
+                        <tr>
+                            <td>{{ row.campo }}</td>
+                            <td>{{ row.original }}</td>
+                            <td>
+                                <input type="text" 
+                                       class="form-control" 
+                                       value="{{ row.sugerido }}"
+                                       readonly
+                                       {% if row.sugerido != row.original %}data-modified="true"{% endif %}>
                             </td>
                         </tr>
                         {% endfor %}
@@ -176,250 +127,106 @@
                 </table>
             </div>
 
-            <!-- Nota de validación -->
-            <div class="validation-note mt-4">
-                <h5 class="mb-3">Nota de Validación:</h5>
-                <p class="mb-0">{{ parsed_data.nota }}</p>
+            {% if parsed_data.nota %}
+            <div class="alert alert-info mt-3">
+                <strong>Nota:</strong> {{ parsed_data.nota }}
             </div>
+            {% endif %}
 
-            <!-- Botones de acción reposicionados -->
-            <div class="d-flex justify-content-end mt-4 gap-2">
-                <button type="button" id="edit-button" class="btn btn-primary">
+            <div class="btn-container">
+                <button type="button" id="editButton" class="btn btn-primary">
                     <i class="fas fa-edit me-2"></i>Editar
                 </button>
-                <button type="button" id="save-button" class="btn btn-success d-none">
+                <button type="button" id="saveButton" class="btn btn-success d-none">
                     <i class="fas fa-save me-2"></i>Guardar
                 </button>
-                <button type="button" id="cancel-button" class="btn btn-secondary d-none">
+                <button type="button" id="cancelButton" class="btn btn-secondary d-none">
                     <i class="fas fa-times me-2"></i>Cancelar
                 </button>
-                <button type="button" id="register-button" class="btn btn-success">
-                    <i class="fas fa-check me-2"></i>Registrar
-                </button>
-                <button type="button" id="new-ticket-button" class="btn btn-primary" onclick="window.location.href='/'">
-                    <i class="fas fa-plus me-2"></i>Nuevo Tiquete
+                <button type="button" onclick="window.location.href='/'" class="btn btn-primary">
+                    <i class="fas fa-camera me-2"></i>Escanear Otro
                 </button>
             </div>
-        </div>
+        </form>
     </div>
 
-    <script src="https://kit.fontawesome.com/your-code.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    
-    <!-- El resto del JavaScript se mantiene igual -->
     <script>
-        const editButton = document.getElementById('edit-button');
-        const registerButton = document.getElementById('register-button');
-        const saveButton = document.getElementById('save-button');
-        const cancelButton = document.getElementById('cancel-button');
-        const editableInputs = document.querySelectorAll('.sugerido input');
-        const loadingOverlay = document.getElementById('loadingOverlay');
-      
         let originalValues = {};
-        editableInputs.forEach(input => {
-            const row = input.closest('tr');
-            originalValues[row.dataset.field] = input.value;
-        });
-      
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        
         function showLoading() {
             loadingOverlay.style.display = 'flex';
         }
-      
+        
         function hideLoading() {
             loadingOverlay.style.display = 'none';
         }
-      
-        editButton.addEventListener('click', () => {
-            editableInputs.forEach(input => {
-                input.readOnly = false;
-                input.classList.add('table-active');
-            });
-            editButton.classList.add('d-none');
-            registerButton.classList.add('d-none');
-            saveButton.classList.remove('d-none');
-            cancelButton.classList.remove('d-none');
-        });
-      
-        cancelButton.addEventListener('click', () => {
-            editableInputs.forEach(input => {
+        
+        function enableEditing() {
+            const inputs = document.querySelectorAll('#dataTable input');
+            inputs.forEach(input => {
                 const row = input.closest('tr');
-                input.value = originalValues[row.dataset.field];
-                input.readOnly = true;
-                input.classList.remove('table-active');
-                row.classList.remove('modified-field');
+                const campo = row.querySelector('td:first-child').textContent;
+                originalValues[campo] = input.value;
+                input.removeAttribute('readonly');
             });
-            editButton.classList.remove('d-none');
-            registerButton.classList.remove('d-none');
-            saveButton.classList.add('d-none');
-            cancelButton.classList.add('d-none');
-        });
-      
-        saveButton.addEventListener('click', () => {
-            const tableData = [];
-            let hasChanges = false;
-
-            // Mostrar pantalla de carga antes de empezar
-            const loadingOverlay = document.createElement('div');
-            loadingOverlay.className = 'loading-overlay';
-            loadingOverlay.innerHTML = `
-                <div class="loading-content">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Procesando...</span>
-                    </div>
-                    <h2 class="mt-4">Procesando revalidación...</h2>
-                    <p>Por favor espere mientras validamos los cambios.</p>
-                </div>
-            `;
-            document.body.appendChild(loadingOverlay);
-            loadingOverlay.style.display = 'flex';
-
-            editableInputs.forEach(input => {
-                const row = input.closest('tr');
-                const campo = row.dataset.field;
-                const original = row.querySelector('.original').textContent.trim();
-                const sugerido = input.value.trim();
-                if (sugerido !== originalValues[campo]) {
-                    hasChanges = true;
-                }
-                tableData.push({ campo, original, sugerido });
-            });
-
-            if (!hasChanges) {
-                document.body.removeChild(loadingOverlay);
-                alert("No se detectaron cambios para guardar.");
-                return;
-            }
-
-            // Agregar logs para debugging
-            console.log('Enviando datos:', tableData);
-
-            fetch("/update_data", {
-                method: "POST",
-                headers: { 
-                    "Content-Type": "application/json",
-                    "Accept": "application/json"
-                },
-                body: JSON.stringify({ table_data: tableData })
-            })
-            .then(res => {
-                console.log('Respuesta recibida:', res.status);
-                return res.json().then(data => {
-                    if (!res.ok) {
-                        throw new Error(data.message || 'Error en el servidor');
-                    }
-                    return data;
-                });
-            })
-            .then(data => {
-                console.log('Datos procesados:', data);
-                if (data.status === "success") {
-                    if (data.data.redirect) {
-                        window.location.href = data.data.redirect;
-                    } else {
-                        showRevalidationResults(data.data);
-                    }
-                } else {
-                    alert('Error en la revalidación: ' + data.message);
-                }
-            })
-            .catch(err => {
-                console.error('Error:', err);
-                alert(`Error: ${err.message}`);
-            })
-            .finally(() => {
-                // Asegurarnos de que la pantalla de carga se remueve
-                if (document.body.contains(loadingOverlay)) {
-                    document.body.removeChild(loadingOverlay);
-                }
-            });
-        });
-      
-        registerButton.addEventListener('click', () => {
-            if (confirm("¿Estás seguro de registrar este tiquete?")) {
-                showLoading();
-                
-                // Recolectar datos actuales de la tabla
-                const tableData = [];
-                editableInputs.forEach(input => {
-                    const row = input.closest('tr');
-                    const campo = row.dataset.field;
-                    const original = row.querySelector('.original').textContent.trim();
-                    const sugerido = input.value.trim();
-                    tableData.push({ campo, original, sugerido });
-                });
-
-                fetch('/register', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ table_data: tableData })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === "success") {
-                        // Redirigir a la página de revisión del PDF
-                        window.location.href = "/review_pdf";
-                    } else {
-                        hideLoading();
-                        alert("Error al registrar el tiquete: " + data.message);
-                    }
-                })
-                .catch(error => {
-                    hideLoading();
-                    console.error('Error:', error);
-                    alert("Error al registrar el tiquete");
-                });
-            }
-        });
-
-        // Función para manejar la respuesta del webhook
-        function handleWebhookResponse(response) {
-            if (response.status === "success") {
-                const data = response.data;
-                
-                // Si hay redirección, navegar a la página de éxito
-                if (data.redirect) {
-                    window.location.href = data.redirect;
-                    return;
-                }
-                
-                // Si no hay redirección pero hay un mensaje, mostrarlo
-                if (data.Result) {
-                    showMessage(data.Result, data.Nota || '', 'warning');
-                }
-            } else {
-                showMessage('Error en la validación', response.message || 'Error desconocido', 'error');
-            }
+            
+            document.getElementById('editButton').classList.add('d-none');
+            document.getElementById('saveButton').classList.remove('d-none');
+            document.getElementById('cancelButton').classList.remove('d-none');
         }
         
-        // Función para enviar los datos actualizados
-        async function updateData() {
+        function cancelEditing() {
+            const inputs = document.querySelectorAll('#dataTable input');
+            inputs.forEach(input => {
+                const row = input.closest('tr');
+                const campo = row.querySelector('td:first-child').textContent;
+                input.value = originalValues[campo];
+                input.setAttribute('readonly', '');
+            });
+            
+            document.getElementById('editButton').classList.remove('d-none');
+            document.getElementById('saveButton').classList.add('d-none');
+            document.getElementById('cancelButton').classList.add('d-none');
+        }
+
+        async function submitForm() {
             try {
                 showLoading();
+                const tableData = [];
+                const rows = document.querySelectorAll('#dataTable tbody tr');
+                
+                rows.forEach(row => {
+                    const campo = row.querySelector('td:first-child').textContent;
+                    const original = row.querySelector('td:nth-child(2)').textContent;
+                    const sugerido = row.querySelector('td:nth-child(3) input').value;
+                    
+                    tableData.push({
+                        campo: campo,
+                        original: original,
+                        sugerido: sugerido || original
+                    });
+                });
+
                 const response = await fetch('/update_data', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({
-                        table_data: tableData
-                    })
+                    body: JSON.stringify({ table_data: tableData })
                 });
 
                 const data = await response.json();
-                console.log('Respuesta recibida:', data);  // Debug
+                console.log('Respuesta del servidor:', data);
 
                 if (data.status === 'success') {
-                    // Redirigir a la URL proporcionada por el servidor
                     window.location.href = data.redirect;
                 } else {
                     hideLoading();
-                    // Mostrar mensaje de error
-                    alert(data.message || 'Error al procesar los datos');
-                    // Si hay una redirección de error, seguirla
                     if (data.redirect) {
                         window.location.href = data.redirect;
+                    } else {
+                        alert(data.message || 'Error al procesar los datos');
                     }
                 }
             } catch (error) {
@@ -428,6 +235,39 @@
                 alert('Error al procesar la solicitud');
             }
         }
+
+        // Agregar manejadores de eventos cuando el documento esté listo
+        document.addEventListener('DOMContentLoaded', function() {
+            // Manejar el botón de editar
+            const editButton = document.getElementById('editButton');
+            if (editButton) {
+                editButton.addEventListener('click', enableEditing);
+            }
+            
+            // Manejar el botón de cancelar
+            const cancelButton = document.getElementById('cancelButton');
+            if (cancelButton) {
+                cancelButton.addEventListener('click', cancelEditing);
+            }
+            
+            // Manejar el botón de guardar
+            const saveButton = document.getElementById('saveButton');
+            if (saveButton) {
+                saveButton.addEventListener('click', submitForm);
+            }
+
+            // Inicializar los campos sugeridos con los valores originales
+            const rows = document.querySelectorAll('#dataTable tbody tr');
+            rows.forEach(row => {
+                const originalValue = row.querySelector('td:nth-child(2)').textContent;
+                const suggestedInput = row.querySelector('td:nth-child(3) input');
+                if (suggestedInput && !suggestedInput.value) {
+                    suggestedInput.value = originalValue;
+                }
+            });
+        });
     </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
