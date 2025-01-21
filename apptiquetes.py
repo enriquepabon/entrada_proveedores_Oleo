@@ -728,6 +728,12 @@ def procesar_pesaje_directo():
         temp_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         foto.save(temp_path)
         
+        # Obtener el código de guía correcto de la sesión
+        codigo_guia = session.get('codigo_guia')
+        if not codigo_guia:
+            logger.error("No se encontró codigo_guia en la sesión")
+            return jsonify({'success': False, 'message': 'No se encontró el código de guía'})
+        
         # Enviar al webhook de Make para procesamiento
         with open(temp_path, 'rb') as f:
             response = requests.post(
@@ -742,7 +748,7 @@ def procesar_pesaje_directo():
             
             if "Exitoso!" in response_text:
                 import re
-                peso_match = re.search(r'El peso bruto es: (\d+\.?\d*)', response_text)
+                peso_match = re.search(r'El peso bruto es:\s*(\d+)\s*tm', response_text)
                 if peso_match:
                     peso = peso_match.group(1)
                     fecha_hora_actual = datetime.now()
@@ -766,7 +772,8 @@ def procesar_pesaje_directo():
                             'peso_bruto': peso,
                             'tipo_pesaje': 'directo',
                             'fecha': fecha_hora_actual.strftime("%Y-%m-%d"),
-                            'hora': fecha_hora_actual.strftime("%H:%M:%S")
+                            'hora': fecha_hora_actual.strftime("%H:%M:%S"),
+                            'codigo_guia': codigo_guia  # Usar el código de guía de la sesión
                         }
                     )
                     
@@ -786,7 +793,7 @@ def procesar_pesaje_directo():
                         'hora_pesaje': fecha_hora_actual.strftime("%H:%M:%S"),
                         'pdf_pesaje': pdf_pesaje,
                         'imagen_pesaje': filename,
-                        'codigo_guia': f"{codigo}_{fecha_hora_actual.strftime('%Y%m%d_%H%M%S')}"
+                        'codigo_guia': codigo_guia  # Usar el código de guía existente
                     }
                     
                     # Guardar en sesión
@@ -800,7 +807,8 @@ def procesar_pesaje_directo():
                     return jsonify({
                         'success': True,
                         'peso': peso,
-                        'message': 'Peso procesado correctamente'
+                        'message': 'Peso procesado correctamente',
+                        'redirect_url': url_for('ver_guia', codigo=codigo)  # Agregar URL de redirección
                     })
                     
                 else:
@@ -1008,61 +1016,68 @@ def registrar_peso_virtual():
 
 def obtener_datos_guia(codigo):
     """
-    Obtiene los datos actuales de la guía usando los datos almacenados
+    Obtiene los datos actuales de la guía usando los datos almacenados y el webhook response
     """
     try:
         # Obtener datos de la sesión
         parsed_data = session.get('parsed_data', {})
         image_filename = session.get('image_filename')
-        codigo_guia = session.get('codigo_guia')
         fecha_registro = session.get('fecha_registro')
         hora_registro = session.get('hora_registro')
+        webhook_response = session.get('webhook_response', {})
         
-        # Datos básicos
+        # Extraer datos validados del webhook
+        webhook_data = webhook_response.get('data', {})
+        
+        # Obtener el código validado del webhook
+        codigo_validado = webhook_data.get('codigo', codigo)
+        
+        # Obtener el codigo_guia de la sesión - NO generar uno nuevo
+        codigo_guia = session.get('codigo_guia')
+        if not codigo_guia:
+            logger.error("No se encontró codigo_guia en la sesión")
+            raise Exception("No se encontró el código de guía")
+        
+        # Datos básicos usando webhook data si está disponible
         datos = {
-            'codigo': codigo,
-            'nombre': '',
-            'fecha_registro': fecha_registro,  # Usar fecha almacenada
-            'hora_registro': hora_registro,    # Usar hora almacenada
-            'placa': '',
-            'transportador': '',
-            'cantidad_racimos': '',
+            'codigo': webhook_data.get('codigo', codigo),
+            'codigo_validado': codigo_validado,
+            'nombre': webhook_data.get('nombre_agricultor', ''),
+            'nombre_validado': webhook_data.get('nombre_agricultor'),
+            'fecha_registro': fecha_registro,
+            'hora_registro': hora_registro,
+            'placa': webhook_data.get('placa', ''),
+            'transportador': webhook_data.get('transportador', ''),
+            'cantidad_racimos': webhook_data.get('racimos', ''),
             'estado_actual': session.get('estado_actual', 'pesaje'),
             'image_filename': image_filename,
             'pdf_filename': session.get('pdf_filename', ''),
-            'codigo_guia': codigo_guia        # Usar código de guía almacenado
+            'codigo_guia': codigo_guia  # Usar el código de guía existente
         }
         
-        # Extraer datos del parsed_data
-        if parsed_data and 'table_data' in parsed_data:
+        # Si no hay datos del webhook, usar datos del parsed_data como respaldo
+        if not webhook_data and parsed_data and 'table_data' in parsed_data:
             for row in parsed_data['table_data']:
                 campo = row['campo']
-                valor = row['original'] if row['sugerido'] == 'No disponible' else row['sugerido']
+                valor = row['sugerido'] if row['sugerido'] != 'No disponible' else row['original']
                 
-                if campo == 'Nombre del Agricultor':
+                if campo == 'Nombre del Agricultor' and not datos['nombre']:
                     datos['nombre'] = valor
-                elif campo == 'Código':
+                elif campo == 'Código' and not datos['codigo_validado']:
                     datos['codigo'] = valor
-                elif campo == 'Placa':
+                elif campo == 'Placa' and not datos['placa']:
                     datos['placa'] = valor
-                elif campo == 'Cantidad de Racimos':
+                elif campo == 'Cantidad de Racimos' and not datos['cantidad_racimos']:
                     datos['cantidad_racimos'] = valor
-                elif campo == 'Transportador':
+                elif campo == 'Transportador' and not datos['transportador']:
                     datos['transportador'] = valor
-
-        # Si no hay fecha_registro almacenada, usar la fecha actual
-        if not datos['fecha_registro']:
-            now = datetime.now()
-            datos['fecha_registro'] = now.strftime("%d/%m/%Y")
-            datos['hora_registro'] = now.strftime("%H:%M:%S")
-
+        
         logger.info(f"Datos obtenidos para guía {codigo}: {datos}")
         return datos
         
     except Exception as e:
         logger.error(f"Error obteniendo datos de guía: {str(e)}")
-        logger.error(traceback.format_exc())
-        return {}
+        raise
     
 def actualizar_estado_guia(codigo, datos):
     """
@@ -1090,20 +1105,6 @@ def ver_guia(codigo):
         datos_guia = obtener_datos_guia(codigo)
         if not datos_guia:
             return render_template('error.html', message="Guía no encontrada"), 404
-
-        # Generar código de guía con formato: codigo_fecha_hora
-        now = datetime.now()
-        fecha_hora = now.strftime("%Y%m%d_%H%M%S")
-        
-        # Formatear fecha para mostrar
-        fecha_formato = now.strftime("%d/%m/%Y")
-        
-        # Actualizar datos_guia con el nuevo código y fecha
-        datos_guia.update({
-            'codigo_guia': f"{codigo}_{fecha_hora}",
-            'fecha_formato': fecha_formato,
-            'hora_formato': now.strftime("%H:%M:%S")
-        })
             
         return render_template('guia_template.html', **datos_guia)
         
