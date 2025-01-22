@@ -3,100 +3,101 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Registro de Pesaje</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF de Pesaje</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            margin: 40px;
-            color: #333;
+            margin: 0;
+            padding: 20px;
         }
         .header {
             text-align: center;
             margin-bottom: 30px;
-            border-bottom: 2px solid #2c3e50;
+            border-bottom: 2px solid #333;
             padding-bottom: 20px;
         }
-        .title {
-            color: #2c3e50;
+        .header img {
+            max-width: 200px;
+            margin-bottom: 15px;
+        }
+        .header h1 {
             font-size: 24px;
+            margin: 0;
+            color: #333;
+        }
+        .header h2 {
+            font-size: 18px;
             margin: 10px 0;
+            color: #666;
         }
-        .data-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 20px 0;
+        .info {
+            margin-bottom: 30px;
         }
-        .data-table th, .data-table td {
-            padding: 12px;
-            border: 1px solid #ddd;
+        .info p {
+            margin: 8px 0;
+            font-size: 14px;
         }
-        .data-table th {
-            background-color: #f8f9fa;
-            font-weight: bold;
+        .info strong {
+            color: #333;
+            min-width: 150px;
+            display: inline-block;
         }
-        .image-container {
+        .weight-image {
             text-align: center;
             margin: 20px 0;
         }
-        .qr-section {
+        .weight-image img {
+            max-width: 100%;
+            max-height: 300px;
+        }
+        .qr-code {
             text-align: center;
-            margin: 30px 0;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #ccc;
+        }
+        .qr-code img {
+            width: 150px;
         }
         .footer {
             margin-top: 30px;
+            text-align: center;
             font-size: 12px;
             color: #666;
-            text-align: center;
         }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1 class="title">Registro de Pesaje</h1>
-        <h2>Extractora Maria La Baja</h2>
+        <img src="/static/images/logo.png" alt="Logo">
+        <h1>Comprobante de Pesaje</h1>
+        <h2>Código: {{ codigo }}</h2>
     </div>
-
-    <div class="data-table">
-        <table>
-            <tr>
-                <th>Código:</th>
-                <td>{{ codigo }}</td>
-                <th>Fecha de Pesaje:</th>
-                <td>{{ fecha_pesaje }}</td>
-            </tr>
-            <tr>
-                <th>Proveedor:</th>
-                <td>{{ nombre }}</td>
-                <th>Hora de Pesaje:</th>
-                <td>{{ hora_pesaje }}</td>
-            </tr>
-            <tr>
-                <th>Peso Bruto:</th>
-                <td colspan="3">{{ peso_bruto }} kg</td>
-            </tr>
-            <tr>
-                <th>Tipo de Pesaje:</th>
-                <td colspan="3">{{ tipo_pesaje|title }}</td>
-            </tr>
-        </table>
+    
+    <div class="info">
+        <p><strong>Nombre:</strong> {{ nombre }}</p>
+        <p><strong>Peso Bruto:</strong> {{ peso_bruto }} kg</p>
+        <p><strong>Tipo de Pesaje:</strong> {{ tipo_pesaje }}</p>
+        <p><strong>Fecha de Pesaje:</strong> {{ fecha_pesaje }}</p>
+        <p><strong>Hora de Pesaje:</strong> {{ hora_pesaje }}</p>
+        <p><strong>Fecha de Generación:</strong> {{ fecha_generacion }}</p>
+        <p><strong>Hora de Generación:</strong> {{ hora_generacion }}</p>
     </div>
-
+    
     {% if imagen_peso %}
-    <div class="image-container">
-        <h3>Imagen del Pesaje</h3>
-        <img src="{{ url_for('static', filename='uploads/' + imagen_peso, _external=True) }}" 
-             style="max-width: 100%; height: auto;">
+    <div class="weight-image">
+        <img src="/static/uploads/{{ imagen_peso }}" alt="Imagen de Pesaje">
     </div>
     {% endif %}
-
-    <div class="qr-section">
-        <img src="{{ url_for('static', filename=qr_filename, _external=True) }}" 
-             style="width: 150px; height: 150px;">
-        <p>Escanee para seguimiento del proceso</p>
+    
+    <div class="qr-code">
+        <img src="/static/qr/{{ qr_filename }}" alt="Código QR">
     </div>
-
+    
     <div class="footer">
-        <p>Documento generado el {{ fecha_generacion }} a las {{ hora_generacion }}</p>
+        <p>Este documento es un comprobante oficial de pesaje.</p>
+        <p>Fecha y hora de emisión: {{ fecha_generacion }} {{ hora_generacion }}</p>
     </div>
 </body>
 </html>

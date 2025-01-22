@@ -24,31 +24,33 @@ wheels/
 venv/
 ENV/
 env/
-
-# Environment Variables
 .env
-.env.*
-!.env.example
 
 # IDE
 .idea/
 .vscode/
 *.swp
 *.swo
-
-# Logs
-*.log
-logs/
+.DS_Store
 
 # Application specific
-static/uploads/*
-!static/uploads/.gitkeep
-static/pdfs/*
-!static/pdfs/.gitkeep
-static/qr/*
-!static/qr/.gitkeep
+static/uploads/
+static/pdfs/
+static/guias/
+static/excels/
+static/qr/
+instance/
+*.log
+*.db
 
-# OS specific
+# Environment variables
+.env
+.env.*
+
+# Local development
+*.sqlite
+*.db
+*.log
 .DS_Store
 Thumbs.db
 

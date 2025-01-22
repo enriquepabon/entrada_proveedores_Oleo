@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Reporte de Clasificación</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            line-height: 1.6;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .info-section {
+            margin-bottom: 20px;
+        }
+        .clasificacion-section {
+            margin-bottom: 30px;
+        }
+        .imagenes-section {
+            margin-bottom: 30px;
+            page-break-before: always;
+        }
+        .imagenes-section img {
+            max-width: 100%;
+            height: auto;
+            margin-bottom: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .footer {
+            margin-top: 30px;
+            text-align: center;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Reporte de Clasificación de Racimos</h1>
+        <p>Fecha de Generación: {{ fecha_generacion }} - {{ hora_generacion }}</p>
+    </div>
+
+    <div class="info-section">
+        <h2>Información General</h2>
+        <table>
+            <tr>
+                <th>Código de Guía:</th>
+                <td>{{ codigo_guia }}</td>
+            </tr>
+            <tr>
+                <th>Código Proveedor:</th>
+                <td>{{ codigo }}</td>
+            </tr>
+            <tr>
+                <th>Nombre:</th>
+                <td>{{ nombre }}</td>
+            </tr>
+            <tr>
+                <th>Peso Bruto:</th>
+                <td>{{ peso_bruto }} kg</td>
+            </tr>
+            <tr>
+                <th>Tipo de Clasificación:</th>
+                <td>{{ tipo_clasificacion|title }}</td>
+            </tr>
+            <tr>
+                <th>Fecha de Clasificación:</th>
+                <td>{{ fecha_clasificacion }}</td>
+            </tr>
+            <tr>
+                <th>Hora de Clasificación:</th>
+                <td>{{ hora_clasificacion }}</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="clasificacion-section">
+        <h2>Resultados de la Clasificación</h2>
+        <table>
+            <tr>
+                <th>Tipo de Racimo</th>
+                <th>Cantidad</th>
+            </tr>
+            <tr>
+                <td>Racimos Verdes</td>
+                <td>{{ clasificacion.verde }}</td>
+            </tr>
+            <tr>
+                <td>Racimos Sobremaduros</td>
+                <td>{{ clasificacion.sobremaduro }}</td>
+            </tr>
+            <tr>
+                <td>Racimos con Daño en Corona</td>
+                <td>{{ clasificacion.danio_corona }}</td>
+            </tr>
+            <tr>
+                <td>Racimos con Pedúnculo Largo</td>
+                <td>{{ clasificacion.pendunculo_largo }}</td>
+            </tr>
+            <tr>
+                <td>Racimos Podridos</td>
+                <td>{{ clasificacion.podrido }}</td>
+            </tr>
+        </table>
+    </div>
+
+    {% if imagenes %}
+    <div class="imagenes-section">
+        <h2>Imágenes de la Clasificación</h2>
+        {% if imagenes.annotated %}
+        <div>
+            <h3>Imagen Anotada</h3>
+            <img src="{{ url_for('static', filename='uploads/' + imagenes.annotated) }}" alt="Imagen Anotada">
+        </div>
+        {% endif %}
+        {% if imagenes.labeled %}
+        <div>
+            <h3>Imagen con Etiquetas</h3>
+            <img src="{{ url_for('static', filename='uploads/' + imagenes.labeled) }}" alt="Imagen con Etiquetas">
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <div class="footer">
+        <p>Este es un documento generado automáticamente.</p>
+        <p>Fecha y hora de generación: {{ fecha_generacion }} {{ hora_generacion }}</p>
+    </div>
+</body>
+</html> 

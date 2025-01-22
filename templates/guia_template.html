@@ -196,8 +196,9 @@
 
         <!-- Información del Tiquete -->
         <div class="info-card">
-            <h3 class="card-title">Información del Tiquete</h3>
+            <h3 class="card-title">Información del Proceso</h3>
             <div class="info-grid">
+                <!-- Registro de Portería -->
                 <div class="info-item">
                     <div class="info-label">Código</div>
                     <div class="info-value">{{ codigo }}</div>
@@ -227,13 +228,86 @@
                     <div class="info-value">{{ transportador }}</div>
                 </div>
                 <div class="info-item">
-                    <div class="info-label">Fecha del Tiquete</div>
-                    <div class="info-value">{{ fecha_tiquete }}</div>
+                    <div class="info-label">Fecha de Registro</div>
+                    <div class="info-value">{{ fecha_registro }}</div>
                 </div>
                 <div class="info-item">
                     <div class="info-label">Hora de Registro</div>
                     <div class="info-value">{{ hora_registro }}</div>
                 </div>
+
+                <!-- Información de Pesaje -->
+                {% if peso_bruto %}
+                <div class="info-item">
+                    <div class="info-label">Fecha de Pesaje</div>
+                    <div class="info-value">{{ fecha_pesaje }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Hora de Pesaje</div>
+                    <div class="info-value">{{ hora_pesaje }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Tipo de Pesaje</div>
+                    <div class="info-value">{{ tipo_pesaje|title }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Peso Bruto</div>
+                    <div class="info-value">{{ peso_bruto }} kg</div>
+                </div>
+                {% endif %}
+
+                <!-- Información de Clasificación -->
+                {% if clasificacion_completa %}
+                <div class="info-item">
+                    <div class="info-label">Fecha de Clasificación</div>
+                    <div class="info-value">{{ fecha_clasificacion }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Hora de Clasificación</div>
+                    <div class="info-value">{{ hora_clasificacion }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Tipo de Clasificación</div>
+                    <div class="info-value">{{ tipo_clasificacion|title }}</div>
+                </div>
+                {% endif %}
+
+                <!-- Información de Peso Tara -->
+                {% if peso_tara %}
+                <div class="info-item">
+                    <div class="info-label">Fecha de Peso Tara</div>
+                    <div class="info-value">{{ fecha_peso_tara }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Hora de Peso Tara</div>
+                    <div class="info-value">{{ hora_peso_tara }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Tipo de Peso Tara</div>
+                    <div class="info-value">{{ tipo_peso_tara|title }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Peso Tara</div>
+                    <div class="info-value">{{ peso_tara }} kg</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Peso Neto</div>
+                    <div class="info-value">{{ peso_neto }} kg</div>
+                </div>
+                {% endif %}
+
+                <!-- Información de Salida -->
+                {% if salida_completa %}
+                <div class="info-item">
+                    <div class="info-label">Fecha de Salida</div>
+                    <div class="info-value">{{ fecha_salida }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Hora de Salida</div>
+                    <div class="info-value">{{ hora_salida }}</div>
+                </div>
+                {% endif %}
+
                 {% if nota %}
                 <div class="info-item">
                     <div class="info-label">Nota</div>
@@ -252,7 +326,7 @@
                     <div class="timeline-content">
                         <div class="timeline-title">
                             <i class="fas fa-check-circle status-icon"></i>
-                            Registro Inicial
+                            Registro de Portería
                         </div>
                         <div class="timeline-info">
                             <span class="me-3">Fecha: {{ fecha_registro }}</span>
@@ -273,7 +347,7 @@
                     <div class="timeline-content">
                         <div class="timeline-title">
                             <i class="fas {% if peso_bruto %}fa-check-circle{% else %}fa-clock{% endif %} status-icon"></i>
-                            Pesaje
+                            Pesaje Bruto
                         </div>
                         {% if peso_bruto %}
                         <div class="timeline-info">
@@ -290,32 +364,76 @@
                         <i class="fas fa-file-pdf"></i> Descargar PDF
                     </a>
                     {% elif not peso_bruto %}
-                    <a href="{{ url_for('pesaje', codigo=codigo) }}" 
-                       class="btn-action btn-register">
-                        Registrar Peso
+                    <a href="/pesaje/{{ codigo }}" class="btn btn-primary btn-register">
+                        <i class="fas fa-weight"></i> Registrar Peso
                     </a>
                     {% endif %}
                 </div>
 
-                <!-- Clasificación de Fruta -->
-                <div class="timeline-item {% if estado_actual == 'clasificacion_completada' %}completed{% elif estado_actual == 'pesaje_completado' %}current{% else %}pending{% endif %}">
+                <!-- Clasificación -->
+                <div class="timeline-item {% if clasificacion_completa %}completed{% elif peso_bruto %}current{% else %}pending{% endif %}">
                     <div class="timeline-content">
                         <div class="timeline-title">
-                            <i class="fas {% if estado_actual == 'clasificacion_completada' %}fa-check-circle{% elif estado_actual == 'pesaje_completado' %}fa-clock{% else %}fa-hourglass-start{% endif %} status-icon"></i>
+                            <i class="fas {% if clasificacion_completa %}fa-check-circle{% elif peso_bruto %}fa-clock{% else %}fa-hourglass{% endif %} status-icon"></i>
                             Clasificación de Fruta
                         </div>
-                        {% if estado_actual == 'clasificacion_completada' %}
+                        {% if clasificacion_completa %}
                         <div class="timeline-info">
-                            <span class="me-3">Fecha: {{ clasificacion_data.fecha_clasificacion }}</span>
-                            <span>Hora: {{ clasificacion_data.hora_clasificacion }}</span>
+                            <span class="me-3">Fecha: {{ fecha_clasificacion }}</span>
+                            <span class="me-3">Hora: {{ hora_clasificacion }}</span>
+                            <span>Tipo: {{ tipo_clasificacion|title }}</span>
                         </div>
                         {% endif %}
                     </div>
-                    {% if estado_actual == 'clasificacion_completada' and clasificacion_data.pdf_clasificacion %}
-                    <a href="{{ url_for('static', filename='pdfs/' + clasificacion_data.pdf_clasificacion) }}" 
-                       class="btn-action btn-download" 
-                       download>
-                        <i class="fas fa-file-pdf"></i> Descargar PDF
+                    {% if peso_bruto and not clasificacion_completa %}
+                    <a href="{{ url_for('clasificacion', codigo=codigo) }}" 
+                       class="btn-action btn-register">
+                        Iniciar Clasificación
+                    </a>
+                    {% endif %}
+                </div>
+
+                <!-- Peso Tara -->
+                <div class="timeline-item {% if peso_tara %}completed{% elif clasificacion_completa %}current{% else %}pending{% endif %}">
+                    <div class="timeline-content">
+                        <div class="timeline-title">
+                            <i class="fas {% if peso_tara %}fa-check-circle{% elif clasificacion_completa %}fa-clock{% else %}fa-hourglass{% endif %} status-icon"></i>
+                            Peso Tara
+                        </div>
+                        {% if peso_tara %}
+                        <div class="timeline-info">
+                            <span class="me-3">Peso Tara: {{ peso_tara }} kg</span>
+                            <span class="me-3">Peso Neto: {{ peso_neto }} kg</span>
+                            <span>Tipo: {{ tipo_peso_tara|title }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% if clasificacion_completa and not peso_tara %}
+                    <a href="{{ url_for('pesaje_tara', codigo=codigo) }}" 
+                       class="btn-action btn-register">
+                        Registrar Tara
+                    </a>
+                    {% endif %}
+                </div>
+
+                <!-- Registro de Salida -->
+                <div class="timeline-item {% if salida_completa %}completed{% elif peso_tara %}current{% else %}pending{% endif %}">
+                    <div class="timeline-content">
+                        <div class="timeline-title">
+                            <i class="fas {% if salida_completa %}fa-check-circle{% elif peso_tara %}fa-clock{% else %}fa-hourglass{% endif %} status-icon"></i>
+                            Registro de Salida
+                        </div>
+                        {% if salida_completa %}
+                        <div class="timeline-info">
+                            <span class="me-3">Fecha: {{ fecha_salida }}</span>
+                            <span>Hora: {{ hora_salida }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% if peso_tara and not salida_completa %}
+                    <a href="{{ url_for('registro_salida', codigo=codigo) }}" 
+                       class="btn-action btn-register">
+                        Registrar Salida
                     </a>
                     {% endif %}
                 </div>

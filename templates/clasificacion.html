@@ -95,19 +95,23 @@
             </div>
         </div>
 
-        <!-- Modificar la sección de Clasificación Automática -->
-        <div id="seccionAutomatica" class="classification-section mb-4">
+        <!-- Sección de Clasificación Automática -->
+        <div id="seccionAutomatica" class="classification-section">
             <h4 class="mb-3">Clasificación Automática</h4>
-            <form id="automaticForm">
+            <form id="clasificacionForm">
+                <input type="hidden" id="codigo" name="codigo" value="{{ codigo }}">
                 <div class="mb-3">
-                    <label class="form-label">Foto para clasificación automática:</label>
-                    <input type="file" class="form-control" id="clasificacionFoto" accept="image/*">
-                    <img id="previewImage" class="preview-image hidden">
+                    <label for="clasificacionFoto" class="form-label">Seleccionar o Tomar Foto:</label>
+                    <input type="file" class="form-control" id="clasificacionFoto" name="foto" accept="image/*" capture>
                 </div>
-                <div id="resultadoAutomatico" class="alert hidden"></div>
-                <button type="button" class="btn btn-primary" onclick="procesarClasificacionAutomatica()">
-                    Procesar Clasificación Automática
-                </button>
+                <div class="mb-3">
+                    <img id="previewImage" src="#" alt="Preview" class="img-fluid hidden" style="max-width: 300px;">
+                </div>
+                <div class="mb-3">
+                    <button type="button" onclick="procesarClasificacionAutomatica()" class="btn btn-primary">
+                        Procesar Imagen
+                    </button>
+                </div>
             </form>
         </div>
 
@@ -140,6 +144,57 @@
             </form>
         </div>
 
+        <!-- Resultados de la clasificación automática -->
+        <div id="resultadosClasificacion" style="display: none;" class="mt-4">
+            <h4>Resultados de la Clasificación</h4>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Conteo de Racimos</h5>
+                            <ul class="list-group">
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Verdes
+                                    <span id="conteoVerde" class="badge bg-success rounded-pill">0</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Sobremaduros
+                                    <span id="conteoSobremaduro" class="badge bg-warning rounded-pill">0</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Daño en Corona
+                                    <span id="conteoDanioCorona" class="badge bg-danger rounded-pill">0</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Pedúnculo Largo
+                                    <span id="conteoPendunculoLargo" class="badge bg-info rounded-pill">0</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Podridos
+                                    <span id="conteoPodrido" class="badge bg-dark rounded-pill">0</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Imágenes Procesadas</h5>
+                            <div id="imagenesClasificacion"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Botón para registrar la clasificación -->
+            <div class="text-center mt-4">
+                <button type="button" onclick="registrarClasificacion()" class="btn btn-primary">
+                    Registrar Clasificación
+                </button>
+            </div>
+        </div>
+
         <!-- Botones de acción -->
         <div class="d-flex justify-content-end gap-2 mt-4">
             <button onclick="window.location.href=`/ver_guia/{{ codigo }}`" class="btn btn-secondary">
@@ -151,6 +206,7 @@
         </div>
     </div>
 
+    <script src="{{ url_for('static', filename='js/clasificacion.js') }}"></script>
     <script>
         // Preview de la imagen
         document.getElementById('clasificacionFoto').addEventListener('change', function(e) {
@@ -161,7 +217,7 @@
                 const reader = new FileReader();
                 reader.onload = function(e) {
                     preview.src = e.target.result;
-                    preview.classList.remove('hidden');
+                    preview.style.display = 'block';
                 }
                 reader.readAsDataURL(file);
             }
@@ -173,42 +229,137 @@
 
         async function procesarClasificacionAutomatica() {
             const fileInput = document.getElementById('clasificacionFoto');
+            const codigo = document.getElementById('codigo').value;
+            const resultadosDiv = document.getElementById('resultadosClasificacion');
+            
             if (!fileInput.files[0]) {
                 alert('Por favor seleccione una imagen para la clasificación');
                 return;
             }
 
-            mostrarCarga(true);
             const formData = new FormData();
             formData.append('foto', fileInput.files[0]);
-            formData.append('codigo', '{{ codigo }}');
+            formData.append('codigo', codigo);
 
             try {
+                resultadosDiv.innerHTML = '<div class="alert alert-info">Procesando imagen...</div>';
+                resultadosDiv.style.display = 'block';
+
                 const response = await fetch('/procesar_clasificacion_automatica', {
                     method: 'POST',
                     body: formData
                 });
-                
+
                 const data = await response.json();
-                const resultadoDiv = document.getElementById('resultadoAutomatico');
-                resultadoDiv.classList.remove('hidden', 'alert-success', 'alert-danger');
-                
+                console.log('Respuesta del servidor:', data);  // Para depuración
+
                 if (data.success) {
-                    resultadoDiv.classList.add('alert-success');
-                    // Aquí puedes llenar automáticamente los campos del formulario manual
-                    llenarFormularioManual(data.clasificacion);
+                    mostrarResultadosClasificacion(data);
                 } else {
-                    resultadoDiv.classList.add('alert-danger');
-                    resultadoDiv.innerHTML = `Error: ${data.message}`;
+                    resultadosDiv.innerHTML = `
+                        <div class="alert alert-danger">
+                            ${data.message || 'Error procesando la imagen'}
+                        </div>
+                    `;
                 }
             } catch (error) {
                 console.error('Error:', error);
-                alert('Error procesando la clasificación');
-            } finally {
-                mostrarCarga(false);
+                resultadosDiv.innerHTML = `
+                    <div class="alert alert-danger">
+                        Error procesando la imagen. Por favor intente nuevamente.
+                    </div>
+                `;
+            }
+        }
+
+        function mostrarResultadosClasificacion(data) {
+            const resultadosDiv = document.getElementById('resultadosClasificacion');
+            const clasificacion = data.clasificacion;
+            const imagenes = data.imagenes;
+            
+            let resultadosHTML = `
+                <h3>Resultados de la Clasificación</h3>
+                <div class="clasificacion-resultados">
+                    <p><strong>Racimos Verdes:</strong> ${clasificacion.verde}</p>
+                    <p><strong>Racimos Sobremaduros:</strong> ${clasificacion.sobremaduro}</p>
+                    <p><strong>Racimos con Daño en Corona:</strong> ${clasificacion.danio_corona}</p>
+                    <p><strong>Racimos con Pedúnculo Largo:</strong> ${clasificacion.pendunculo_largo}</p>
+                    <p><strong>Racimos Podridos:</strong> ${clasificacion.podrido}</p>
+                </div>
+            `;
+            
+            if (imagenes) {
+                resultadosHTML += '<div class="imagenes-clasificacion">';
+                if (imagenes.annotated) {
+                    resultadosHTML += `
+                        <div class="imagen-container">
+                            <h4>Imagen Anotada</h4>
+                            <img src="/static/uploads/${imagenes.annotated}" alt="Imagen Anotada" class="img-fluid">
+                        </div>
+                    `;
+                }
+                if (imagenes.labeled) {
+                    resultadosHTML += `
+                        <div class="imagen-container">
+                            <h4>Imagen con Etiquetas</h4>
+                            <img src="/static/uploads/${imagenes.labeled}" alt="Imagen con Etiquetas" class="img-fluid">
+                        </div>
+                    `;
+                }
+                resultadosHTML += '</div>';
+            }
+            
+            resultadosHTML += `
+                <div class="mt-4">
+                    <button onclick="registrarClasificacion()" class="btn btn-primary">Registrar Clasificación</button>
+                </div>
+            `;
+            
+            resultadosDiv.innerHTML = resultadosHTML;
+            resultadosDiv.style.display = 'block';
+            
+            // Guardar datos para registro posterior
+            window.clasificacionData = {
+                clasificacion: clasificacion,
+                imagenes: imagenes
+            };
+
+            // Llenar formulario manual si existe la función
+            if (typeof llenarFormularioManual === 'function') {
+                llenarFormularioManual(clasificacion);
+            }
+        }
+
+        async function registrarClasificacion() {
+            if (!window.clasificacionData) {
+                alert('No hay datos de clasificación para registrar');
+                return;
             }
 
-            window.clasificacionAutomaticaResultado = data.clasificacion;
+            try {
+                const response = await fetch('/guardar_clasificacion_automatica', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        codigo: document.getElementById('codigo').value,
+                        clasificacion: window.clasificacionData.clasificacion,
+                        imagenes: window.clasificacionData.imagenes
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    window.location.href = data.redirect_url;
+                } else {
+                    alert(data.message || 'Error al registrar la clasificación');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error al registrar la clasificación');
+            }
         }
 
         function llenarFormularioManual(clasificacion) {

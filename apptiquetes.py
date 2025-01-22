@@ -13,6 +13,8 @@ import json
 import qrcode
 from io import BytesIO
 from PIL import Image
+import io
+import base64
 from openpyxl import Workbook, load_workbook
 from openpyxl.drawing.image import Image as ExcelImage
 from parser import parse_markdown_response
@@ -23,6 +25,11 @@ import string
 from datetime import datetime, timedelta
 from knowledge_updater import knowledge_bp
 
+# Configuración de Roboflow
+ROBOFLOW_API_KEY = "huyFoCQs7090vfjDhfgK"
+ROBOFLOW_API_URL = "https://detect.roboflow.com/infer/workflows"
+WORKSPACE_NAME = "enrique-p-workspace"
+WORKFLOW_ID = "clasificacion-racimos-3"
 
 # Configuración de Logging
 logging.basicConfig(level=logging.DEBUG)
@@ -85,6 +92,8 @@ ADMIN_NOTIFICATION_WEBHOOK_URL = "https://hook.us2.make.com/wpeskbay7k21c3jnthu8
 PESAJE_WEBHOOK_URL = "https://hook.us2.make.com/srw5ti54ulwuxtvocrj2lypa5pmq3im4"
 AUTORIZACION_WEBHOOK_URL = "https://hook.us2.make.com/py29fwgfrehp9il45832acotytu8xr5s"
 REGISTRO_PESO_WEBHOOK_URL = "https://hook.us2.make.com/agxyjbyswl2cg1bor1wdrlfcgrll0y15"
+CLASIFICACION_WEBHOOK_URL = "https://hook.us2.make.com/clasificacion_webhook_url"
+REGISTRO_CLASIFICACION_WEBHOOK_URL = "https://hook.us2.make.com/ydtogfd3mln2ixbcuam0xrd2m9odfgna"
 
 codigos_autorizacion = {}
 
@@ -368,14 +377,10 @@ def generate_qr_image(codigo, nombre, fruta):
 
 
 def generate_pdf(parsed_data, image_filename, fecha_procesamiento, hora_procesamiento, revalidation_data=None):
-    """
-    Genera un PDF a partir de los datos del tiquete.
-    """
     try:
         logger.info("Iniciando generación de PDF")
         logger.info(f"Datos de revalidación: {revalidation_data}")
         
-        # Obtener fecha original del tiquete
         fecha_registro = None
         for row in parsed_data.get('table_data', []):
             if row['campo'] == 'Fecha':
@@ -384,8 +389,7 @@ def generate_pdf(parsed_data, image_filename, fecha_procesamiento, hora_procesam
         
         if not fecha_registro:
             fecha_registro = datetime.now().strftime("%d-%m-%Y")
-        
-        # Preparar datos para el QR
+       
         qr_data = {
             "codigo": revalidation_data.get('Código') if revalidation_data else parsed_data.get('codigo', ''),
             "nombre": revalidation_data.get('Nombre del Agricultor') if revalidation_data else parsed_data.get('nombre_agricultor', ''),
@@ -649,7 +653,37 @@ def pesaje_inicial(codigo):
 @app.route('/clasificacion/<codigo>', methods=['GET', 'POST'])
 def clasificacion(codigo):
     """Manejo de clasificación de fruta (automático o manual)"""
-    pass
+    try:
+        # Obtener datos de la guía
+        datos_guia = obtener_datos_guia(codigo)
+        if not datos_guia:
+            return render_template('error.html', message="Guía no encontrada"), 404
+
+        # Verificar que el pesaje esté completo
+        if not datos_guia.get('peso_bruto'):
+            return render_template('error.html', message="Debe completar el pesaje antes de la clasificación"), 400
+
+        # Verificar que la clasificación no esté ya completa
+        if datos_guia.get('clasificacion_completa'):
+            return render_template('error.html', message="La clasificación ya fue completada"), 400
+
+        # Renderizar template de clasificación con los datos necesarios
+        return render_template('clasificacion.html', 
+                           codigo=codigo,
+                           codigo_guia=datos_guia.get('codigo_guia'),
+                           nombre=datos_guia.get('nombre'),
+                           cantidad_racimos=datos_guia.get('cantidad_racimos'),
+                           peso_bruto=datos_guia.get('peso_bruto'),
+                           tipo_pesaje=datos_guia.get('tipo_pesaje'),
+                           fecha_registro=datos_guia.get('fecha_registro'),
+                           hora_registro=datos_guia.get('hora_registro'),
+                           transportador=datos_guia.get('transportador'),
+                           placa=datos_guia.get('placa'))
+                           
+    except Exception as e:
+        logger.error(f"Error en clasificación: {str(e)}")
+        logger.error(traceback.format_exc())
+        return render_template('error.html', message="Error procesando clasificación"), 500
 
 @app.route('/pesaje-tara/<codigo>', methods=['GET', 'POST'])
 def pesaje_tara(codigo):
@@ -736,101 +770,161 @@ def procesar_pesaje_directo():
         
         # Enviar al webhook de Make para procesamiento
         with open(temp_path, 'rb') as f:
-            response = requests.post(
-                PESAJE_WEBHOOK_URL,
-                files={'file': (filename, f, 'image/jpeg')},
-                data={'codigo': codigo}
-            )
+            files = {'file': (filename, f, 'multipart/form-data')}
+            data = {'codigo': codigo, 'codigo_guia': codigo_guia}
+            logger.info(f"Enviando imagen al webhook: {PESAJE_WEBHOOK_URL}")
+            response = requests.post(PESAJE_WEBHOOK_URL, files=files, data=data)
         
-        # Procesar respuesta del webhook
-        if response.status_code == 200:
-            response_text = response.text
-            
-            if "Exitoso!" in response_text:
-                import re
-                peso_match = re.search(r'El peso bruto es:\s*(\d+)\s*tm', response_text)
-                if peso_match:
-                    peso = peso_match.group(1)
-                    fecha_hora_actual = datetime.now()
-                    
-                    # Guardar nombre de la imagen
-                    session['imagen_pesaje'] = filename
-                    
-                    # Generar PDF de pesaje
-                    pdf_pesaje = generar_pdf_pesaje(
-                        codigo=codigo,
-                        peso_bruto=peso,
-                        tipo_pesaje='directo',
-                        imagen_peso=filename
-                    )
-                    
-                    # Registrar en Make.com
-                    registro_response = requests.post(
-                        REGISTRO_PESO_WEBHOOK_URL,
-                        json={
-                            'codigo': codigo,
-                            'peso_bruto': peso,
-                            'tipo_pesaje': 'directo',
-                            'fecha': fecha_hora_actual.strftime("%Y-%m-%d"),
-                            'hora': fecha_hora_actual.strftime("%H:%M:%S"),
-                            'codigo_guia': codigo_guia  # Usar el código de guía de la sesión
-                        }
-                    )
-                    
-                    if registro_response.status_code != 200:
-                        return jsonify({
-                            'success': False,
-                            'message': 'Error registrando el peso en el sistema'
-                        })
-                    
-                    # Construir datos completos para guardar
-                    datos_pesaje = {
-                        'estado': 'pesaje_completado',
-                        'estado_actual': 'pesaje_completado',
-                        'peso_bruto': peso,
-                        'tipo_pesaje': 'directo',
-                        'fecha_pesaje': fecha_hora_actual.strftime("%Y-%m-%d"),
-                        'hora_pesaje': fecha_hora_actual.strftime("%H:%M:%S"),
-                        'pdf_pesaje': pdf_pesaje,
-                        'imagen_pesaje': filename,
-                        'codigo_guia': codigo_guia  # Usar el código de guía existente
-                    }
-                    
-                    # Guardar en sesión
-                    session.update(datos_pesaje)
-                    
-                    # Actualizar estado en la guía
-                    actualizar_estado_guia(codigo, datos_pesaje)
-                    
-                    logger.info(f"Estado actualizado para guía {codigo}: {datos_pesaje}")
-                    
-                    return jsonify({
-                        'success': True,
-                        'peso': peso,
-                        'message': 'Peso procesado correctamente',
-                        'redirect_url': url_for('ver_guia', codigo=codigo)  # Agregar URL de redirección
-                    })
-                    
-                else:
-                    return jsonify({
-                        'success': False,
-                        'message': 'No se pudo extraer el peso de la respuesta'
-                    })
-            else:
-                return jsonify({
-                    'success': False,
-                    'message': 'El código no corresponde a la guía'
-                })
-        else:
+        logger.info(f"Respuesta del Webhook: {response.status_code} - {response.text}")
+        
+        if response.status_code != 200:
+            logger.error(f"Error del webhook: {response.text}")
             return jsonify({
                 'success': False,
-                'message': 'Error procesando la imagen'
+                'message': f"Error del webhook: {response.text}"
+            }), 500
+            
+        # Procesar respuesta del webhook
+        response_text = response.text.strip()
+        if not response_text:
+            logger.error("Respuesta vacía del webhook")
+            return jsonify({
+                'success': False,
+                'message': "Respuesta vacía del webhook."
+            }), 500
+            
+        if "Exitoso!" in response_text:
+            import re
+            # Actualizar el patrón regex para manejar decimales
+            peso_match = re.search(r'El peso bruto es:\s*(\d+(?:\.\d+)?)\s*(?:tm)?', response_text)
+            if peso_match:
+                peso = peso_match.group(1)
+                session['imagen_pesaje'] = filename
+                
+                return jsonify({
+                    'success': True,
+                    'peso': peso,
+                    'message': 'Peso detectado correctamente'
+                })
+            else:
+                logger.error("No se pudo extraer el peso de la respuesta")
+                logger.error(f"Texto de respuesta: {response_text}")
+                return jsonify({
+                    'success': False,
+                    'message': 'No se pudo extraer el peso de la respuesta'
+                })
+        else:
+            logger.error("El código no corresponde a la guía")
+            return jsonify({
+                'success': False,
+                'message': 'El código no corresponde a la guía'
             })
             
     except Exception as e:
         logger.error(f"Error en pesaje directo: {str(e)}")
         logger.error(traceback.format_exc())
         return jsonify({'success': False, 'message': str(e)})
+
+@app.route('/registrar_peso_directo', methods=['POST'])
+def registrar_peso_directo():
+    try:
+        data = request.get_json()
+        codigo = data.get('codigo')
+        peso_bruto = data.get('peso_bruto')
+        codigo_guia = data.get('codigo_guia')
+        
+        if not all([codigo, peso_bruto, codigo_guia]):
+            return jsonify({
+                'success': False,
+                'message': 'Faltan datos requeridos'
+            })
+
+        # Obtener fecha y hora actual
+        fecha_hora_actual = datetime.now()
+        
+        # Registrar en Make.com
+        registro_response = requests.post(
+            REGISTRO_PESO_WEBHOOK_URL,
+            json={
+                'codigo': codigo,
+                'peso_bruto': peso_bruto,
+                'tipo_pesaje': 'directo',
+                'fecha': fecha_hora_actual.strftime("%Y-%m-%d"),
+                'hora': fecha_hora_actual.strftime("%H:%M:%S"),
+                'codigo_guia': codigo_guia
+            }
+        )
+        
+        if registro_response.status_code != 200:
+            logger.error(f"Error en registro de peso: {registro_response.text}")
+            return jsonify({
+                'success': False,
+                'message': 'Error registrando el peso en el sistema'
+            })
+        
+        # Generar PDF de pesaje
+        pdf_pesaje = generar_pdf_pesaje(
+            codigo=codigo,
+            peso_bruto=peso_bruto,
+            tipo_pesaje='directo',
+            imagen_peso=session.get('imagen_pesaje')
+        )
+        
+        if not pdf_pesaje:
+            logger.error("Error generando el PDF de pesaje")
+            return jsonify({
+                'success': False,
+                'message': 'Error generando el PDF de pesaje'
+            })
+        
+        # Construir datos completos para guardar
+        datos_pesaje = {
+            'estado': 'pesaje_completado',
+            'estado_actual': 'pesaje_completado',
+            'peso_bruto': peso_bruto,
+            'tipo_pesaje': 'directo',
+            'fecha_pesaje': fecha_hora_actual.strftime("%Y-%m-%d"),
+            'hora_pesaje': fecha_hora_actual.strftime("%H:%M:%S"),
+            'pdf_pesaje': pdf_pesaje
+        }
+        
+        # Guardar en sesión
+        session.update(datos_pesaje)
+        
+        # Actualizar estado en la guía
+        actualizar_estado_guia(codigo, datos_pesaje)
+        
+        # Obtener datos actualizados de la guía
+        datos_guia = obtener_datos_guia(codigo)
+        if not datos_guia:
+            return jsonify({
+                'success': False,
+                'message': 'Error obteniendo datos actualizados de la guía'
+            })
+            
+        # Actualizar el archivo HTML usando la nueva función
+        if not actualizar_html_guia(codigo_guia, datos_guia):
+            return jsonify({
+                'success': False,
+                'message': 'Error actualizando el archivo HTML de la guía'
+            })
+        
+        # Construir la URL de la guía
+        guia_url = f"/guias/guia_{codigo_guia}.html"
+        
+        return jsonify({
+            'success': True,
+            'message': 'Peso registrado correctamente',
+            'redirect_url': guia_url
+        })
+        
+    except Exception as e:
+        logger.error(f"Error en registro de peso directo: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        })
 
 @app.route('/solicitar_autorizacion_pesaje', methods=['POST'])
 def solicitar_autorizacion_pesaje():
@@ -851,6 +945,17 @@ def solicitar_autorizacion_pesaje():
         # Generar código aleatorio de 6 caracteres
         codigo_autorizacion = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
         
+        # Obtener datos de la guía
+        datos_guia = obtener_datos_guia(codigo)
+        if not datos_guia:
+            return jsonify({
+                'success': False,
+                'message': 'Error obteniendo datos de la guía'
+            })
+        
+        # Construir URL de la guía
+        guia_url = request.host_url.rstrip('/') + url_for('serve_guia', filename=f"guia_{datos_guia['codigo_guia']}.html")
+        
         # Guardar código con expiración de 1 hora
         codigos_autorizacion[codigo] = {
             'codigo': codigo_autorizacion,
@@ -861,7 +966,8 @@ def solicitar_autorizacion_pesaje():
         response = requests.post(
             AUTORIZACION_WEBHOOK_URL,
             json={
-                'codigo_guia': codigo,
+                'codigo': codigo,
+                'url_guia': guia_url,
                 'comentarios': comentarios,
                 'codigo_autorizacion': codigo_autorizacion
             }
@@ -887,17 +993,17 @@ def validar_codigo_autorizacion():
     """
     try:
         data = request.get_json()
-        codigo_guia = data.get('codigo')
+        codigo = data.get('codigo')
         codigo_autorizacion = data.get('codigoAutorizacion')
         
-        if not codigo_guia or not codigo_autorizacion:
+        if not codigo or not codigo_autorizacion:
             return jsonify({
                 'success': False,
                 'message': 'Faltan datos requeridos'
             })
             
         # Verificar código
-        auth_data = codigos_autorizacion.get(codigo_guia)
+        auth_data = codigos_autorizacion.get(codigo)
         if not auth_data:
             return jsonify({
                 'success': False,
@@ -906,7 +1012,7 @@ def validar_codigo_autorizacion():
             
         # Verificar expiración
         if datetime.now() > auth_data['expiracion']:
-            codigos_autorizacion.pop(codigo_guia)
+            codigos_autorizacion.pop(codigo)
             return jsonify({
                 'success': False,
                 'message': 'El código ha expirado'
@@ -929,15 +1035,19 @@ def validar_codigo_autorizacion():
 def generar_pdf_pesaje(codigo, peso_bruto, tipo_pesaje, imagen_peso=None):
     try:
         datos_guia = obtener_datos_guia(codigo)
-        
+        if not datos_guia:
+            logger.error("No se pudieron obtener los datos de la guía")
+            return None
+            
         # Preparar datos para el PDF
         fecha_actual = datetime.now()
-        # Usar la fecha del registro en lugar de la fecha actual para el nombre del archivo
-        fecha_registro = datos_guia.get('fecha_registro', '').replace('/', '-')
+        
+        # Usar fecha actual si no hay fecha de registro
+        fecha_registro = fecha_actual.strftime('%Y%m%d')
         
         datos_pdf = {
-            'codigo': codigo,
-            'nombre': datos_guia.get('nombre', ''),
+            'codigo': datos_guia.get('codigo_validado', codigo),
+            'nombre': datos_guia.get('nombre_validado', 'No disponible'),
             'peso_bruto': peso_bruto,
             'tipo_pesaje': tipo_pesaje,
             'fecha_pesaje': fecha_actual.strftime('%d/%m/%Y'),
@@ -945,12 +1055,13 @@ def generar_pdf_pesaje(codigo, peso_bruto, tipo_pesaje, imagen_peso=None):
             'fecha_generacion': fecha_actual.strftime('%d/%m/%Y'),
             'hora_generacion': fecha_actual.strftime('%H:%M:%S'),
             'imagen_peso': imagen_peso,
-            'qr_filename': session.get('qr_filename')
+            'qr_filename': session.get('qr_filename'),
+            'codigo_guia': datos_guia.get('codigo_guia')
         }
         
         # Generar PDF
         rendered = render_template('pesaje_pdf_template.html', **datos_pdf)
-        pdf_filename = f"pesaje_{codigo}_{fecha_actual.strftime('%Y%m%d_%H%M%S')}.pdf"
+        pdf_filename = f"pesaje_{datos_guia.get('codigo_guia', codigo)}_{fecha_actual.strftime('%Y%m%d_%H%M%S')}.pdf"
         pdf_path = os.path.join(app.config['PDF_FOLDER'], pdf_filename)
         
         # Asegurar que el directorio existe
@@ -963,16 +1074,17 @@ def generar_pdf_pesaje(codigo, peso_bruto, tipo_pesaje, imagen_peso=None):
     except Exception as e:
         logger.error(f"Error generando PDF de pesaje: {str(e)}")
         logger.error(traceback.format_exc())
-        return None    
+        return None
 
 @app.route('/registrar_peso_virtual', methods=['POST'])
 def registrar_peso_virtual():
     try:
         data = request.get_json()
         codigo = data.get('codigo')
-        peso = data.get('peso')
+        peso_bruto = data.get('peso_bruto')
+        codigo_guia = data.get('codigo_guia')
         
-        if not codigo or not peso:
+        if not all([codigo, peso_bruto, codigo_guia]):
             return jsonify({
                 'success': False,
                 'message': 'Faltan datos requeridos'
@@ -981,18 +1093,46 @@ def registrar_peso_virtual():
         # Fecha y hora actual
         fecha_hora = datetime.now()
         
+        # Registrar en Make.com
+        registro_response = requests.post(
+            REGISTRO_PESO_WEBHOOK_URL,
+            json={
+                'codigo': codigo,
+                'peso_bruto': peso_bruto,
+                'tipo_pesaje': 'virtual',
+                'fecha': fecha_hora.strftime("%Y-%m-%d"),
+                'hora': fecha_hora.strftime("%H:%M:%S"),
+                'codigo_guia': codigo_guia
+            }
+        )
+        
+        if registro_response.status_code != 200:
+            logger.error(f"Error en registro de peso: {registro_response.text}")
+            return jsonify({
+                'success': False,
+                'message': 'Error registrando el peso en el sistema'
+            })
+        
         # Generar PDF de pesaje
         pdf_filename = generar_pdf_pesaje(
             codigo=codigo,
-            peso_bruto=peso,
+            peso_bruto=peso_bruto,
             tipo_pesaje='virtual',
             imagen_peso=None
         )
         
+        if not pdf_filename:
+            logger.error("Error generando el PDF de pesaje")
+            return jsonify({
+                'success': False,
+                'message': 'Error generando el PDF de pesaje'
+            })
+        
         # Datos a guardar
         datos_pesaje = {
             'estado': 'pesaje_completado',
-            'peso_bruto': peso,
+            'estado_actual': 'pesaje_completado',
+            'peso_bruto': peso_bruto,
             'tipo_pesaje': 'virtual',
             'fecha_pesaje': fecha_hora.strftime("%Y-%m-%d"),
             'hora_pesaje': fecha_hora.strftime("%H:%M:%S"),
@@ -1005,9 +1145,29 @@ def registrar_peso_virtual():
         # Actualizar estado
         actualizar_estado_guia(codigo, datos_pesaje)
         
-        logger.info(f"Estado actualizado para guía {codigo}: {datos_pesaje}")
+        # Obtener datos actualizados de la guía
+        datos_guia = obtener_datos_guia(codigo)
+        if not datos_guia:
+            return jsonify({
+                'success': False,
+                'message': 'Error obteniendo datos actualizados de la guía'
+            })
+            
+        # Actualizar el archivo HTML
+        if not actualizar_html_guia(codigo_guia, datos_guia):
+            return jsonify({
+                'success': False,
+                'message': 'Error actualizando el archivo HTML de la guía'
+            })
         
-        return jsonify({'success': True})
+        # Construir la URL de la guía
+        guia_url = f"/guias/guia_{codigo_guia}.html"
+        
+        return jsonify({
+            'success': True,
+            'message': 'Peso registrado correctamente',
+            'redirect_url': guia_url
+        })
         
     except Exception as e:
         logger.error(f"Error registrando peso virtual: {str(e)}")
@@ -1015,81 +1175,133 @@ def registrar_peso_virtual():
         return jsonify({'success': False, 'message': str(e)})
 
 def obtener_datos_guia(codigo):
-    """
-    Obtiene los datos actuales de la guía usando los datos almacenados y el webhook response
-    """
     try:
-        # Obtener datos de la sesión
-        parsed_data = session.get('parsed_data', {})
-        image_filename = session.get('image_filename')
-        fecha_registro = session.get('fecha_registro')
-        hora_registro = session.get('hora_registro')
+        # Obtener datos validados del webhook
         webhook_response = session.get('webhook_response', {})
-        
-        # Extraer datos validados del webhook
         webhook_data = webhook_response.get('data', {})
         
-        # Obtener el código validado del webhook
-        codigo_validado = webhook_data.get('codigo', codigo)
-        
-        # Obtener el codigo_guia de la sesión - NO generar uno nuevo
-        codigo_guia = session.get('codigo_guia')
-        if not codigo_guia:
-            logger.error("No se encontró codigo_guia en la sesión")
-            raise Exception("No se encontró el código de guía")
-        
-        # Datos básicos usando webhook data si está disponible
+        # Si webhook_data es string (JSON), intentar parsearlo
+        if isinstance(webhook_data, str):
+            try:
+                webhook_data = json.loads(webhook_data)
+            except json.JSONDecodeError:
+                app.logger.error("Error parseando webhook_data")
+                webhook_data = {}
+
+        # Extraer el codigo_guia del nombre del PDF
+        pdf_filename = session.get('pdf_filename')
+        if pdf_filename and pdf_filename.startswith('tiquete_'):
+            codigo_guia = pdf_filename[8:-4]  # Remover 'tiquete_' y '.pdf'
+        else:
+            app.logger.warning(f"No se encontró pdf_filename en la sesión para el código {codigo}")
+            return None
+
+        # Preparar datos usando los valores validados del webhook
         datos = {
-            'codigo': webhook_data.get('codigo', codigo),
-            'codigo_validado': codigo_validado,
-            'nombre': webhook_data.get('nombre_agricultor', ''),
-            'nombre_validado': webhook_data.get('nombre_agricultor'),
-            'fecha_registro': fecha_registro,
-            'hora_registro': hora_registro,
-            'placa': webhook_data.get('placa', ''),
-            'transportador': webhook_data.get('transportador', ''),
-            'cantidad_racimos': webhook_data.get('racimos', ''),
-            'estado_actual': session.get('estado_actual', 'pesaje'),
-            'image_filename': image_filename,
-            'pdf_filename': session.get('pdf_filename', ''),
-            'codigo_guia': codigo_guia  # Usar el código de guía existente
+            # Datos de registro
+            'codigo': codigo,
+            'codigo_validado': webhook_data.get('codigo', codigo),
+            'nombre': webhook_data.get('nombre_agricultor', 'No disponible'),
+            'nombre_validado': webhook_data.get('nombre_agricultor', 'No disponible'),
+            'fecha_registro': webhook_data.get('fecha_tiquete', datetime.now().strftime("%d-%m-%Y")),
+            'hora_registro': session.get('hora_registro'),
+            'placa': webhook_data.get('placa', 'No disponible'),
+            'transportador': webhook_data.get('transportador', 'No disponible'),
+            'cantidad_racimos': webhook_data.get('racimos', 'No disponible'),
+            'acarreo': webhook_data.get('acarreo', 'No'),
+            'cargo': webhook_data.get('cargo', 'No'),
+            'estado_actual': session.get('estado_actual', 'registro'),
+            'image_filename': session.get('image_filename'),
+            'pdf_filename': pdf_filename,
+            'codigo_guia': codigo_guia,
+            'nota': webhook_data.get('nota', ''),
+
+            # Datos de pesaje
+            'peso_bruto': session.get('peso_bruto'),
+            'tipo_pesaje': session.get('tipo_pesaje'),
+            'fecha_pesaje': session.get('fecha_pesaje'),
+            'hora_pesaje': session.get('hora_pesaje'),
+            'pesaje_pdf': session.get('pdf_pesaje'),
+
+            # Datos de clasificación
+            'clasificacion_completa': session.get('clasificacion_completa', False),
+            'tipo_clasificacion': session.get('tipo_clasificacion'),
+            'fecha_clasificacion': session.get('fecha_clasificacion'),
+            'hora_clasificacion': session.get('hora_clasificacion'),
+
+            # Datos de peso tara
+            'peso_tara': session.get('peso_tara'),
+            'tipo_peso_tara': session.get('tipo_peso_tara'),
+            'fecha_peso_tara': session.get('fecha_peso_tara'),
+            'hora_peso_tara': session.get('hora_peso_tara'),
+            'peso_neto': session.get('peso_neto'),
+
+            # Datos de salida
+            'salida_completa': session.get('salida_completa', False),
+            'fecha_salida': session.get('fecha_salida'),
+            'hora_salida': session.get('hora_salida')
         }
-        
-        # Si no hay datos del webhook, usar datos del parsed_data como respaldo
-        if not webhook_data and parsed_data and 'table_data' in parsed_data:
-            for row in parsed_data['table_data']:
-                campo = row['campo']
-                valor = row['sugerido'] if row['sugerido'] != 'No disponible' else row['original']
-                
-                if campo == 'Nombre del Agricultor' and not datos['nombre']:
-                    datos['nombre'] = valor
-                elif campo == 'Código' and not datos['codigo_validado']:
-                    datos['codigo'] = valor
-                elif campo == 'Placa' and not datos['placa']:
-                    datos['placa'] = valor
-                elif campo == 'Cantidad de Racimos' and not datos['cantidad_racimos']:
-                    datos['cantidad_racimos'] = valor
-                elif campo == 'Transportador' and not datos['transportador']:
-                    datos['transportador'] = valor
-        
-        logger.info(f"Datos obtenidos para guía {codigo}: {datos}")
+
+        app.logger.info(f"Datos obtenidos para guía {codigo}: {datos}")
         return datos
+    except Exception as e:
+        app.logger.error(f"Error al obtener datos de la guía: {str(e)}")
+        return None
+    
+def actualizar_html_guia(codigo_guia, datos_guia):
+    """
+    Actualiza el archivo HTML de la guía con los datos más recientes.
+    
+    Args:
+        codigo_guia: El código único de la guía
+        datos_guia: Diccionario con todos los datos de la guía
+    
+    Returns:
+        bool: True si la actualización fue exitosa, False en caso contrario
+    """
+    try:
+        # Generar el HTML actualizado
+        html_content = render_template('guia_template.html', **datos_guia)
+        
+        # Guardar el HTML actualizado
+        guia_path = os.path.join(app.config['GUIAS_FOLDER'], f'guia_{codigo_guia}.html')
+        with open(guia_path, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+            
+        logger.info(f"Archivo HTML de guía actualizado: {guia_path}")
+        return True
         
     except Exception as e:
-        logger.error(f"Error obteniendo datos de guía: {str(e)}")
-        raise
-    
+        logger.error(f"Error actualizando archivo HTML de guía: {str(e)}")
+        return False
+
 def actualizar_estado_guia(codigo, datos):
     """
     Actualiza el estado y datos de la guía
-    Por ahora guardamos en sesión, luego será en base de datos
     """
     try:
         # Actualizar datos en la sesión
         for key, value in datos.items():
             session[key] = value
             
-        logger.info(f"Estado actualizado para guía {codigo}: {datos}")
+        # Obtener datos completos de la guía
+        datos_guia = obtener_datos_guia(codigo)
+        if not datos_guia:
+            logger.error(f"Error obteniendo datos actualizados de la guía {codigo}")
+            return False
+            
+        # Obtener el codigo_guia
+        codigo_guia = datos_guia.get('codigo_guia')
+        if not codigo_guia:
+            logger.error(f"No se encontró codigo_guia para la guía {codigo}")
+            return False
+            
+        # Actualizar el archivo HTML usando la nueva función
+        if not actualizar_html_guia(codigo_guia, datos_guia):
+            logger.error(f"Error actualizando HTML de la guía {codigo}")
+            return False
+            
+        logger.info(f"Estado y archivo de guía actualizados para guía {codigo}: {datos}")
         return True
         
     except Exception as e:
@@ -1099,13 +1311,17 @@ def actualizar_estado_guia(codigo, datos):
 @app.route('/ver_guia/<codigo>')
 def ver_guia(codigo):
     """
-    Muestra la vista actual de la guía
+    Muestra la vista actual de la guía según el estado del proceso
     """
     try:
         datos_guia = obtener_datos_guia(codigo)
         if not datos_guia:
             return render_template('error.html', message="Guía no encontrada"), 404
-            
+        
+        # Obtener el estado actual del proceso
+        estado_actual = datos_guia.get('estado_actual', 'registro')
+        
+        # Renderizar el template con los datos y el estado actual
         return render_template('guia_template.html', **datos_guia)
         
     except Exception as e:
@@ -1215,6 +1431,306 @@ def revalidation_success():
         logger.error(traceback.format_exc())
         flash('Error al mostrar la página de éxito', 'error')
         return redirect(url_for('review'))
+
+@app.route('/procesar_clasificacion_automatica', methods=['POST'])
+def procesar_clasificacion_automatica():
+    """
+    Procesa la imagen para clasificación automática de fruta usando Roboflow API
+    """
+    try:
+        if 'foto' not in request.files:
+            return jsonify({'success': False, 'message': 'No se encontró la imagen'})
+        
+        foto = request.files['foto']
+        codigo = request.form.get('codigo')
+        
+        if not foto:
+            return jsonify({'success': False, 'message': 'Archivo no válido'})
+
+        # Guardar y redimensionar imagen
+        original_filename = secure_filename(foto.filename)
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], original_filename)
+        foto.save(file_path)
+
+        # Redimensionar imagen
+        try:
+            with Image.open(file_path) as img:
+                img = img.resize((1152, 2048), Image.Resampling.LANCZOS)
+                resized_path = os.path.join(app.config['UPLOAD_FOLDER'], f"resized_{original_filename}")
+                img.save(resized_path, quality=85)
+                file_path = resized_path
+        except Exception as e:
+            logger.error(f"Error al redimensionar imagen: {e}")
+
+        # Preparar imagen para Roboflow
+        try:
+            with open(file_path, "rb") as image_file:
+                image_base64 = base64.b64encode(image_file.read()).decode("utf-8")
+                payload = {
+                    "api_key": ROBOFLOW_API_KEY,
+                    "inputs": {
+                        "image": {"type": "base64", "value": image_base64}
+                    }
+                }
+                
+                headers = {
+                    "Content-Type": "application/json"
+                }
+                
+                # Hacer la petición a Roboflow
+                response = requests.post(
+                    f"{ROBOFLOW_API_URL}/{WORKSPACE_NAME}/{WORKFLOW_ID}",
+                    json=payload,
+                    headers=headers
+                )
+
+                if response.status_code != 200:
+                    logger.error(f"Error en Roboflow: {response.text}")
+                    return jsonify({
+                        'success': False,
+                        'message': 'Error en el servicio de clasificación'
+                    })
+
+                result = response.json()
+                logger.info(f"Respuesta de Roboflow: {result}")
+                
+                # Si la respuesta es una lista, tomamos el primer elemento
+                if isinstance(result, list) and len(result) > 0:
+                    result = result[0]
+                
+                # Extraer outputs si existe
+                outputs = result.get("outputs", [])
+                if isinstance(outputs, list) and len(outputs) > 0:
+                    out_dict = outputs[0]
+                else:
+                    out_dict = result  # Si no hay outputs, usar el resultado directamente
+                
+                logger.info(f"Diccionario de salida: {out_dict}")
+                
+                # Extraer clasificaciones del diccionario de salida
+                clasificacion = {
+                    'verde': int(out_dict.get('Racimos verdes', 0)),
+                    'sobremaduro': int(out_dict.get('racimo sobremaduro', 0)),
+                    'danio_corona': int(out_dict.get('racimo daño en corona', 0)),
+                    'pendunculo_largo': int(out_dict.get('racimo pedunculo largo', 0)),
+                    'podrido': int(out_dict.get('racimo podrido', 0))
+                }
+
+                logger.info(f"Clasificación extraída: {clasificacion}")
+
+                # Guardar imágenes resultantes
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                imagenes_guardadas = {}
+
+                # Guardar imagen anotada si existe
+                annotated_obj = out_dict.get('annotated_image', {})
+                if isinstance(annotated_obj, dict):
+                    ann_val = annotated_obj.get('value', '')
+                    if ann_val:
+                        ann_filename = f"annotated_{codigo}_{timestamp}.jpg"
+                        ann_path = os.path.join(app.config['UPLOAD_FOLDER'], ann_filename)
+                        with open(ann_path, 'wb') as f:
+                            f.write(base64.b64decode(ann_val))
+                        imagenes_guardadas['annotated'] = ann_filename
+
+                # Guardar visualización de etiquetas si existe
+                label_vis_obj = out_dict.get('label_visualization_1', {})
+                if isinstance(label_vis_obj, dict):
+                    label_val = label_vis_obj.get('value', '')
+                    if label_val:
+                        label_filename = f"labeled_{codigo}_{timestamp}.jpg"
+                        label_path = os.path.join(app.config['UPLOAD_FOLDER'], label_filename)
+                        with open(label_path, 'wb') as f:
+                            f.write(base64.b64decode(label_val))
+                        imagenes_guardadas['labeled'] = label_filename
+
+                return jsonify({
+                    'success': True,
+                    'clasificacion': clasificacion,
+                    'imagenes': imagenes_guardadas
+                })
+
+        except Exception as e:
+            logger.error(f"Error procesando con Roboflow: {str(e)}")
+            logger.error(traceback.format_exc())
+            return jsonify({
+                'success': False,
+                'message': f'Error en el procesamiento: {str(e)}'
+            })
+
+    except Exception as e:
+        logger.error(f"Error general en clasificación automática: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({'success': False, 'message': str(e)})
+
+def generar_pdf_clasificacion(codigo, clasificacion, tipo_clasificacion, imagenes, datos_guia):
+    try:
+        fecha_actual = datetime.now()
+        
+        datos_pdf = {
+            'codigo': datos_guia.get('codigo_validado', codigo),
+            'nombre': datos_guia.get('nombre_validado', 'No disponible'),
+            'tipo_clasificacion': tipo_clasificacion,
+            'fecha_clasificacion': fecha_actual.strftime('%d/%m/%Y'),
+            'hora_clasificacion': fecha_actual.strftime('%H:%M:%S'),
+            'clasificacion': clasificacion,
+            'imagenes': imagenes,
+            'peso_bruto': datos_guia.get('peso_bruto', 'No disponible'),
+            'fecha_generacion': fecha_actual.strftime('%d/%m/%Y'),
+            'hora_generacion': fecha_actual.strftime('%H:%M:%S'),
+            'codigo_guia': datos_guia.get('codigo_guia')
+        }
+        
+        # Generar PDF
+        rendered = render_template('clasificacion_pdf_template.html', **datos_pdf)
+        pdf_filename = f"clasificacion_{datos_guia.get('codigo_guia', codigo)}_{fecha_actual.strftime('%Y%m%d_%H%M%S')}.pdf"
+        pdf_path = os.path.join(app.config['PDF_FOLDER'], pdf_filename)
+        
+        # Asegurar que el directorio existe
+        os.makedirs(os.path.dirname(pdf_path), exist_ok=True)
+        
+        HTML(string=rendered, base_url=app.static_folder).write_pdf(pdf_path)
+        logger.info(f"PDF de clasificación generado exitosamente: {pdf_filename}")
+        return pdf_filename
+        
+    except Exception as e:
+        logger.error(f"Error generando PDF de clasificación: {str(e)}")
+        logger.error(traceback.format_exc())
+        return None
+
+@app.route('/guardar_clasificacion_automatica', methods=['POST'])
+def guardar_clasificacion_automatica():
+    """
+    Guarda los resultados de la clasificación automática y envía los datos al webhook
+    """
+    try:
+        data = request.get_json()
+        codigo = data.get('codigo')
+        clasificacion = data.get('clasificacion')
+        imagenes = data.get('imagenes')
+        
+        if not all([codigo, clasificacion]):
+            return jsonify({
+                'success': False,
+                'message': 'Faltan datos requeridos'
+            })
+            
+        # Obtener datos de la guía
+        datos_guia = obtener_datos_guia(codigo)
+        if not datos_guia:
+            return jsonify({
+                'success': False,
+                'message': 'Guía no encontrada'
+            })
+            
+        # Fecha y hora actual
+        fecha_hora = datetime.now()
+        
+        # Construir URL de la guía
+        guia_url = request.host_url.rstrip('/') + url_for('serve_guia', filename=f"guia_{datos_guia['codigo_guia']}.html")
+        
+        # Preparar datos para el registro
+        datos_clasificacion = {
+            'url_guia': guia_url,
+            'codigo_proveedor': codigo,
+            'fecha_clasificacion': fecha_hora.strftime("%Y-%m-%d"),
+            'hora_clasificacion': fecha_hora.strftime("%H:%M:%S"),
+            'tipo_clasificacion': 'automatica',
+            'resultado_clasificacion_manual': None,
+            'resultado_clasificacion_automatica': clasificacion,
+            'imagenes': imagenes,
+            'codigo_guia': datos_guia['codigo_guia']
+        }
+        
+        # Registrar en Make.com
+        response = requests.post(
+            REGISTRO_CLASIFICACION_WEBHOOK_URL,
+            json=datos_clasificacion
+        )
+        
+        if response.status_code != 200:
+            logger.error(f"Error en registro de clasificación: {response.text}")
+            return jsonify({
+                'success': False,
+                'message': 'Error registrando la clasificación en el sistema'
+            })
+        
+        # Generar PDF de clasificación
+        pdf_filename = generar_pdf_clasificacion(
+            codigo=codigo,
+            clasificacion=clasificacion,
+            tipo_clasificacion='automatica',
+            imagenes=imagenes,
+            datos_guia=datos_guia
+        )
+        
+        if not pdf_filename:
+            logger.error("Error generando el PDF de clasificación")
+            return jsonify({
+                'success': False,
+                'message': 'Error generando el PDF de clasificación'
+            })
+        
+        # Datos a guardar en la sesión
+        datos_completos = {
+            'estado': 'clasificacion_completa',
+            'estado_actual': 'clasificacion_completa',
+            'clasificacion_completa': True,
+            'tipo_clasificacion': 'automatica',
+            'fecha_clasificacion': fecha_hora.strftime("%Y-%m-%d"),
+            'hora_clasificacion': fecha_hora.strftime("%H:%M:%S"),
+            'resultado_clasificacion': clasificacion,
+            'imagenes_clasificacion': imagenes,
+            'pdf_clasificacion': pdf_filename
+        }
+        
+        # Guardar en sesión
+        session.update(datos_completos)
+        
+        # Actualizar estado en la guía
+        actualizar_estado_guia(codigo, datos_completos)
+        
+        # Actualizar el archivo HTML
+        if not actualizar_html_guia(datos_guia['codigo_guia'], obtener_datos_guia(codigo)):
+            return jsonify({
+                'success': False,
+                'message': 'Error actualizando el archivo HTML de la guía'
+            })
+        
+        return jsonify({
+            'success': True,
+            'message': 'Clasificación guardada correctamente',
+            'redirect_url': f"/ver_guia/{codigo}"
+        })
+        
+    except Exception as e:
+        logger.error(f"Error guardando clasificación automática: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({'success': False, 'message': str(e)})
+
+def interpretar_resultado_roboflow(result):
+    """
+    Interpreta el resultado del modelo de Roboflow y lo convierte al formato esperado
+    """
+    try:
+        logger.info(f"Interpretando resultado de Roboflow: {result}")
+        
+        # Extraer los valores directamente del resultado
+        clasificacion = {
+            'verde': int(result.get('Racimos verdes', 0)),
+            'sobremaduro': int(result.get('racimo sobremaduro', 0)),
+            'danio_corona': int(result.get('racimo daño en corona', 0)),
+            'pendunculo_largo': int(result.get('racimo pedunculo largo', 0)),
+            'podrido': int(result.get('racimo podrido', 0))
+        }
+        
+        logger.info(f"Clasificación interpretada: {clasificacion}")
+        return clasificacion
+        
+    except Exception as e:
+        logger.error(f"Error interpretando resultado de Roboflow: {str(e)}")
+        logger.error(f"Resultado que causó el error: {result}")
+        return None
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5002)
