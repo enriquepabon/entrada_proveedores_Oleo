@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html>
 <head>
     <meta charset="UTF-8">
     <title>Reporte de Clasificación</title>
@@ -7,25 +7,12 @@
         body {
             font-family: Arial, sans-serif;
             margin: 20px;
-            line-height: 1.6;
         }
         .header {
             text-align: center;
-            margin-bottom: 30px;
-        }
-        .info-section {
             margin-bottom: 20px;
         }
-        .clasificacion-section {
-            margin-bottom: 30px;
-        }
-        .imagenes-section {
-            margin-bottom: 30px;
-            page-break-before: always;
-        }
-        .imagenes-section img {
-            max-width: 100%;
-            height: auto;
+        .info-section {
             margin-bottom: 20px;
         }
         table {
@@ -34,111 +21,193 @@
             margin-bottom: 20px;
         }
         th, td {
-            border: 1px solid #ddd;
+            border: 1px solid black;
             padding: 8px;
             text-align: left;
         }
         th {
             background-color: #f2f2f2;
         }
-        .footer {
-            margin-top: 30px;
+        .image-container {
+            display: flex;
+            justify-content: space-between;
+            margin: 10px 0;
+        }
+        .image-item {
+            width: 45%;  /* Reducido de 48% a 45% */
             text-align: center;
-            font-size: 0.9em;
+        }
+        .image-item img {
+            max-width: 100%;
+            height: auto;
+            max-height: 300px; /* Limitar altura máxima */
+            object-fit: contain;
+            margin: 5px 0;
+        }
+        .classification-section {
+            margin-bottom: 20px;
+        }
+        .page-break {
+            page-break-before: always;
+        }
+        .result-container {
+            margin-bottom: 15px;
+        }
+        .result-table {
+            width: 100%;
+            margin-bottom: 15px;
+        }
+        .individual-section {
+            page-break-inside: avoid;
+        }
+        h4 {
+            margin: 5px 0;
+            font-size: 14px;
         }
     </style>
 </head>
 <body>
     <div class="header">
         <h1>Reporte de Clasificación de Racimos</h1>
-        <p>Fecha de Generación: {{ fecha_generacion }} - {{ hora_generacion }}</p>
     </div>
 
     <div class="info-section">
         <h2>Información General</h2>
         <table>
             <tr>
+                <th>Proveedor:</th>
+                <td>{{ nombre_proveedor }} ({{ codigo_proveedor }})</td>
+            </tr>
+            <tr>
                 <th>Código de Guía:</th>
                 <td>{{ codigo_guia }}</td>
             </tr>
             <tr>
-                <th>Código Proveedor:</th>
-                <td>{{ codigo }}</td>
-            </tr>
-            <tr>
-                <th>Nombre:</th>
-                <td>{{ nombre }}</td>
-            </tr>
-            <tr>
-                <th>Peso Bruto:</th>
-                <td>{{ peso_bruto }} kg</td>
-            </tr>
-            <tr>
-                <th>Tipo de Clasificación:</th>
-                <td>{{ tipo_clasificacion|title }}</td>
-            </tr>
-            <tr>
-                <th>Fecha de Clasificación:</th>
+                <th>Fecha:</th>
                 <td>{{ fecha_clasificacion }}</td>
             </tr>
             <tr>
-                <th>Hora de Clasificación:</th>
+                <th>Hora:</th>
                 <td>{{ hora_clasificacion }}</td>
             </tr>
+            <tr>
+                <th>Tipo de Clasificación:</th>
+                <td>{{ tipo_clasificacion }}</td>
+            </tr>
         </table>
     </div>
 
-    <div class="clasificacion-section">
-        <h2>Resultados de la Clasificación</h2>
+    {% if clasificacion_manual %}
+    <div class="classification-section">
+        <h2>Clasificación Manual</h2>
         <table>
             <tr>
-                <th>Tipo de Racimo</th>
+                <th>Categoría</th>
                 <th>Cantidad</th>
+                <th>Porcentaje</th>
             </tr>
+            {% for categoria, datos in clasificacion_manual.items() %}
             <tr>
-                <td>Racimos Verdes</td>
-                <td>{{ clasificacion.verde }}</td>
+                <td>{{ categoria }}</td>
+                <td>{{ datos.cantidad }}</td>
+                <td>{{ "%.2f"|format(datos.porcentaje) }}% ({{ datos.cantidad }}/{{ datos.total_racimos }})</td>
             </tr>
+            {% endfor %}
             <tr>
-                <td>Racimos Sobremaduros</td>
-                <td>{{ clasificacion.sobremaduro }}</td>
-            </tr>
-            <tr>
-                <td>Racimos con Daño en Corona</td>
-                <td>{{ clasificacion.danio_corona }}</td>
-            </tr>
-            <tr>
-                <td>Racimos con Pedúnculo Largo</td>
-                <td>{{ clasificacion.pendunculo_largo }}</td>
-            </tr>
-            <tr>
-                <td>Racimos Podridos</td>
-                <td>{{ clasificacion.podrido }}</td>
+                <th>Total Racimos</th>
+                <th colspan="2">{{ clasificacion_manual|first|attr('total_racimos') }}</th>
             </tr>
         </table>
-    </div>
-
-    {% if imagenes %}
-    <div class="imagenes-section">
-        <h2>Imágenes de la Clasificación</h2>
-        {% if imagenes.annotated %}
-        <div>
-            <h3>Imagen Anotada</h3>
-            <img src="{{ url_for('static', filename='uploads/' + imagenes.annotated) }}" alt="Imagen Anotada">
-        </div>
-        {% endif %}
-        {% if imagenes.labeled %}
-        <div>
-            <h3>Imagen con Etiquetas</h3>
-            <img src="{{ url_for('static', filename='uploads/' + imagenes.labeled) }}" alt="Imagen con Etiquetas">
-        </div>
-        {% endif %}
     </div>
     {% endif %}
 
-    <div class="footer">
-        <p>Este es un documento generado automáticamente.</p>
-        <p>Fecha y hora de generación: {{ fecha_generacion }} {{ hora_generacion }}</p>
+    {% if clasificacion_automatica %}
+    <div class="classification-section">
+        <h2>Clasificación Automática</h2>
+        <table>
+            <tr>
+                <th>Categoría</th>
+                <th>Cantidad</th>
+                <th>Porcentaje</th>
+            </tr>
+            {% for categoria, datos in clasificacion_automatica.items() %}
+            <tr>
+                <td>{{ categoria }}</td>
+                <td>{{ datos.cantidad }}</td>
+                <td>{{ "%.2f"|format(datos.porcentaje) }}% ({{ datos.cantidad }}/{{ datos.total_racimos }})</td>
+            </tr>
+            {% endfor %}
+            <tr>
+                <th>Total Racimos</th>
+                <th colspan="2">{{ clasificacion_automatica|first|attr('total_racimos') }}</th>
+            </tr>
+        </table>
     </div>
+    {% endif %}
+
+    {% if resultados_individuales %}
+    <div class="classification-section">
+        <h2>Resultados Individuales</h2>
+        {% for resultado in resultados_individuales %}
+        <div class="individual-section">
+            <h3>Clasificación {{ loop.index }}</h3>
+            <div class="result-table">
+                <table>
+                    <tr>
+                        <th>Categoría</th>
+                        <th>Cantidad</th>
+                        <th>Porcentaje</th>
+                    </tr>
+                    <tr>
+                        <td>Verdes</td>
+                        <td>{{ resultado.verde }}</td>
+                        <td>{{ "%.2f"|format(resultado.porcentajes.verde) }}%</td>
+                    </tr>
+                    <tr>
+                        <td>Sobremaduros</td>
+                        <td>{{ resultado.sobremaduro }}</td>
+                        <td>{{ "%.2f"|format(resultado.porcentajes.sobremaduro) }}%</td>
+                    </tr>
+                    <tr>
+                        <td>Daño en Corona</td>
+                        <td>{{ resultado.danio_corona }}</td>
+                        <td>{{ "%.2f"|format(resultado.porcentajes.danio_corona) }}%</td>
+                    </tr>
+                    <tr>
+                        <td>Pedúnculo Largo</td>
+                        <td>{{ resultado.pendunculo_largo }}</td>
+                        <td>{{ "%.2f"|format(resultado.porcentajes.pendunculo_largo) }}%</td>
+                    </tr>
+                    <tr>
+                        <td>Podridos</td>
+                        <td>{{ resultado.podrido }}</td>
+                        <td>{{ "%.2f"|format(resultado.porcentajes.podrido) }}%</td>
+                    </tr>
+                    <tr>
+                        <th>Total de Racimos</th>
+                        <th colspan="2">{{ resultado.total_racimos }}</th>
+                    </tr>
+                </table>
+            </div>
+            
+            <div class="image-container">
+                {% if resultado.imagenes.annotated %}
+                <div class="image-item">
+                    <h4>Imagen Anotada</h4>
+                    <img src="file://{{ static_folder }}/uploads/{{ resultado.imagenes.annotated }}" alt="Clasificación {{ loop.index }} - Anotado">
+                </div>
+                {% endif %}
+                
+                {% if resultado.imagenes.labeled %}
+                <div class="image-item">
+                    <h4>Imagen con Etiquetas</h4>
+                    <img src="file://{{ static_folder }}/uploads/{{ resultado.imagenes.labeled }}" alt="Clasificación {{ loop.index }} - Etiquetado">
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
 </body>
 </html> 

@@ -1434,19 +1434,14 @@ def revalidation_success():
 
 @app.route('/procesar_clasificacion_automatica', methods=['POST'])
 def procesar_clasificacion_automatica():
-    """
-    Procesa la imagen para clasificación automática de fruta usando Roboflow API
-    """
     try:
         if 'foto' not in request.files:
-            return jsonify({'success': False, 'message': 'No se encontró la imagen'})
+            return jsonify({'success': False, 'message': 'No se encontró archivo de imagen'})
         
         foto = request.files['foto']
-        codigo = request.form.get('codigo')
-        
-        if not foto:
-            return jsonify({'success': False, 'message': 'Archivo no válido'})
-
+        if foto.filename == '':
+            return jsonify({'success': False, 'message': 'No se seleccionó ningún archivo'})
+            
         # Guardar y redimensionar imagen
         original_filename = secure_filename(foto.filename)
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], original_filename)
@@ -1461,7 +1456,7 @@ def procesar_clasificacion_automatica():
                 file_path = resized_path
         except Exception as e:
             logger.error(f"Error al redimensionar imagen: {e}")
-
+        
         # Preparar imagen para Roboflow
         try:
             with open(file_path, "rb") as image_file:
@@ -1490,7 +1485,7 @@ def procesar_clasificacion_automatica():
                         'success': False,
                         'message': 'Error en el servicio de clasificación'
                     })
-
+                
                 result = response.json()
                 logger.info(f"Respuesta de Roboflow: {result}")
                 
@@ -1515,41 +1510,77 @@ def procesar_clasificacion_automatica():
                     'pendunculo_largo': int(out_dict.get('racimo pedunculo largo', 0)),
                     'podrido': int(out_dict.get('racimo podrido', 0))
                 }
-
+                
+                # Obtener el total de racimos detectados
+                total_racimos = int(out_dict.get('potholes_detected', 0))
+                if total_racimos == 0:
+                    # Si no hay total, calcularlo de la suma de clasificaciones
+                    total_racimos = sum(clasificacion.values())
+                
                 logger.info(f"Clasificación extraída: {clasificacion}")
+                logger.info(f"Total de racimos detectados: {total_racimos}")
+
+                # Calcular porcentajes
+                porcentajes = {}
+                if total_racimos > 0:
+                    for key, value in clasificacion.items():
+                        porcentajes[key] = round((value / total_racimos) * 100, 2)
 
                 # Guardar imágenes resultantes
                 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
                 imagenes_guardadas = {}
-
+                
                 # Guardar imagen anotada si existe
                 annotated_obj = out_dict.get('annotated_image', {})
                 if isinstance(annotated_obj, dict):
                     ann_val = annotated_obj.get('value', '')
                     if ann_val:
-                        ann_filename = f"annotated_{codigo}_{timestamp}.jpg"
+                        ann_filename = f"annotated_{timestamp}_{original_filename}"
                         ann_path = os.path.join(app.config['UPLOAD_FOLDER'], ann_filename)
                         with open(ann_path, 'wb') as f:
                             f.write(base64.b64decode(ann_val))
                         imagenes_guardadas['annotated'] = ann_filename
-
+                
                 # Guardar visualización de etiquetas si existe
                 label_vis_obj = out_dict.get('label_visualization_1', {})
                 if isinstance(label_vis_obj, dict):
                     label_val = label_vis_obj.get('value', '')
                     if label_val:
-                        label_filename = f"labeled_{codigo}_{timestamp}.jpg"
+                        label_filename = f"labeled_{timestamp}_{original_filename}"
                         label_path = os.path.join(app.config['UPLOAD_FOLDER'], label_filename)
                         with open(label_path, 'wb') as f:
                             f.write(base64.b64decode(label_val))
                         imagenes_guardadas['labeled'] = label_filename
 
+                # Guardar resultados en la sesión
+                if 'resultados_individuales' not in session:
+                    session['resultados_individuales'] = []
+                if 'imagenes_clasificacion' not in session:
+                    session['imagenes_clasificacion'] = []
+
+                # Agregar resultados individuales con más detalle
+                resultado_individual = {
+                    'verde': clasificacion['verde'],
+                    'sobremaduro': clasificacion['sobremaduro'],
+                    'danio_corona': clasificacion['danio_corona'],
+                    'pendunculo_largo': clasificacion['pendunculo_largo'],
+                    'podrido': clasificacion['podrido'],
+                    'total_racimos': total_racimos,
+                    'porcentajes': porcentajes,
+                    'imagenes': imagenes_guardadas  # Incluir las imágenes con cada resultado
+                }
+                
+                session['resultados_individuales'].append(resultado_individual)
+                session.modified = True
+
                 return jsonify({
                     'success': True,
                     'clasificacion': clasificacion,
+                    'total_racimos': total_racimos,
+                    'porcentajes': porcentajes,
                     'imagenes': imagenes_guardadas
                 })
-
+                
         except Exception as e:
             logger.error(f"Error procesando con Roboflow: {str(e)}")
             logger.error(traceback.format_exc())
@@ -1563,174 +1594,154 @@ def procesar_clasificacion_automatica():
         logger.error(traceback.format_exc())
         return jsonify({'success': False, 'message': str(e)})
 
-def generar_pdf_clasificacion(codigo, clasificacion, tipo_clasificacion, imagenes, datos_guia):
+@app.route('/generar_pdf_clasificacion', methods=['POST'])
+def generar_pdf_clasificacion():
     try:
-        fecha_actual = datetime.now()
+        datos = request.get_json()
         
-        datos_pdf = {
-            'codigo': datos_guia.get('codigo_validado', codigo),
-            'nombre': datos_guia.get('nombre_validado', 'No disponible'),
-            'tipo_clasificacion': tipo_clasificacion,
-            'fecha_clasificacion': fecha_actual.strftime('%d/%m/%Y'),
-            'hora_clasificacion': fecha_actual.strftime('%H:%M:%S'),
-            'clasificacion': clasificacion,
-            'imagenes': imagenes,
-            'peso_bruto': datos_guia.get('peso_bruto', 'No disponible'),
-            'fecha_generacion': fecha_actual.strftime('%d/%m/%Y'),
-            'hora_generacion': fecha_actual.strftime('%H:%M:%S'),
-            'codigo_guia': datos_guia.get('codigo_guia')
-        }
+        # Obtener los resultados individuales y las imágenes de la sesión
+        resultados_individuales = session.get('resultados_individuales', [])[:3]  # Limitar a 3 resultados
         
-        # Generar PDF
-        rendered = render_template('clasificacion_pdf_template.html', **datos_pdf)
-        pdf_filename = f"clasificacion_{datos_guia.get('codigo_guia', codigo)}_{fecha_actual.strftime('%Y%m%d_%H%M%S')}.pdf"
+        # Verificar que tenemos todos los datos necesarios
+        if not resultados_individuales:
+            logger.error("No se encontraron resultados individuales en la sesión")
+            return jsonify({
+                'success': False,
+                'error': 'No se encontraron datos de clasificación'
+            }), 400
+
+        # Estructurar datos de clasificación manual si existe
+        clasificacion_manual = {}
+        if datos.get('clasificacion_manual'):
+            # Determinar el total de racimos basado en el valor inicial
+            valor_inicial = datos.get('valor_inicial', 0)
+            total_manual = 100 if valor_inicial > 1000 else 28
+            
+            # Excluir 'cantidad_racimos' del cálculo de porcentajes
+            categorias_validas = {k: v for k, v in datos['clasificacion_manual'].items() if k != 'cantidad_racimos'}
+            
+            for categoria, cantidad in categorias_validas.items():
+                porcentaje = (cantidad / total_manual * 100) if total_manual > 0 else 0
+                clasificacion_manual[categoria] = {
+                    'cantidad': cantidad,
+                    'porcentaje': porcentaje,
+                    'total_racimos': total_manual
+                }
+
+        # Estructurar datos de clasificación automática si existe
+        clasificacion_automatica = {}
+        if datos.get('clasificacion_automatica'):
+            # Calcular el total sumando los totales individuales
+            total_auto = sum(resultado.get('total_racimos', 0) for resultado in resultados_individuales)
+            
+            # Excluir 'cantidad_racimos' del cálculo
+            categorias_validas = {k: v for k, v in datos['clasificacion_automatica'].items() if k != 'cantidad_racimos'}
+            
+            for categoria, cantidad in categorias_validas.items():
+                porcentaje = (cantidad / total_auto * 100) if total_auto > 0 else 0
+                clasificacion_automatica[categoria] = {
+                    'cantidad': cantidad,
+                    'porcentaje': porcentaje,
+                    'total_racimos': total_auto
+                }
+
+        # Generar nombre del archivo PDF
+        fecha_actual = datetime.now().strftime("%Y%m%d_%H%M%S")
+        pdf_filename = f"clasificacion_{datos['codigo_proveedor']}_{fecha_actual}.pdf"
         pdf_path = os.path.join(app.config['PDF_FOLDER'], pdf_filename)
         
-        # Asegurar que el directorio existe
-        os.makedirs(os.path.dirname(pdf_path), exist_ok=True)
+        # Obtener la ruta absoluta del directorio static
+        static_folder = os.path.abspath(app.static_folder)
         
-        HTML(string=rendered, base_url=app.static_folder).write_pdf(pdf_path)
-        logger.info(f"PDF de clasificación generado exitosamente: {pdf_filename}")
-        return pdf_filename
+        # Renderizar el template HTML
+        html_content = render_template(
+            'clasificacion_pdf_template.html',
+            nombre_proveedor=datos['nombre_proveedor'],
+            codigo_proveedor=datos['codigo_proveedor'],
+            codigo_guia=datos['codigo_guia'],
+            guia_url=datos['guia_url'],
+            fecha_clasificacion=datos['fecha_clasificacion'],
+            hora_clasificacion=datos['hora_clasificacion'],
+            tipo_clasificacion=datos['tipo_clasificacion'],
+            clasificacion_manual=clasificacion_manual,
+            clasificacion_automatica=clasificacion_automatica,
+            resultados_individuales=resultados_individuales,
+            static_folder=static_folder
+        )
+        
+        # Generar PDF usando WeasyPrint con la URL base correcta
+        HTML(
+            string=html_content,
+            base_url=static_folder
+        ).write_pdf(pdf_path)
+        
+        # Actualizar datos de la sesión
+        session['pdf_clasificacion'] = pdf_filename
+        session['clasificacion_completa'] = True
+        session['estado_actual'] = 'peso_tara'
+        session['fecha_clasificacion'] = datos['fecha_clasificacion']
+        session['hora_clasificacion'] = datos['hora_clasificacion']
+        session['tipo_clasificacion'] = datos['tipo_clasificacion']
+        session['clasificacion_manual'] = clasificacion_manual
+        session['clasificacion_automatica'] = clasificacion_automatica
+        session.modified = True
+        
+        # Actualizar estado de la guía
+        datos_actualizacion = {
+            'estado': 'clasificacion_completada',
+            'estado_actual': 'peso_tara',
+            'clasificacion_completa': True,
+            'pdf_clasificacion': pdf_filename,
+            'fecha_clasificacion': datos['fecha_clasificacion'],
+            'hora_clasificacion': datos['hora_clasificacion'],
+            'tipo_clasificacion': datos['tipo_clasificacion'],
+            'clasificacion_manual': clasificacion_manual,
+            'clasificacion_automatica': clasificacion_automatica
+        }
+        
+        # Actualizar el estado de la guía
+        actualizar_estado_guia(datos['codigo_proveedor'], datos_actualizacion)
+        
+        # Enviar datos al webhook de registro de clasificación
+        try:
+            response = requests.post(
+                REGISTRO_CLASIFICACION_WEBHOOK_URL,
+                json={
+                    'codigo': datos['codigo_proveedor'],
+                    'codigo_guia': datos['codigo_guia'],
+                    'clasificacion_manual': clasificacion_manual,
+                    'clasificacion_automatica': clasificacion_automatica,
+                    'fecha_clasificacion': datos['fecha_clasificacion'],
+                    'hora_clasificacion': datos['hora_clasificacion'],
+                    'tipo_clasificacion': datos['tipo_clasificacion']
+                }
+            )
+            
+            if response.status_code != 200:
+                logger.error(f"Error en webhook de registro de clasificación: {response.text}")
+        except Exception as e:
+            logger.error(f"Error enviando datos al webhook de clasificación: {str(e)}")
+        
+        # Construir la URL de redirección usando el código de guía completo
+        redirect_url = datos['guia_url']
+        
+        # Limpiar datos temporales de la sesión
+        session.pop('resultados_individuales', None)
+        session.modified = True
+        
+        return jsonify({
+            'success': True,
+            'pdf_filename': pdf_filename,
+            'redirect_url': redirect_url
+        })
         
     except Exception as e:
         logger.error(f"Error generando PDF de clasificación: {str(e)}")
         logger.error(traceback.format_exc())
-        return None
-
-@app.route('/guardar_clasificacion_automatica', methods=['POST'])
-def guardar_clasificacion_automatica():
-    """
-    Guarda los resultados de la clasificación automática y envía los datos al webhook
-    """
-    try:
-        data = request.get_json()
-        codigo = data.get('codigo')
-        clasificacion = data.get('clasificacion')
-        imagenes = data.get('imagenes')
-        
-        if not all([codigo, clasificacion]):
-            return jsonify({
-                'success': False,
-                'message': 'Faltan datos requeridos'
-            })
-            
-        # Obtener datos de la guía
-        datos_guia = obtener_datos_guia(codigo)
-        if not datos_guia:
-            return jsonify({
-                'success': False,
-                'message': 'Guía no encontrada'
-            })
-            
-        # Fecha y hora actual
-        fecha_hora = datetime.now()
-        
-        # Construir URL de la guía
-        guia_url = request.host_url.rstrip('/') + url_for('serve_guia', filename=f"guia_{datos_guia['codigo_guia']}.html")
-        
-        # Preparar datos para el registro
-        datos_clasificacion = {
-            'url_guia': guia_url,
-            'codigo_proveedor': codigo,
-            'fecha_clasificacion': fecha_hora.strftime("%Y-%m-%d"),
-            'hora_clasificacion': fecha_hora.strftime("%H:%M:%S"),
-            'tipo_clasificacion': 'automatica',
-            'resultado_clasificacion_manual': None,
-            'resultado_clasificacion_automatica': clasificacion,
-            'imagenes': imagenes,
-            'codigo_guia': datos_guia['codigo_guia']
-        }
-        
-        # Registrar en Make.com
-        response = requests.post(
-            REGISTRO_CLASIFICACION_WEBHOOK_URL,
-            json=datos_clasificacion
-        )
-        
-        if response.status_code != 200:
-            logger.error(f"Error en registro de clasificación: {response.text}")
-            return jsonify({
-                'success': False,
-                'message': 'Error registrando la clasificación en el sistema'
-            })
-        
-        # Generar PDF de clasificación
-        pdf_filename = generar_pdf_clasificacion(
-            codigo=codigo,
-            clasificacion=clasificacion,
-            tipo_clasificacion='automatica',
-            imagenes=imagenes,
-            datos_guia=datos_guia
-        )
-        
-        if not pdf_filename:
-            logger.error("Error generando el PDF de clasificación")
-            return jsonify({
-                'success': False,
-                'message': 'Error generando el PDF de clasificación'
-            })
-        
-        # Datos a guardar en la sesión
-        datos_completos = {
-            'estado': 'clasificacion_completa',
-            'estado_actual': 'clasificacion_completa',
-            'clasificacion_completa': True,
-            'tipo_clasificacion': 'automatica',
-            'fecha_clasificacion': fecha_hora.strftime("%Y-%m-%d"),
-            'hora_clasificacion': fecha_hora.strftime("%H:%M:%S"),
-            'resultado_clasificacion': clasificacion,
-            'imagenes_clasificacion': imagenes,
-            'pdf_clasificacion': pdf_filename
-        }
-        
-        # Guardar en sesión
-        session.update(datos_completos)
-        
-        # Actualizar estado en la guía
-        actualizar_estado_guia(codigo, datos_completos)
-        
-        # Actualizar el archivo HTML
-        if not actualizar_html_guia(datos_guia['codigo_guia'], obtener_datos_guia(codigo)):
-            return jsonify({
-                'success': False,
-                'message': 'Error actualizando el archivo HTML de la guía'
-            })
-        
         return jsonify({
-            'success': True,
-            'message': 'Clasificación guardada correctamente',
-            'redirect_url': f"/ver_guia/{codigo}"
-        })
-        
-    except Exception as e:
-        logger.error(f"Error guardando clasificación automática: {str(e)}")
-        logger.error(traceback.format_exc())
-        return jsonify({'success': False, 'message': str(e)})
-
-def interpretar_resultado_roboflow(result):
-    """
-    Interpreta el resultado del modelo de Roboflow y lo convierte al formato esperado
-    """
-    try:
-        logger.info(f"Interpretando resultado de Roboflow: {result}")
-        
-        # Extraer los valores directamente del resultado
-        clasificacion = {
-            'verde': int(result.get('Racimos verdes', 0)),
-            'sobremaduro': int(result.get('racimo sobremaduro', 0)),
-            'danio_corona': int(result.get('racimo daño en corona', 0)),
-            'pendunculo_largo': int(result.get('racimo pedunculo largo', 0)),
-            'podrido': int(result.get('racimo podrido', 0))
-        }
-        
-        logger.info(f"Clasificación interpretada: {clasificacion}")
-        return clasificacion
-        
-    except Exception as e:
-        logger.error(f"Error interpretando resultado de Roboflow: {str(e)}")
-        logger.error(f"Resultado que causó el error: {result}")
-        return None
+            'success': False,
+            'error': str(e)
+        }), 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5002)
