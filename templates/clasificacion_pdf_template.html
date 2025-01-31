@@ -2,18 +2,22 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Reporte de Clasificación</title>
+    <title>Reporte de Clasificación de Racimos</title>
     <style>
         body {
             font-family: Arial, sans-serif;
             margin: 20px;
+            font-size: 12px;
         }
-        .header {
+        h1 {
             text-align: center;
+            font-size: 18px;
             margin-bottom: 20px;
         }
-        .info-section {
-            margin-bottom: 20px;
+        h2 {
+            font-size: 16px;
+            margin-top: 30px;
+            margin-bottom: 10px;
         }
         table {
             width: 100%;
@@ -22,73 +26,45 @@
         }
         th, td {
             border: 1px solid black;
-            padding: 8px;
+            padding: 5px;
             text-align: left;
         }
         th {
             background-color: #f2f2f2;
         }
-        .image-container {
-            display: flex;
-            justify-content: space-between;
-            margin: 10px 0;
+        .info-general {
+            margin-bottom: 30px;
         }
-        .image-item {
-            width: 45%;  /* Reducido de 48% a 45% */
-            text-align: center;
+        .clasificacion {
+            margin-bottom: 30px;
         }
-        .image-item img {
-            max-width: 100%;
-            height: auto;
-            max-height: 300px; /* Limitar altura máxima */
-            object-fit: contain;
-            margin: 5px 0;
-        }
-        .classification-section {
-            margin-bottom: 20px;
-        }
-        .page-break {
-            page-break-before: always;
-        }
-        .result-container {
-            margin-bottom: 15px;
-        }
-        .result-table {
-            width: 100%;
-            margin-bottom: 15px;
-        }
-        .individual-section {
-            page-break-inside: avoid;
-        }
-        h4 {
-            margin: 5px 0;
-            font-size: 14px;
+        .italic {
+            font-style: italic;
+            color: #666;
         }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>Reporte de Clasificación de Racimos</h1>
-    </div>
+    <h1>Reporte de Clasificación de Racimos</h1>
 
-    <div class="info-section">
+    <div class="info-general">
         <h2>Información General</h2>
         <table>
             <tr>
                 <th>Proveedor:</th>
-                <td>{{ nombre_proveedor }} ({{ codigo_proveedor }})</td>
+                <td>{{ nombre }}</td>
             </tr>
             <tr>
                 <th>Código de Guía:</th>
-                <td>{{ codigo_guia }}</td>
+                <td>{{ codigo }}</td>
             </tr>
             <tr>
                 <th>Fecha:</th>
-                <td>{{ fecha_clasificacion }}</td>
+                <td>{{ fecha }}</td>
             </tr>
             <tr>
                 <th>Hora:</th>
-                <td>{{ hora_clasificacion }}</td>
+                <td>{{ hora }}</td>
             </tr>
             <tr>
                 <th>Tipo de Clasificación:</th>
@@ -98,7 +74,7 @@
     </div>
 
     {% if clasificacion_manual %}
-    <div class="classification-section">
+    <div class="clasificacion">
         <h2>Clasificación Manual</h2>
         <table>
             <tr>
@@ -106,23 +82,45 @@
                 <th>Cantidad</th>
                 <th>Porcentaje</th>
             </tr>
-            {% for categoria, datos in clasificacion_manual.items() %}
             <tr>
-                <td>{{ categoria }}</td>
-                <td>{{ datos.cantidad }}</td>
-                <td>{{ "%.2f"|format(datos.porcentaje) }}% ({{ datos.cantidad }}/{{ datos.total_racimos }})</td>
+                <td>Verde</td>
+                <td>{{ clasificacion_manual.verde }}</td>
+                <td>{{ "%.2f"|format(clasificacion_manual.porcentaje_verde) }}%</td>
             </tr>
-            {% endfor %}
             <tr>
-                <th>Total Racimos</th>
-                <th colspan="2">{{ clasificacion_manual|first|attr('total_racimos') }}</th>
+                <td>Sobremaduro</td>
+                <td>{{ clasificacion_manual.sobremaduro }}</td>
+                <td>{{ "%.2f"|format(clasificacion_manual.porcentaje_sobremaduro) }}%</td>
+            </tr>
+            <tr>
+                <td>Daño en Corona</td>
+                <td>{{ clasificacion_manual.danio_corona }}</td>
+                <td>{{ "%.2f"|format(clasificacion_manual.porcentaje_danio_corona) }}%</td>
+            </tr>
+            <tr>
+                <td>Pedúnculo Largo</td>
+                <td>{{ clasificacion_manual.pendunculo_largo }}</td>
+                <td>{{ "%.2f"|format(clasificacion_manual.porcentaje_pendunculo_largo) }}%</td>
+            </tr>
+            <tr>
+                <td>Podrido</td>
+                <td>{{ clasificacion_manual.podrido }}</td>
+                <td>{{ "%.2f"|format(clasificacion_manual.porcentaje_podrido) }}%</td>
+            </tr>
+            <tr>
+                <th>Total de Racimos</th>
+                <td colspan="2">{{ clasificacion_manual.total_racimos }}</td>
             </tr>
         </table>
+    </div>
+    {% else %}
+    <div class="clasificacion">
+        <p class="italic">No se realizó clasificación manual</p>
     </div>
     {% endif %}
 
     {% if clasificacion_automatica %}
-    <div class="classification-section">
+    <div class="clasificacion">
         <h2>Clasificación Automática</h2>
         <table>
             <tr>
@@ -130,83 +128,40 @@
                 <th>Cantidad</th>
                 <th>Porcentaje</th>
             </tr>
-            {% for categoria, datos in clasificacion_automatica.items() %}
             <tr>
-                <td>{{ categoria }}</td>
-                <td>{{ datos.cantidad }}</td>
-                <td>{{ "%.2f"|format(datos.porcentaje) }}% ({{ datos.cantidad }}/{{ datos.total_racimos }})</td>
+                <td>Verde</td>
+                <td>{{ clasificacion_automatica.verde }}</td>
+                <td>{{ "%.2f"|format(clasificacion_automatica.porcentaje_verde) }}%</td>
             </tr>
-            {% endfor %}
             <tr>
-                <th>Total Racimos</th>
-                <th colspan="2">{{ clasificacion_automatica|first|attr('total_racimos') }}</th>
+                <td>Sobremaduro</td>
+                <td>{{ clasificacion_automatica.sobremaduro }}</td>
+                <td>{{ "%.2f"|format(clasificacion_automatica.porcentaje_sobremaduro) }}%</td>
+            </tr>
+            <tr>
+                <td>Daño en Corona</td>
+                <td>{{ clasificacion_automatica.danio_corona }}</td>
+                <td>{{ "%.2f"|format(clasificacion_automatica.porcentaje_danio_corona) }}%</td>
+            </tr>
+            <tr>
+                <td>Pedúnculo Largo</td>
+                <td>{{ clasificacion_automatica.pendunculo_largo }}</td>
+                <td>{{ "%.2f"|format(clasificacion_automatica.porcentaje_pendunculo_largo) }}%</td>
+            </tr>
+            <tr>
+                <td>Podrido</td>
+                <td>{{ clasificacion_automatica.podrido }}</td>
+                <td>{{ "%.2f"|format(clasificacion_automatica.porcentaje_podrido) }}%</td>
+            </tr>
+            <tr>
+                <th>Total de Racimos</th>
+                <td colspan="2">{{ clasificacion_automatica.total_racimos }}</td>
             </tr>
         </table>
     </div>
-    {% endif %}
-
-    {% if resultados_individuales %}
-    <div class="classification-section">
-        <h2>Resultados Individuales</h2>
-        {% for resultado in resultados_individuales %}
-        <div class="individual-section">
-            <h3>Clasificación {{ loop.index }}</h3>
-            <div class="result-table">
-                <table>
-                    <tr>
-                        <th>Categoría</th>
-                        <th>Cantidad</th>
-                        <th>Porcentaje</th>
-                    </tr>
-                    <tr>
-                        <td>Verdes</td>
-                        <td>{{ resultado.verde }}</td>
-                        <td>{{ "%.2f"|format(resultado.porcentajes.verde) }}%</td>
-                    </tr>
-                    <tr>
-                        <td>Sobremaduros</td>
-                        <td>{{ resultado.sobremaduro }}</td>
-                        <td>{{ "%.2f"|format(resultado.porcentajes.sobremaduro) }}%</td>
-                    </tr>
-                    <tr>
-                        <td>Daño en Corona</td>
-                        <td>{{ resultado.danio_corona }}</td>
-                        <td>{{ "%.2f"|format(resultado.porcentajes.danio_corona) }}%</td>
-                    </tr>
-                    <tr>
-                        <td>Pedúnculo Largo</td>
-                        <td>{{ resultado.pendunculo_largo }}</td>
-                        <td>{{ "%.2f"|format(resultado.porcentajes.pendunculo_largo) }}%</td>
-                    </tr>
-                    <tr>
-                        <td>Podridos</td>
-                        <td>{{ resultado.podrido }}</td>
-                        <td>{{ "%.2f"|format(resultado.porcentajes.podrido) }}%</td>
-                    </tr>
-                    <tr>
-                        <th>Total de Racimos</th>
-                        <th colspan="2">{{ resultado.total_racimos }}</th>
-                    </tr>
-                </table>
-            </div>
-            
-            <div class="image-container">
-                {% if resultado.imagenes.annotated %}
-                <div class="image-item">
-                    <h4>Imagen Anotada</h4>
-                    <img src="file://{{ static_folder }}/uploads/{{ resultado.imagenes.annotated }}" alt="Clasificación {{ loop.index }} - Anotado">
-                </div>
-                {% endif %}
-                
-                {% if resultado.imagenes.labeled %}
-                <div class="image-item">
-                    <h4>Imagen con Etiquetas</h4>
-                    <img src="file://{{ static_folder }}/uploads/{{ resultado.imagenes.labeled }}" alt="Clasificación {{ loop.index }} - Etiquetado">
-                </div>
-                {% endif %}
-            </div>
-        </div>
-        {% endfor %}
+    {% else %}
+    <div class="clasificacion">
+        <p class="italic">No se realizó clasificación automática</p>
     </div>
     {% endif %}
 </body>

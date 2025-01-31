@@ -103,11 +103,22 @@
             <form id="directForm">
                 <div class="mb-3">
                     <label class="form-label">Foto de la báscula:</label>
-                    <input type="file" class="form-control" id="pesajeFoto" accept="image/*">
+                    <input type="file" class="form-control" id="pesajeFoto" accept="image/*" capture="environment">
                     <img id="previewImage" class="preview-image hidden">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Peso Tara (kg):</label>
+                    <input type="number" class="form-control" id="pesoTaraDirecto" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Peso Neto (kg):</label>
+                    <input type="number" class="form-control" id="pesoNeto" readonly>
                 </div>
                 <button type="button" class="btn btn-primary" onclick="procesarPesajeDirecto()">
                     Procesar Pesaje Directo
+                </button>
+                <button type="button" class="btn btn-success hidden" id="btnGuardarPesaje" onclick="registrarPesoTaraDirecto()">
+                    Guardar Pesaje
                 </button>
             </form>
         </div>
@@ -119,6 +130,10 @@
                 <div class="mb-3">
                     <label class="form-label">Peso Tara (kg):</label>
                     <input type="number" class="form-control" id="pesoTaraVirtual" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Peso Neto (kg):</label>
+                    <input type="number" class="form-control" id="pesoNetoVirtual" readonly>
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Comentarios:</label>
@@ -149,6 +164,10 @@
     </div>
 
     <script>
+        // Variables globales
+        const pesoBruto = Number("{{ datos.peso_bruto }}");
+        const codigoGuia = "{{ datos.codigo_guia }}";
+
         // Manejo de la visualización de secciones según tipo de pesaje
         document.querySelectorAll('input[name="tipoPesaje"]').forEach(radio => {
             radio.addEventListener('change', function() {
@@ -172,22 +191,192 @@
             }
         });
 
+        // Calcular peso neto cuando cambia el peso tara virtual
+        document.getElementById('pesoTaraVirtual').addEventListener('input', function() {
+            const pesoTara = parseFloat(this.value) || 0;
+            const pesoNeto = pesoBruto - pesoTara;
+            document.getElementById('pesoNetoVirtual').value = pesoNeto.toFixed(3);
+        });
+
         function mostrarCarga(mostrar) {
             document.getElementById('loadingOverlay').style.display = mostrar ? 'flex' : 'none';
         }
 
-        // Funciones para el pesaje directo y virtual
-        // Estas funciones deberán implementarse según la lógica de negocio requerida
         async function procesarPesajeDirecto() {
-            // Implementar lógica de pesaje directo
+            try {
+                mostrarCarga(true);
+                const fotoInput = document.getElementById('pesajeFoto');
+                if (!fotoInput.files[0]) {
+                    alert('Por favor seleccione una foto de la báscula');
+                    mostrarCarga(false);
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('foto', fotoInput.files[0]);
+                formData.append('codigo_guia', codigoGuia);
+
+                const response = await fetch('/procesar_pesaje_tara_directo', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    document.getElementById('pesoTaraDirecto').value = data.peso;
+                    const pesoNeto = pesoBruto - parseFloat(data.peso);
+                    document.getElementById('pesoNeto').value = pesoNeto.toFixed(3);
+                    document.getElementById('btnGuardarPesaje').classList.remove('hidden');
+                } else {
+                    alert(data.message || 'Error procesando el pesaje');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error procesando el pesaje');
+            } finally {
+                mostrarCarga(false);
+            }
+        }
+
+        async function registrarPesoTaraDirecto() {
+            try {
+                mostrarCarga(true);
+                const pesoTara = document.getElementById('pesoTaraDirecto').value;
+                
+                if (!pesoTara) {
+                    alert('Por favor procese primero el peso tara');
+                    mostrarCarga(false);
+                    return;
+                }
+
+                const response = await fetch('/registrar_peso_tara_directo', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        codigo_guia: codigoGuia,
+                        peso_tara: pesoTara
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    window.location.href = data.redirect_url;
+                } else {
+                    alert(data.message || 'Error registrando el peso');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error registrando el peso');
+            } finally {
+                mostrarCarga(false);
+            }
         }
 
         async function solicitarAutorizacionTara() {
-            // Implementar lógica de solicitud de autorización
+            try {
+                mostrarCarga(true);
+                const pesoTara = document.getElementById('pesoTaraVirtual').value;
+                const comentarios = document.getElementById('comentariosTara').value;
+
+                if (!pesoTara || !comentarios) {
+                    alert('Por favor complete todos los campos');
+                    mostrarCarga(false);
+                    return;
+                }
+
+                const response = await fetch('/solicitar_autorizacion_tara', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        codigo_guia: codigoGuia,
+                        peso_tara: pesoTara,
+                        comentarios: comentarios
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    document.getElementById('autorizacionSection').classList.remove('hidden');
+                    alert('Solicitud enviada. Por favor ingrese el código de autorización cuando lo reciba.');
+                } else {
+                    alert(data.message || 'Error enviando la solicitud');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error enviando la solicitud');
+            } finally {
+                mostrarCarga(false);
+            }
         }
 
         async function validarAutorizacionTara() {
-            // Implementar lógica de validación de autorización
+            try {
+                mostrarCarga(true);
+                const codigoAutorizacion = document.getElementById('codigoAutorizacionTara').value;
+                
+                if (!codigoAutorizacion) {
+                    alert('Por favor ingrese el código de autorización');
+                    mostrarCarga(false);
+                    return;
+                }
+
+                const response = await fetch('/validar_autorizacion_tara', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        codigo_guia: codigoGuia,
+                        codigoAutorizacion: codigoAutorizacion
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    registrarPesoTaraVirtual();
+                } else {
+                    alert(data.message || 'Código inválido');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error validando el código');
+            } finally {
+                mostrarCarga(false);
+            }
+        }
+
+        async function registrarPesoTaraVirtual() {
+            try {
+                mostrarCarga(true);
+                const pesoTara = document.getElementById('pesoTaraVirtual').value;
+                
+                const response = await fetch('/registrar_peso_tara_virtual', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        codigo_guia: codigoGuia,
+                        peso_tara: pesoTara
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    window.location.href = data.redirect_url;
+                } else {
+                    alert(data.message || 'Error registrando el peso');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error registrando el peso');
+            } finally {
+                mostrarCarga(false);
+            }
         }
     </script>
 

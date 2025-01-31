@@ -139,7 +139,7 @@
         <!-- Modificar la sección de Clasificación Manual -->
         <div id="seccionManual" class="classification-section">
             <h4 class="mb-3">Clasificación Manual</h4>
-            <form id="manualForm" onsubmit="event.preventDefault(); registrarClasificacionManual();">
+            <form id="manualForm">
                 <div class="row">
                     <div class="col-md-6 mb-3">
                         <label class="form-label">Racimos Sobremaduros:</label>
@@ -537,6 +537,88 @@
             document.getElementById('racimo_verde').value = clasificacion.verde || 0;
         }
 
+        async function registrarClasificacion() {
+            try {
+                // Verificaciones iniciales
+                if (!resultadosAcumulados || !resultadosAcumulados.porcentajes) {
+                    alert('No hay datos de clasificación automática completos para registrar');
+                    return;
+                }
+
+                if (!resultadosAcumulados.imagenes || resultadosAcumulados.imagenes.length !== 3) {
+                    alert('No se han procesado las 3 fotos requeridas');
+                    return;
+                }
+
+                const codigo = document.getElementById('codigo').value;
+                const fecha = new Date();
+
+                // Mostrar el overlay de carga con mensaje personalizado
+                const loadingContent = document.querySelector('.loading-content');
+                const loadingTitle = loadingContent.querySelector('h2');
+                const loadingText = loadingContent.querySelector('p');
+                loadingTitle.textContent = 'Registrando clasificación automática...';
+                loadingText.textContent = 'Por favor espere mientras guardamos los resultados.';
+                mostrarCarga(true);
+
+                // Calcular el total de racimos como la suma de los totales individuales
+                const totalRacimos = window.resultadosIndividuales ? 
+                    window.resultadosIndividuales.reduce((sum, resultado) => sum + resultado.total_racimos, 0) : 0;
+
+                // Preparar datos para el webhook en el nuevo formato
+                const datosWebhook = {
+                    codigo_proveedor: codigo,
+                    url_guia_template: window.location.origin + `/ver_guia/${codigo}`,
+                    fecha_clasificacion: fecha.toISOString().split('T')[0],
+                    hora_clasificacion: fecha.toTimeString().split(' ')[0],
+                    verde_automatica: resultadosAcumulados.clasificacion.verde,
+                    sobremadura_automatica: resultadosAcumulados.clasificacion.sobremaduro,
+                    danio_corona_automatica: resultadosAcumulados.clasificacion.danio_corona,
+                    pendunculo_largo_automatica: resultadosAcumulados.clasificacion.pendunculo_largo,
+                    podrido_automatica: resultadosAcumulados.clasificacion.podrido,
+                    cantidad_racimo_automatico: totalRacimos,
+                    peso_bruto: parseFloat('{{ peso_bruto }}') || 0,
+                    codigo_guia: '{{ codigo_guia }}',
+                    nombre: '{{ nombre }}'
+                };
+
+                console.log('Enviando datos al webhook:', datosWebhook);
+
+                // URL del webhook de Make
+                const webhookUrl = 'https://hook.us2.make.com/ydtogfd3mln2ixbcuam0xrd2m9odfgna';
+
+                const response = await fetch(webhookUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(datosWebhook)
+                });
+
+                if (!response.ok) {
+                    throw new Error('Error enviando datos al webhook');
+                }
+
+                alert('Clasificación automática registrada exitosamente');
+
+                // Deshabilitar el botón de registro automático y el checkbox
+                document.querySelector('button[onclick="registrarClasificacion()"]').disabled = true;
+                document.getElementById('clasificacionAutomatica').disabled = true;
+
+            } catch (error) {
+                console.error('Error en registrarClasificacion:', error);
+                alert(error.message || 'Error al registrar la clasificación');
+            } finally {
+                // Ocultar el overlay de carga y restaurar mensajes originales
+                mostrarCarga(false);
+                const loadingContent = document.querySelector('.loading-content');
+                const loadingTitle = loadingContent.querySelector('h2');
+                const loadingText = loadingContent.querySelector('p');
+                loadingTitle.textContent = 'Procesando clasificación...';
+                loadingText.textContent = 'Por favor espere mientras procesamos la imagen.';
+            }
+        }
+
         async function registrarClasificacionManual() {
             try {
                 const codigo = document.getElementById('codigo').value;
@@ -550,6 +632,12 @@
                     return;
                 }
 
+                // Mostrar el overlay de carga con mensaje personalizado
+                const loadingContent = document.querySelector('.loading-content');
+                const loadingTitle = loadingContent.querySelector('h2');
+                const loadingText = loadingContent.querySelector('p');
+                loadingTitle.textContent = 'Registrando clasificación manual...';
+                loadingText.textContent = 'Por favor espere mientras guardamos los resultados.';
                 mostrarCarga(true);
 
                 // Obtener la cantidad inicial de racimos y determinar el total según la condición
@@ -591,80 +679,24 @@
                 }
 
                 alert('Clasificación manual registrada exitosamente');
-                // No redirigir aquí, esperar a que el usuario haga clic en "Guardar Clasificación"
+
+                // Deshabilitar el botón de registro manual y el checkbox
+                document.querySelector('button[type="submit"]').disabled = true;
+                document.getElementById('clasificacionManual').disabled = true;
 
             } catch (error) {
                 console.error('Error en registrarClasificacionManual:', error);
                 alert(error.message || 'Error al registrar la clasificación manual');
             } finally {
+                // Ocultar el overlay de carga y restaurar mensajes originales
                 mostrarCarga(false);
+                const loadingContent = document.querySelector('.loading-content');
+                const loadingTitle = loadingContent.querySelector('h2');
+                const loadingText = loadingContent.querySelector('p');
+                loadingTitle.textContent = 'Procesando clasificación...';
+                loadingText.textContent = 'Por favor espere mientras procesamos la imagen.';
             }
             return false; // Prevenir cualquier comportamiento por defecto del formulario
-        }
-
-        async function registrarClasificacion() {
-            try {
-                // Verificaciones iniciales
-                if (!resultadosAcumulados || !resultadosAcumulados.porcentajes) {
-                    alert('No hay datos de clasificación automática completos para registrar');
-                    return;
-                }
-
-                if (!resultadosAcumulados.imagenes || resultadosAcumulados.imagenes.length !== 3) {
-                    alert('No se han procesado las 3 fotos requeridas');
-                    return;
-                }
-
-                const codigo = document.getElementById('codigo').value;
-                const fecha = new Date();
-
-                // Calcular el total de racimos como la suma de los totales individuales
-                const totalRacimos = window.resultadosIndividuales.reduce((sum, resultado) => sum + resultado.total_racimos, 0);
-
-                mostrarCarga(true);
-
-                // Preparar datos para el webhook en el nuevo formato
-                const datosWebhook = {
-                    codigo_proveedor: codigo,
-                    url_guia_template: window.location.origin + `/ver_guia/${codigo}`,
-                    fecha_clasificacion: fecha.toISOString().split('T')[0],
-                    hora_clasificacion: fecha.toTimeString().split(' ')[0],
-                    verde_automatica: resultadosAcumulados.clasificacion.verde,
-                    sobremadura_automatica: resultadosAcumulados.clasificacion.sobremaduro,
-                    danio_corona_automatica: resultadosAcumulados.clasificacion.danio_corona,
-                    pendunculo_largo_automatica: resultadosAcumulados.clasificacion.pendunculo_largo,
-                    podrido_automatica: resultadosAcumulados.clasificacion.podrido,
-                    cantidad_racimo_automatico: totalRacimos,
-                    peso_bruto: parseFloat('{{ peso_bruto }}') || 0,
-                    codigo_guia: '{{ codigo_guia }}',
-                    nombre: '{{ nombre }}'
-                };
-
-                console.log('Enviando datos al webhook:', datosWebhook);
-
-                // URL del webhook de Make
-                const webhookUrl = 'https://hook.us2.make.com/ydtogfd3mln2ixbcuam0xrd2m9odfgna';
-
-                const response = await fetch(webhookUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(datosWebhook)
-                });
-
-                if (!response.ok) {
-                    throw new Error('Error enviando datos al webhook');
-                }
-
-                alert('Clasificación automática registrada exitosamente');
-
-            } catch (error) {
-                console.error('Error en registrarClasificacion:', error);
-                alert(error.message || 'Error al registrar la clasificación');
-            } finally {
-                mostrarCarga(false);
-            }
         }
 
         function obtenerDatosManuales() {
@@ -701,24 +733,36 @@
             }
         }
 
-        // Variable global para almacenar el resultado de la clasificación automática
-        window.clasificacionAutomaticaResultado = null;
-
         async function guardarClasificacion() {
             try {
+                // Verificaciones iniciales
+                if (!resultadosAcumulados || !resultadosAcumulados.porcentajes) {
+                    alert('No hay datos de clasificación automática completos para guardar');
+                    return;
+                }
+
+                if (!resultadosAcumulados.imagenes || resultadosAcumulados.imagenes.length !== 3) {
+                    alert('No se han procesado las 3 fotos requeridas');
+                    return;
+                }
+
                 const codigo = document.getElementById('codigo').value;
+                const codigo_guia = '{{ codigo_guia }}';
+
+                // Mostrar el overlay de carga con mensaje personalizado
+                const loadingContent = document.querySelector('.loading-content');
+                const loadingTitle = loadingContent.querySelector('h2');
+                const loadingText = loadingContent.querySelector('p');
+                loadingTitle.textContent = 'Guardando clasificación...';
+                loadingText.textContent = 'Por favor espere mientras generamos el PDF.';
                 mostrarCarga(true);
 
-                // Verificar qué tipos de clasificación están activos
-                const clasificacionAutomaticaActiva = document.getElementById('clasificacionAutomatica').checked;
-                const clasificacionManualActiva = document.getElementById('clasificacionManual').checked;
-                
                 // Preparar datos para el PDF
                 const datosPDF = {
                     nombre_proveedor: '{{ nombre }}',
                     codigo_proveedor: codigo,
-                    guia_url: window.location.origin + `/ver_guia/${codigo}`,
-                    codigo_guia: '{{ codigo_guia }}',
+                    guia_url: window.location.origin + `/guias/guia_${codigo_guia}.html`,
+                    codigo_guia: codigo_guia,
                     fecha_clasificacion: new Date().toISOString().split('T')[0],
                     hora_clasificacion: new Date().toTimeString().split(' ')[0],
                     tipo_clasificacion: [],
@@ -727,6 +771,7 @@
                 };
 
                 // Verificar si hay datos de clasificación manual
+                const clasificacionManualActiva = document.getElementById('clasificacionManual').checked;
                 if (clasificacionManualActiva) {
                     const clasificacionManual = obtenerDatosManuales();
                     const hayDatosManual = Object.values(clasificacionManual).some(valor => valor > 0);
@@ -734,7 +779,7 @@
                         datosPDF.tipo_clasificacion.push('Manual');
                         const cantidadRacimosInicial = parseInt('{{ cantidad_racimos }}');
                         const totalRacimosManual = cantidadRacimosInicial >= 1000 ? 100 : 28;
-                        
+
                         datosPDF.clasificacion_manual = {
                             verde: clasificacionManual.verde,
                             sobremaduro: clasificacionManual.sobremaduro,
@@ -747,11 +792,12 @@
                 }
 
                 // Verificar si hay datos de clasificación automática
+                const clasificacionAutomaticaActiva = document.getElementById('clasificacionAutomatica').checked;
                 if (clasificacionAutomaticaActiva && resultadosAcumulados && resultadosAcumulados.clasificacion) {
                     datosPDF.tipo_clasificacion.push('Automática');
-                    const totalRacimosAuto = window.resultadosIndividuales ? 
+                    const totalRacimosAuto = window.resultadosIndividuales ?
                         window.resultadosIndividuales.reduce((sum, resultado) => sum + resultado.total_racimos, 0) : 0;
-                    
+
                     datosPDF.clasificacion_automatica = {
                         verde: resultadosAcumulados.clasificacion.verde,
                         sobremaduro: resultadosAcumulados.clasificacion.sobremaduro,
@@ -782,14 +828,20 @@
                     throw new Error(result.error || 'Error generando el PDF de clasificación');
                 }
 
-                // Redirigir a la guía template
-                window.location.href = `/ver_guia/${codigo}`;
+                // Redirigir a la URL correcta
+                window.location.href = `/guias/guia_${codigo_guia}.html`;
 
             } catch (error) {
                 console.error('Error en guardarClasificacion:', error);
                 alert('Error al guardar la clasificación: ' + error.message);
             } finally {
+                // Restaurar mensajes originales del overlay de carga
                 mostrarCarga(false);
+                const loadingContent = document.querySelector('.loading-content');
+                const loadingTitle = loadingContent.querySelector('h2');
+                const loadingText = loadingContent.querySelector('p');
+                loadingTitle.textContent = 'Procesando clasificación...';
+                loadingText.textContent = 'Por favor espere mientras procesamos la imagen.';
             }
         }
     </script>
