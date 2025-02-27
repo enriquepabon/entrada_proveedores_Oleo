@@ -1,103 +1,182 @@
-<!-- En templates/pesaje_pdf_template.html -->
+<!-- templates/pesaje_pdf_template.html -->
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PDF de Pesaje</title>
+    <title>Comprobante de Pesaje - {{ codigo_guia }}</title>
     <style>
         body {
             font-family: Arial, sans-serif;
             margin: 0;
-            padding: 20px;
+            padding: 0;
+            color: #333;
+            font-size: 12px;
         }
-        .header {
+        .main-container {
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 10px;
+        }
+        .header-section {
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
             border-bottom: 2px solid #333;
-            padding-bottom: 20px;
+            padding-bottom: 15px;
         }
-        .header img {
-            max-width: 200px;
+        .header-logo {
+            max-width: 150px;
+            margin-bottom: 10px;
+        }
+        .content-row {
+            display: flex;
+            justify-content: space-between;
+        }
+        .info-column {
+            width: 48%;
+        }
+        .info-section {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
             margin-bottom: 15px;
         }
-        .header h1 {
-            font-size: 24px;
-            margin: 0;
-            color: #333;
+        .section-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #dee2e6;
+            padding-bottom: 5px;
         }
-        .header h2 {
-            font-size: 18px;
-            margin: 10px 0;
-            color: #666;
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
         }
-        .info {
-            margin-bottom: 30px;
+        .info-item {
+            margin-bottom: 5px;
         }
-        .info p {
-            margin: 8px 0;
-            font-size: 14px;
+        .info-label {
+            font-weight: bold;
+            color: #6c757d;
+            font-size: 11px;
         }
-        .info strong {
-            color: #333;
-            min-width: 150px;
-            display: inline-block;
+        .info-value {
+            font-size: 13px;
+        }
+        .weight-value {
+            font-size: 16px;
+            font-weight: bold;
+            color: #198754;
         }
         .weight-image {
-            text-align: center;
-            margin: 20px 0;
-        }
-        .weight-image img {
             max-width: 100%;
-            max-height: 300px;
+            max-height: 200px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .qr-section {
+            text-align: center;
+            margin-top: 15px;
         }
         .qr-code {
-            text-align: center;
-            margin-top: 30px;
-            padding-top: 20px;
-            border-top: 1px solid #ccc;
-        }
-        .qr-code img {
-            width: 150px;
+            max-width: 100px;
+            margin: 0 auto;
         }
         .footer {
-            margin-top: 30px;
             text-align: center;
-            font-size: 12px;
-            color: #666;
+            margin-top: 20px;
+            font-size: 10px;
+            color: #6c757d;
+            border-top: 1px solid #dee2e6;
+            padding-top: 10px;
         }
     </style>
 </head>
 <body>
-    <div class="header">
-        <img src="/static/images/logo.png" alt="Logo">
-        <h1>Comprobante de Pesaje</h1>
-        <h2>Código: {{ codigo }}</h2>
-    </div>
-    
-    <div class="info">
-        <p><strong>Nombre:</strong> {{ nombre }}</p>
-        <p><strong>Peso Bruto:</strong> {{ peso_bruto }} kg</p>
-        <p><strong>Tipo de Pesaje:</strong> {{ tipo_pesaje }}</p>
-        <p><strong>Fecha de Pesaje:</strong> {{ fecha_pesaje }}</p>
-        <p><strong>Hora de Pesaje:</strong> {{ hora_pesaje }}</p>
-        <p><strong>Fecha de Generación:</strong> {{ fecha_generacion }}</p>
-        <p><strong>Hora de Generación:</strong> {{ hora_generacion }}</p>
-    </div>
-    
-    {% if imagen_peso %}
-    <div class="weight-image">
-        <img src="/static/uploads/{{ imagen_peso }}" alt="Imagen de Pesaje">
-    </div>
-    {% endif %}
-    
-    <div class="qr-code">
-        <img src="/static/qr/{{ qr_filename }}" alt="Código QR">
-    </div>
-    
-    <div class="footer">
-        <p>Este documento es un comprobante oficial de pesaje.</p>
-        <p>Fecha y hora de emisión: {{ fecha_generacion }} {{ hora_generacion }}</p>
+    <div class="main-container">
+        <div class="header-section">
+            <img src="{{ url_for('static', filename='images/logo.png', _external=True) }}" 
+                 alt="Logo" class="header-logo">
+            <h1>Comprobante de Pesaje</h1>
+            <h3>Guía: {{ codigo_guia }}</h3>
+        </div>
+
+        <div class="content-row">
+            <div class="info-column">
+                <div class="info-section">
+                    <div class="section-title">Datos del Proveedor</div>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <div class="info-label">Código</div>
+                            <div class="info-value">{{ codigo_proveedor }}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Nombre</div>
+                            <div class="info-value">{{ nombre_proveedor }}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Transportador</div>
+                            <div class="info-value">{{ transportador }}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Placa</div>
+                            <div class="info-value">{{ placa }}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Racimos</div>
+                            <div class="info-value">{{ racimos }}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Código Guía Transporte SAP</div>
+                            <div class="info-value">{{ codigo_guia_transporte_sap }}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="info-section">
+                    <div class="section-title">Información del Pesaje</div>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <div class="info-label">Peso Bruto</div>
+                            <div class="weight-value">{{ peso_bruto }} kg</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Tipo de Pesaje</div>
+                            <div class="info-value">{{ tipo_pesaje|title }}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Fecha</div>
+                            <div class="info-value">{{ fecha_pesaje }}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Hora</div>
+                            <div class="info-value">{{ hora_pesaje }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="info-column">
+                {% if imagen_pesaje %}
+                <div class="info-section">
+                    <div class="section-title">Imagen del Pesaje</div>
+                    <img src="{{ imagen_pesaje }}" alt="Imagen del pesaje" class="weight-image">
+                </div>
+                {% endif %}
+
+                <div class="qr-section">
+                    <div class="section-title">Código QR para seguimiento</div>
+                    <img src="{{ qr_code }}" alt="Código QR" class="qr-code">
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Documento generado el {{ fecha_generacion }} a las {{ hora_generacion }}</p>
+            <p>© {{ fecha_generacion.split('/')[2] }} Extractora María La Baja - Todos los derechos reservados</p>
+        </div>
     </div>
 </body>
 </html>

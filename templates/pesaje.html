@@ -412,6 +412,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             const data = await response.json();
             if (data.success) {
+                // Redireccionar a la URL proporcionada por el servidor
                 window.location.href = data.redirect_url;
             } else {
                 alert(data.message);

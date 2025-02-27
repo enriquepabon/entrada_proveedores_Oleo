@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detalle de Registro de Entrada</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .main-container {
+            max-width: 1200px;
+            margin: 50px auto;
+            padding: 30px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .tiquete-image {
+            max-width: 100%;
+            height: auto;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .modified-label {
+            font-size: 0.85rem;
+            background-color: #fff3cd;
+            color: #856404;
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-left: 10px;
+        }
+        .btn-container {
+            margin-top: 30px;
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+        .back-link {
+            margin-bottom: 1.5rem;
+            display: inline-block;
+        }
+        .action-button {
+            min-width: 180px;
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <a href="{{ url_for('lista_registros_entrada') }}" class="back-link">
+            <i class="fas fa-arrow-left me-2"></i>Volver a la lista de registros
+        </a>
+        
+        <h2 class="text-center mb-4">Detalle de Registro de Entrada</h2>
+        <h4 class="text-center mb-4">Código Guía: {{ registro.codigo_guia }}</h4>
+        
+        {% if registro.image_filename %}
+        <div class="text-center">
+            <img src="{{ url_for('static', filename='uploads/' + registro.image_filename) }}" 
+                 alt="Tiquete" class="tiquete-image">
+        </div>
+        {% endif %}
+
+        <div class="table-responsive mt-4">
+            <table class="table table-bordered">
+                <tbody>
+                    <tr>
+                        <th style="width: 30%">Nombre del Agricultor:</th>
+                        <td>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span>{{ registro.nombre_proveedor }}</span>
+                                {% if registro.modified_fields and registro.modified_fields.nombre_agricultor %}
+                                <span class="modified-label">Editado manualmente</span>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Código:</th>
+                        <td>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span>{{ registro.codigo_proveedor }}</span>
+                                {% if registro.modified_fields and registro.modified_fields.codigo %}
+                                <span class="modified-label">Editado manualmente</span>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Cantidad de Racimos:</th>
+                        <td>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span>{{ registro.cantidad_racimos }}</span>
+                                {% if registro.modified_fields and registro.modified_fields.racimos %}
+                                <span class="modified-label">Editado manualmente</span>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Placa:</th>
+                        <td>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span>{{ registro.placa }}</span>
+                                <div class="d-flex align-items-center">
+                                    {% if registro.modified_fields and registro.modified_fields.placa %}
+                                    <span class="modified-label">Editado manualmente</span>
+                                    {% endif %}
+                                    {% if registro.plate_text %}
+                                    <div class="ms-3 p-2 bg-light border rounded">
+                                        <small class="text-muted me-1">Placa detectada:</small>
+                                        <strong>{{ registro.plate_text }}</strong>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Se Acarreó:</th>
+                        <td>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span>{{ registro.acarreo }}</span>
+                                {% if registro.modified_fields and registro.modified_fields.acarreo %}
+                                <span class="modified-label">Editado manualmente</span>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Se Cargó:</th>
+                        <td>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span>{{ registro.cargo }}</span>
+                                {% if registro.modified_fields and registro.modified_fields.cargo %}
+                                <span class="modified-label">Editado manualmente</span>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Transportador:</th>
+                        <td>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span>{{ registro.transportador }}</span>
+                                {% if registro.modified_fields and registro.modified_fields.transportador %}
+                                <span class="modified-label">Editado manualmente</span>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Fecha:</th>
+                        <td>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span>{{ registro.fecha_tiquete }}</span>
+                                {% if registro.modified_fields and registro.modified_fields.fecha_tiquete %}
+                                <span class="modified-label">Editado manualmente</span>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Fecha de Registro:</th>
+                        <td>{{ registro.fecha_registro }}</td>
+                    </tr>
+                    <tr>
+                        <th>Hora de Registro:</th>
+                        <td>{{ registro.hora_registro }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        {% if registro.nota and registro.nota != 'No disponible' %}
+        <div class="alert alert-info mt-3">
+            <strong>Nota:</strong> {{ registro.nota }}
+        </div>
+        {% endif %}
+
+        <div class="btn-container">
+            <a href="{{ url_for('generar_pdf_registro', codigo_guia=registro.codigo_guia) }}" 
+               class="btn btn-success action-button">
+                <i class="fas fa-file-pdf me-2"></i>Generar PDF
+            </a>
+            <a href="{{ url_for('lista_registros_entrada') }}" class="btn btn-secondary action-button">
+                <i class="fas fa-list me-2"></i>Ver Todos los Registros
+            </a>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> 

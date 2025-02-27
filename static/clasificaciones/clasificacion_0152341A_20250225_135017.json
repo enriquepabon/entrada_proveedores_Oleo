@@ -1,0 +1,38 @@
+{
+    "id": "Clasificacion_0152341A_20250225_135017",
+    "fecha_registro": "25/2/2025",
+    "hora_registro": "13:52:35",
+    "fotos": [
+        "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/static/fotos_racimos_temp/foto1_0152341A_20250225_135017.jpg",
+        "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/static/fotos_racimos_temp/foto2_0152341A_20250225_135017.jpg",
+        "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/static/fotos_racimos_temp/foto3_0152341A_20250225_135017.jpg"
+    ],
+    "estado": "completado",
+    "clasificacion_manual": {
+        "verdes": 4,
+        "sobremaduros": 4,
+        "danio_corona": 4,
+        "pendunculo_largo": 4,
+        "podridos": 4
+    },
+    "clasificacion_automatica": {
+        "racimos_verdes": 0,
+        "racimos_maduros": 0,
+        "racimos_sobremaduros": 0,
+        "racimos_podridos": 0
+    },
+    "resultados_por_foto": {
+        "1": {
+            "error": "Error en el procesamiento: 500"
+        },
+        "2": {
+            "error": "Error en el procesamiento: 500"
+        },
+        "3": {
+            "error": "Error en el procesamiento: 500"
+        }
+    },
+    "workflow_completado": true,
+    "tiempo_procesamiento": "20.85 segundos",
+    "modelo_utilizado": "enrique-p-workspace/clasificacion-racimos-3"
+}

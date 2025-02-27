@@ -82,39 +82,115 @@
                 <tbody>
                     <tr>
                         <th style="width: 30%">Nombre del Agricultor:</th>
-                        <td {% if nombre_del_agricultor_modificado %}class="modified-field"{% endif %}>
-                            {{ nombre_agricultor }}
+                        <td>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span>{{ nombre_agricultor }}</span>
+                                {% if nombre_agricultor_modificado %}
+                                <div class="ms-3 p-2 bg-light border rounded">
+                                    <small class="text-muted">Editado manualmente</small>
+                                </div>
+                                {% endif %}
+                            </div>
                         </td>
                     </tr>
                     <tr>
                         <th>Código:</th>
-                        <td {% if código_modificado %}class="modified-field"{% endif %}>
-                            {{ codigo }}
+                        <td>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span>{{ codigo }}</span>
+                                {% if codigo_modificado %}
+                                <div class="ms-3 p-2 bg-light border rounded">
+                                    <small class="text-muted">Editado manualmente</small>
+                                </div>
+                                {% endif %}
+                            </div>
                         </td>
                     </tr>
                     <tr>
                         <th>Cantidad de Racimos:</th>
-                        <td>{{ racimos }}</td>
+                        <td>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span>{{ racimos }}</span>
+                                {% if cantidad_de_racimos_modificado %}
+                                <div class="ms-3 p-2 bg-light border rounded">
+                                    <small class="text-muted">Editado manualmente</small>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </td>
                     </tr>
                     <tr>
                         <th>Placa:</th>
-                        <td>{{ placa }}</td>
+                        <td>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span>{{ placa }}</span>
+                                <div class="d-flex align-items-center">
+                                    {% if placa_modificado %}
+                                    <div class="ms-3 p-2 bg-light border rounded">
+                                        <small class="text-muted">Editado manualmente</small>
+                                    </div>
+                                    {% endif %}
+                                    {% if plate_text %}
+                                    <div class="ms-3 p-2 bg-light border rounded">
+                                        <small class="text-muted me-1">Placa detectada:</small>
+                                        <strong>{{ plate_text }}</strong>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </td>
                     </tr>
                     <tr>
                         <th>Se Acarreó:</th>
-                        <td>{{ acarreo }}</td>
+                        <td>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span>{{ acarreo }}</span>
+                                {% if acarreo_modificado %}
+                                <div class="ms-3 p-2 bg-light border rounded">
+                                    <small class="text-muted">Editado manualmente</small>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </td>
                     </tr>
                     <tr>
                         <th>Se Cargó:</th>
-                        <td>{{ cargo }}</td>
+                        <td>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span>{{ cargo }}</span>
+                                {% if cargo_modificado %}
+                                <div class="ms-3 p-2 bg-light border rounded">
+                                    <small class="text-muted">Editado manualmente</small>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </td>
                     </tr>
                     <tr>
                         <th>Transportador:</th>
-                        <td>{{ transportador }}</td>
+                        <td>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span>{{ transportador }}</span>
+                                {% if transportador_modificado %}
+                                <div class="ms-3 p-2 bg-light border rounded">
+                                    <small class="text-muted">Editado manualmente</small>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </td>
                     </tr>
                     <tr>
                         <th>Fecha:</th>
-                        <td>{{ fecha_tiquete }}</td>
+                        <td>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span>{{ fecha_tiquete }}</span>
+                                {% if fecha_modificado %}
+                                <div class="ms-3 p-2 bg-light border rounded">
+                                    <small class="text-muted">Editado manualmente</small>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </td>
                     </tr>
                     <tr>
                         <th>Hora de Registro:</th>
@@ -156,13 +232,13 @@
             if (confirm('¿Estás seguro de registrar este tiquete?')) {
                 try {
                     showLoading();
-                    const response = await fetch('/register', {
+                    const response = await fetch('/process_validated_data', {
                         method: 'POST'
                     });
                     
                     const data = await response.json();
                     if (data.status === 'success') {
-                        window.location.href = '/review_pdf';
+                        window.location.href = data.redirect;
                     } else {
                         alert('Error al registrar: ' + data.message);
                         hideLoading();

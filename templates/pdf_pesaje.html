@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recibo de Pesaje - {{ datos.codigo_guia }}</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            color: #333;
+        }
+        .container {
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #333;
+            padding-bottom: 20px;
+        }
+        .logo {
+            max-width: 150px;
+            margin-bottom: 10px;
+        }
+        .title {
+            font-size: 24px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .subtitle {
+            font-size: 18px;
+            margin: 5px 0;
+        }
+        .info-section {
+            margin-bottom: 30px;
+        }
+        .section-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 5px;
+        }
+        .info-row {
+            display: flex;
+            margin-bottom: 10px;
+        }
+        .info-label {
+            width: 180px;
+            font-weight: bold;
+        }
+        .info-value {
+            flex: 1;
+        }
+        .qr-section {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .qr-code {
+            max-width: 150px;
+            margin: 0 auto;
+        }
+        .footer {
+            margin-top: 50px;
+            text-align: center;
+            font-size: 14px;
+            color: #777;
+        }
+        .weight-image {
+            max-width: 100%;
+            max-height: 300px;
+            margin: 15px 0;
+            border: 1px solid #ddd;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        table, th, td {
+            border: 1px solid #ddd;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo" class="logo">
+            <div class="title">RECIBO DE PESAJE</div>
+            <div class="subtitle">{{ datos.codigo_guia }}</div>
+            <div>Fecha: {{ datos.fecha_pesaje }} | Hora: {{ datos.hora_pesaje }}</div>
+        </div>
+
+        <div class="info-section">
+            <div class="section-title">Información del Proveedor</div>
+            <div class="info-row">
+                <div class="info-label">Código:</div>
+                <div class="info-value">{{ datos.codigo_proveedor }}</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">Nombre:</div>
+                <div class="info-value">{{ datos.nombre_proveedor }}</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">Transportador:</div>
+                <div class="info-value">{{ datos.transportador }}</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">Placa:</div>
+                <div class="info-value">{{ datos.placa }}</div>
+            </div>
+        </div>
+
+        <div class="info-section">
+            <div class="section-title">Detalles del Pesaje</div>
+            <div class="info-row">
+                <div class="info-label">Tipo de Pesaje:</div>
+                <div class="info-value">{{ datos.tipo_pesaje|title }}</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">Peso Bruto:</div>
+                <div class="info-value"><strong>{{ datos.peso_bruto }} kg</strong></div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">Racimos:</div>
+                <div class="info-value">{{ datos.racimos }}</div>
+            </div>
+        </div>
+
+        {% if datos.imagen_pesaje %}
+        <div class="info-section">
+            <div class="section-title">Imagen del Pesaje</div>
+            <img src="{{ datos.imagen_pesaje }}" alt="Imagen del Pesaje" class="weight-image">
+        </div>
+        {% endif %}
+
+        <div class="qr-section">
+            {% if datos.qr_code %}
+            <div class="section-title">Código QR para acceso rápido</div>
+            <img src="{{ datos.qr_code }}" alt="Código QR" class="qr-code">
+            {% endif %}
+        </div>
+
+        <div class="footer">
+            <p>Este documento fue generado automáticamente.</p>
+            <p>Fecha de generación: {{ fecha_actual }}</p>
+        </div>
+    </div>
+</body>
+</html> 

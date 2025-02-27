@@ -1,0 +1,19 @@
+{
+    "id": "Clasificacion_0103095A",
+    "fecha_registro": "20/2/2025",
+    "hora_registro": "14:36:28",
+    "fotos": [
+        "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/static/fotos_racimos_temp/foto1_0103095A.jpg",
+        "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/static/fotos_racimos_temp/foto2_0103095A.jpg",
+        "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/static/fotos_racimos_temp/foto3_0103095A.jpg"
+    ],
+    "estado": "en_proceso",
+    "clasificacion_manual": {
+        "verdes": 1,
+        "sobremaduros": 1,
+        "danio_corona": 2,
+        "pendunculo_largo": 3,
+        "podridos": 2
+    },
+    "clasificacion_automatica": null
+}

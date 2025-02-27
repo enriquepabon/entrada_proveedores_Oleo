@@ -1,0 +1,38 @@
+{
+    "id": "Clasificacion_0150294A_20250225_160811",
+    "fecha_registro": "25/2/2025",
+    "hora_registro": "16:13:27",
+    "fotos": [
+        "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/static/fotos_racimos_temp/foto1_0150294A_20250225_160811.jpg",
+        "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/static/fotos_racimos_temp/foto2_0150294A_20250225_160811.jpg",
+        "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/static/fotos_racimos_temp/foto3_0150294A_20250225_160811.jpg"
+    ],
+    "estado": "completado",
+    "clasificacion_manual": {
+        "verdes": 6,
+        "sobremaduros": 6,
+        "danio_corona": 6,
+        "pendunculo_largo": 6,
+        "podridos": 6
+    },
+    "clasificacion_automatica": {
+        "racimos_verdes": 0,
+        "racimos_maduros": 0,
+        "racimos_sobremaduros": 0,
+        "racimos_podridos": 0
+    },
+    "resultados_por_foto": {
+        "1": {
+            "error": "'list' object has no attribute 'keys'"
+        },
+        "2": {
+            "error": "'list' object has no attribute 'keys'"
+        },
+        "3": {
+            "error": "'list' object has no attribute 'keys'"
+        }
+    },
+    "workflow_completado": true,
+    "tiempo_procesamiento": "27.3 segundos",
+    "modelo_utilizado": "enrique-p-workspace/clasificacion-racimos-3"
+}

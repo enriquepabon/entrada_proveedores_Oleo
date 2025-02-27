@@ -10,6 +10,7 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from google.oauth2 import service_account
 from dotenv import load_dotenv
+import re
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO, 
@@ -184,19 +185,23 @@ def update_assistant_knowledge():
     Actualiza la base de conocimiento del asistente
     """
     try:
+        logger.info("Iniciando proceso de actualización")
         # Limpiar archivos antiguos
         cleanup_old_files()
         
         # Obtener datos actualizados de Google Sheets
+        logger.info("Obteniendo datos de Google Sheets")
         sheet_data = get_sheet_data()
         
         if not sheet_data:
+            logger.error("No se pudieron obtener datos de Google Sheets")
             return jsonify({
                 'success': False,
                 'message': 'No se pudieron obtener los datos de Google Sheets'
             }), 500
 
         # Formatear datos para el asistente
+        logger.info("Formateando datos para el asistente")
         formatted_data = format_assistant_data(sheet_data)
         
         # Crear archivo temporal
@@ -204,21 +209,65 @@ def update_assistant_knowledge():
         os.makedirs(temp_dir, exist_ok=True)
         temp_file_path = os.path.join(temp_dir, 'temp_base_maestra.json')
         
+        logger.info("Guardando datos en archivo temporal")
         with open(temp_file_path, 'w', encoding='utf-8') as f:
             json.dump(formatted_data, f, ensure_ascii=False, indent=2)
 
         # Crear archivo en OpenAI
+        logger.info("Creando archivo en OpenAI")
         with open(temp_file_path, 'rb') as f:
             file = openai_client.files.create(
                 file=f,
                 purpose='assistants'
             )
+        logger.info(f"Archivo creado con ID: {file.id}")
 
-        # Actualizar el asistente
-        assistant = openai_client.beta.assistants.update(
-            assistant_id=ASSISTANT_ID,
-            file_ids=[file.id]
-        )
+        try:
+            # Crear un nuevo asistente sin archivos
+            logger.info("Creando nuevo asistente")
+            assistant = openai_client.beta.assistants.create(
+                name="Asistente de Validación",
+                instructions="Soy un asistente que ayuda a validar información de proveedores y vehículos.",
+                tools=[{"type": "retrieval"}],
+                model="gpt-4-1106-preview"
+            )
+            logger.info(f"Asistente creado con ID: {assistant.id}")
+            
+            # Adjuntar el archivo al asistente
+            logger.info(f"Adjuntando archivo: {file.id}")
+            file_attachment = openai_client.beta.assistants.files.create(
+                assistant_id=assistant.id,
+                file_id=file.id
+            )
+            logger.info("Archivo adjuntado correctamente")
+            
+            # Actualizar el ID del asistente en las variables de entorno
+            with open('API_Keys.env', 'r') as f:
+                env_content = f.read()
+            
+            # Reemplazar el ID anterior con el nuevo
+            new_env_content = re.sub(
+                r'ASSISTANT_ID=.*',
+                f'ASSISTANT_ID={assistant.id}',
+                env_content
+            )
+            
+            with open('API_Keys.env', 'w') as f:
+                f.write(new_env_content)
+            
+            logger.info("ID del asistente actualizado en las variables de entorno")
+            
+        except Exception as e:
+            logger.error(f"Error actualizando el asistente: {str(e)}")
+            logger.error(f"Tipo de error: {type(e)}")
+            logger.error(f"Args: {e.args}")
+            # Limpiar el archivo creado en caso de error
+            try:
+                logger.info(f"Eliminando archivo por error: {file.id}")
+                openai_client.files.delete(file.id)
+            except Exception as delete_error:
+                logger.error(f"Error eliminando archivo: {str(delete_error)}")
+            raise e
 
         # Registro de actualización
         update_log = {
@@ -247,7 +296,9 @@ def update_assistant_knowledge():
         })
         
     except Exception as e:
-        logger.error(f"Error actualizando base de conocimiento: {str(e)}")
+        logger.error(f"Error en la actualización: {str(e)}")
+        logger.error(f"Tipo de error: {type(e)}")
+        logger.error(f"Args: {e.args}")
         return jsonify({
             'success': False,
             'message': f'Error: {str(e)}'

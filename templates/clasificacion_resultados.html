@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resultados de Clasificación</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .results-section {
+            margin-bottom: 2rem;
+            padding: 1.5rem;
+            border: 1px solid #dee2e6;
+            border-radius: 0.5rem;
+        }
+        .image-container {
+            margin: 1rem 0;
+        }
+        .image-container img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        .results-table {
+            margin-top: 1rem;
+        }
+        .status-badge {
+            padding: 0.5rem 1rem;
+            border-radius: 0.25rem;
+            font-weight: 500;
+        }
+        .status-completed {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status-processing {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        .photo-status {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        .photo-status .indicator {
+            width: 1rem;
+            height: 1rem;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+        }
+        .indicator.uploaded {
+            background-color: #28a745;
+        }
+        .indicator.pending {
+            background-color: #ffc107;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>Resultados de Clasificación</h2>
+            <a href="/clasificaciones" class="btn btn-primary">
+                <i class="fas fa-arrow-left"></i> Volver a la Lista
+            </a>
+        </div>
+
+        <!-- Información General -->
+        <div class="results-section">
+            <h4>Información General</h4>
+            <div class="row">
+                <div class="col-md-6">
+                    <p><strong>URL Guía:</strong> {{ clasificacion.url_guia }}</p>
+                    <p><strong>Fecha:</strong> {{ clasificacion.fecha }}</p>
+                </div>
+                <div class="col-md-6">
+                    <p><strong>Estado:</strong> 
+                        <span class="status-badge {% if clasificacion.estado == 'completado' %}status-completed{% else %}status-processing{% endif %}">
+                            {{ clasificacion.estado|title }}
+                        </span>
+                    </p>
+                    <p><strong>Última Actualización:</strong> {{ clasificacion.ultima_actualizacion }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Estado de las Fotos -->
+        <div class="results-section">
+            <h4>Estado de las Fotos</h4>
+            <div class="row">
+                {% for foto in clasificacion.fotos %}
+                <div class="col-md-4">
+                    <div class="photo-status">
+                        <div class="indicator {% if foto.procesada %}uploaded{% else %}pending{% endif %}"></div>
+                        <span>Foto {{ loop.index }}: {{ foto.estado }}</span>
+                    </div>
+                    {% if foto.procesada %}
+                    <div class="image-container">
+                        <img src="{{ url_for('static', filename='uploads/' + foto.imagen_etiquetada) }}" 
+                             alt="Foto {{ loop.index }} Etiquetada">
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Resultados de Clasificación Automática -->
+        <div class="results-section">
+            <h4>Resultados de Clasificación Automática</h4>
+            <div class="table-responsive results-table">
+                <table class="table table-bordered">
+                    <thead>
+                        <tr>
+                            <th>Categoría</th>
+                            <th>Foto 1</th>
+                            <th>Foto 2</th>
+                            <th>Foto 3</th>
+                            <th>Promedio</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for categoria in clasificacion.resultados_automaticos %}
+                        <tr>
+                            <td>{{ categoria.nombre|title }}</td>
+                            <td>{{ categoria.foto1 }}%</td>
+                            <td>{{ categoria.foto2 }}%</td>
+                            <td>{{ categoria.foto3 }}%</td>
+                            <td>{{ categoria.promedio }}%</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Resultados de Clasificación Manual -->
+        {% if clasificacion.resultados_manuales %}
+        <div class="results-section">
+            <h4>Resultados de Clasificación Manual</h4>
+            <div class="table-responsive results-table">
+                <table class="table table-bordered">
+                    <thead>
+                        <tr>
+                            <th>Categoría</th>
+                            <th>Porcentaje</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for categoria in clasificacion.resultados_manuales %}
+                        <tr>
+                            <td>{{ categoria.nombre|title }}</td>
+                            <td>{{ categoria.porcentaje }}%</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Historial de Clasificaciones -->
+        {% if clasificacion.historial %}
+        <div class="results-section">
+            <h4>Historial de Clasificaciones</h4>
+            <div class="table-responsive results-table">
+                <table class="table table-bordered">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Tipo</th>
+                            <th>Resultados</th>
+                            <th>Usuario</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for registro in clasificacion.historial %}
+                        <tr>
+                            <td>{{ registro.fecha }}</td>
+                            <td>{{ registro.tipo|title }}</td>
+                            <td>
+                                <button class="btn btn-sm btn-info" 
+                                        data-bs-toggle="modal" 
+                                        data-bs-target="#modalResultados{{ loop.index }}">
+                                    Ver Detalles
+                                </button>
+                            </td>
+                            <td>{{ registro.usuario }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Modales para el historial -->
+        {% for registro in clasificacion.historial %}
+        <div class="modal fade" id="modalResultados{{ loop.index }}" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Resultados del {{ registro.fecha }}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="table-responsive">
+                            <table class="table table-bordered">
+                                <thead>
+                                    <tr>
+                                        <th>Categoría</th>
+                                        <th>Porcentaje</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for categoria in registro.resultados %}
+                                    <tr>
+                                        <td>{{ categoria.nombre|title }}</td>
+                                        <td>{{ categoria.porcentaje }}%</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+        {% endif %}
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://kit.fontawesome.com/a076d05399.js"></script>
+</body>
+</html> 

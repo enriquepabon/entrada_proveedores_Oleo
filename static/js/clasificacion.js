@@ -1,5 +1,9 @@
-let clasificacionActual = null;
-let imagenesActuales = null;
+let estadoFotos = {
+    foto1: { procesada: false, estado: 'pendiente', imagen: null },
+    foto2: { procesada: false, estado: 'pendiente', imagen: null },
+    foto3: { procesada: false, estado: 'pendiente', imagen: null }
+};
+
 let resultadosAcumulados = {
     total_racimos: 0,
     clasificacion: {
@@ -19,10 +23,9 @@ let resultadosAcumulados = {
     imagenes: []
 };
 
-let fotoActual = 1;
-
 let clasificacionManualCompletada = false;
 let clasificacionAutomaticaCompletada = false;
+let fotoActual = 1;
 
 function mostrarCarga(mostrar) {
     const loadingOverlay = document.getElementById('loadingOverlay');
@@ -233,6 +236,11 @@ async function procesarClasificacionAutomatica() {
             mostrarResultadosClasificacion(data);
             // Preparar para la siguiente foto
             prepararSiguienteFoto();
+            // Marcar clasificación automática como completada si es la última foto
+            if (fotoActual > 3) {
+                clasificacionAutomaticaCompletada = true;
+                verificarClasificacionesCompletadas();
+            }
         } else {
             alert('Error en la clasificación: ' + data.message);
         }
@@ -244,75 +252,107 @@ async function procesarClasificacionAutomatica() {
     }
 }
 
-async function registrarClasificacion() {
+async function registrarClasificacionManual() {
     try {
-        // Verificaciones iniciales
-        if (!resultadosAcumulados || !resultadosAcumulados.porcentajes) {
-            alert('No hay datos de clasificación automática completos para registrar');
-            return;
-        }
-
-        if (!resultadosAcumulados.imagenes || resultadosAcumulados.imagenes.length !== 3) {
-            alert('No se han procesado las 3 fotos requeridas');
-            return;
-        }
-
         const codigo = document.getElementById('codigo').value;
-        const fecha = new Date();
+        const clasificacionManual = obtenerDatosManuales();
+
+        // Verificar que haya datos
+        const totalManual = Object.values(clasificacionManual).reduce((a, b) => a + b, 0);
+        if (totalManual === 0) {
+            alert('Debe ingresar al menos un valor en la clasificación manual');
+            return;
+        }
 
         mostrarCarga(true);
 
-        // Calcular el total de racimos como la suma de los totales individuales
-        const totalRacimos = window.resultadosIndividuales ? 
-            window.resultadosIndividuales.reduce((sum, resultado) => sum + resultado.total_racimos, 0) : 0;
-
-        // Preparar datos para el webhook en el nuevo formato
-        const datosWebhook = {
-            codigo_proveedor: codigo,
-            url_guia_template: window.location.origin + `/ver_guia/${codigo}`,
-            fecha_clasificacion: fecha.toISOString().split('T')[0],
-            hora_clasificacion: fecha.toTimeString().split(' ')[0],
-            verde_automatica: resultadosAcumulados.clasificacion.verde,
-            sobremadura_automatica: resultadosAcumulados.clasificacion.sobremaduro,
-            danio_corona_automatica: resultadosAcumulados.clasificacion.danio_corona,
-            pendunculo_largo_automatica: resultadosAcumulados.clasificacion.pendunculo_largo,
-            podrido_automatica: resultadosAcumulados.clasificacion.podrido,
-            cantidad_racimo_automatico: totalRacimos,
-            peso_bruto: parseFloat(obtenerValorInfo('Peso Bruto')) || 0,
-            codigo_guia: obtenerValorInfo('Guía'),
-            nombre: obtenerValorInfo('Proveedor')
-        };
-
-        console.log('Enviando datos al webhook:', datosWebhook);
-
-        // URL del webhook de Make
-        const webhookUrl = 'https://hook.us2.make.com/ydtogfd3mln2ixbcuam0xrd2m9odfgna';
-
-        const response = await fetch(webhookUrl, {
+        // Guardar datos internamente
+        const response = await fetch('/guardar_clasificacion_manual', {  // Nuevo endpoint
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(datosWebhook)
+            body: JSON.stringify({
+                codigo: codigo,
+                clasificacion: clasificacionManual
+            })
         });
 
         if (!response.ok) {
-            throw new Error('Error enviando datos al webhook');
+            throw new Error('Error al registrar la clasificación manual');
         }
 
-        alert('Clasificación automática registrada exitosamente');
-
-        // Marcar clasificación automática como completada
-        clasificacionAutomaticaCompletada = true;
-        verificarClasificacionesCompletadas();
-
-        // Deshabilitar el botón de registro automático y el checkbox
-        document.querySelector('button[onclick="registrarClasificacion()"]').disabled = true;
-        document.getElementById('clasificacionAutomatica').disabled = true;
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('Clasificación manual registrada exitosamente');
+            // Marcar clasificación manual como completada
+            clasificacionManualCompletada = true;
+            console.log('Clasificación manual completada');
+            
+            // Deshabilitar el formulario manual
+            const manualForm = document.getElementById('manualForm');
+            if (manualForm) {
+                const inputs = manualForm.querySelectorAll('input[type="number"]');
+                inputs.forEach(input => input.disabled = true);
+                manualForm.querySelector('button[type="submit"]').disabled = true;
+            }
+            
+            // Verificar estado de clasificaciones
+            verificarClasificacionesCompletadas();
+        } else {
+            throw new Error(data.message || 'Error al registrar la clasificación manual');
+        }
 
     } catch (error) {
-        console.error('Error en registrarClasificacion:', error);
-        alert(error.message || 'Error al registrar la clasificación');
+        console.error('Error en registrarClasificacionManual:', error);
+        alert(error.message || 'Error al registrar la clasificación manual');
+    } finally {
+        mostrarCarga(false);
+    }
+}
+
+async function registrarClasificacion() {
+    try {
+        const codigo = document.getElementById('codigo').value;
+
+        // Verificar que se hayan completado ambas clasificaciones
+        if (!clasificacionManualCompletada && !clasificacionAutomaticaCompletada) {
+            alert('Debe completar al menos una clasificación (manual o automática) antes de registrar.');
+            return;
+        }
+
+        mostrarCarga(true);
+
+        // Preparar datos para enviar
+        const datosFinales = {
+            codigo: codigo,
+            resultados_acumulados: resultadosAcumulados,
+            resultados_individuales: window.resultadosIndividuales || [],
+            clasificacion_manual: obtenerDatosManuales(),
+            nombre_proveedor: obtenerNombreProveedor()
+        };
+
+        const response = await fetch('/registrar_clasificacion', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(datosFinales)
+        });
+
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('Clasificación registrada exitosamente');
+            // Redirigir a la página de la guía
+            window.location.href = data.redirect_url;
+        } else {
+            alert('Error al registrar la clasificación: ' + data.message);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error al registrar la clasificación');
     } finally {
         mostrarCarga(false);
     }
@@ -330,133 +370,32 @@ function obtenerValorInfo(etiqueta) {
 
 function obtenerDatosManuales() {
     return {
-        verde: parseInt(document.getElementById('racimo_verde').value) || 0,
-        sobremaduro: parseInt(document.getElementById('racimo_sobremaduro').value) || 0,
-        danio_corona: parseInt(document.getElementById('racimo_danio_corona').value) || 0,
-        pendunculo_largo: parseInt(document.getElementById('racimo_pendunculo_largo').value) || 0,
-        podrido: parseInt(document.getElementById('racimo_podrido').value) || 0
+        verde: parseFloat(document.getElementById('verdeManual').value) || 0,
+        sobremaduro: parseFloat(document.getElementById('sobreMaduroManual').value) || 0,
+        danio_corona: parseFloat(document.getElementById('danioCoronaManual').value) || 0,
+        pendunculo_largo: parseFloat(document.getElementById('pendunculoLargoManual').value) || 0,
+        podrido: parseFloat(document.getElementById('podridoManual').value) || 0
     };
 }
 
-async function registrarClasificacionManual() {
-    try {
-        const codigo = document.getElementById('codigo').value;
-        const clasificacionManual = obtenerDatosManuales();
-        const fecha = new Date();
-
-        // Verificar que haya datos
-        const totalManual = Object.values(clasificacionManual).reduce((a, b) => a + b, 0);
-        if (totalManual === 0) {
-            alert('Debe ingresar al menos un valor en la clasificación manual');
-            return;
-        }
-
-        mostrarCarga(true);
-
-        // Obtener valores de la información general
-        const cantidadRacimosInicial = parseInt(obtenerValorInfo('Cantidad de Racimos')) || 0;
-        const totalRacimosClasificados = cantidadRacimosInicial >= 1000 ? 100 : 28;
-        const pesoBruto = parseFloat(obtenerValorInfo('Peso Bruto')) || 0;
-        const codigoGuia = obtenerValorInfo('Guía');
-        const nombre = obtenerValorInfo('Proveedor');
-
-        // Preparar datos para el webhook en el formato correcto
-        const datosWebhook = {
-            codigo_proveedor: codigo,
-            url_guia_template: window.location.origin + `/ver_guia/${codigo}`,
-            fecha_clasificacion: fecha.toISOString().split('T')[0],
-            hora_clasificacion: fecha.toTimeString().split(' ')[0],
-            verde_manual: clasificacionManual.verde,
-            sobremadura_manual: clasificacionManual.sobremaduro,
-            danio_corona_manual: clasificacionManual.danio_corona,
-            pendunculo_largo_manual: clasificacionManual.pendunculo_largo,
-            podrido_manual: clasificacionManual.podrido,
-            cantidad_racimo_manual: totalRacimosClasificados,
-            peso_bruto: pesoBruto,
-            codigo_guia: codigoGuia,
-            nombre: nombre
-        };
-
-        console.log('Enviando datos al webhook (manual):', datosWebhook);
-
-        // URL del webhook de Make
-        const webhookUrl = 'https://hook.us2.make.com/ydtogfd3mln2ixbcuam0xrd2m9odfgna';
-
-        const response = await fetch(webhookUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(datosWebhook)
-        });
-
-        if (!response.ok) {
-            throw new Error('Error enviando datos al webhook');
-        }
-
-        alert('Clasificación manual registrada exitosamente');
-
-        // Marcar clasificación manual como completada
-        clasificacionManualCompletada = true;
-        console.log('Clasificación manual completada');
-        
-        // Deshabilitar el formulario manual
-        const manualForm = document.getElementById('manualForm');
-        if (manualForm) {
-            const inputs = manualForm.querySelectorAll('input[type="number"]');
-            inputs.forEach(input => input.disabled = true);
-            manualForm.querySelector('button[type="submit"]').disabled = true;
-        }
-        
-        // Verificar estado de clasificaciones
-        verificarClasificacionesCompletadas();
-
-    } catch (error) {
-        console.error('Error en registrarClasificacionManual:', error);
-        alert(error.message || 'Error al registrar la clasificación manual');
-    } finally {
-        mostrarCarga(false);
-    }
-}
-
 function verificarClasificacionesCompletadas() {
-    console.log('Verificando estado de clasificaciones...');
-    const checkAutomatica = document.getElementById('clasificacionAutomatica');
-    const checkManual = document.getElementById('clasificacionManual');
-    const btnGuardarClasificacion = document.querySelector('button[onclick="guardarClasificacion()"]');
-    
-    if (!btnGuardarClasificacion) {
-        console.log('Botón de guardar clasificación no encontrado');
-        return;
-    }
-
-    console.log('Estado actual:', {
-        'Manual completada': clasificacionManualCompletada,
-        'Automática completada': clasificacionAutomaticaCompletada,
-        'Check manual': checkManual?.checked,
-        'Check automática': checkAutomatica?.checked
+    // Verificar clasificación manual
+    const camposManual = ['verdeManual', 'sobreMaduroManual', 'danioCoronaManual', 'pendunculoLargoManual', 'podridoManual'];
+    const todosLlenosManual = camposManual.every(campo => {
+        const valor = document.getElementById(campo).value;
+        return valor !== '' && !isNaN(parseFloat(valor));
     });
-
-    // Verificar si todas las clasificaciones seleccionadas están completadas
-    let todasCompletadas = false;
-
-    // Si la clasificación manual está seleccionada y completada
-    if (checkManual?.checked && clasificacionManualCompletada) {
-        todasCompletadas = true;
-    }
     
-    // Si la clasificación automática está seleccionada y completada
-    if (checkAutomatica?.checked && clasificacionAutomaticaCompletada) {
-        todasCompletadas = true;
+    clasificacionManualCompletada = todosLlenosManual;
+    
+    // Verificar clasificación automática
+    clasificacionAutomaticaCompletada = window.resultadosIndividuales && window.resultadosIndividuales.length === 3;
+    
+    // Habilitar o deshabilitar botón de registro
+    const botonRegistro = document.querySelector('button[onclick="registrarClasificacion()"]');
+    if (botonRegistro) {
+        botonRegistro.disabled = !(clasificacionManualCompletada || clasificacionAutomaticaCompletada);
     }
-
-    // Si ninguna clasificación está seleccionada
-    if (!checkManual?.checked && !checkAutomatica?.checked) {
-        todasCompletadas = false;
-    }
-
-    console.log('¿Todas las clasificaciones completadas?', todasCompletadas);
-    btnGuardarClasificacion.disabled = !todasCompletadas;
 }
 
 async function guardarClasificacionFinal() {
@@ -470,17 +409,25 @@ async function guardarClasificacionFinal() {
             return;
         }
 
+        // Determinar el tipo de clasificación
+        let tipo_clasificacion = 'manual';
+        if (clasificacionManualCompletada && clasificacionAutomaticaCompletada) {
+            tipo_clasificacion = 'ambas';
+        } else if (clasificacionAutomaticaCompletada) {
+            tipo_clasificacion = 'automatica';
+        }
+
         // Preparar los datos para enviar al backend
         const datosGuardar = {
             codigo: codigo,
-            tipo_clasificacion: clasificacionManualCompletada && clasificacionAutomaticaCompletada ? 'ambas' :
-                               clasificacionManualCompletada ? 'manual' : 'automatica'
+            tipo_clasificacion: tipo_clasificacion,
+            terminado: "ok"  // Flag para el webhook
         };
 
         console.log('Guardando clasificación final:', datosGuardar);
 
-        // Hacer la petición al backend para guardar y generar el PDF
-        const response = await fetch('/guardar_clasificacion_final', {
+        // Hacer la petición al backend
+        const response = await fetch('/finalizar_clasificacion', {  // Nuevo endpoint
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -488,18 +435,14 @@ async function guardarClasificacionFinal() {
             body: JSON.stringify(datosGuardar)
         });
 
-        if (!response.ok) {
-            throw new Error('Error al guardar la clasificación');
-        }
-
         const data = await response.json();
         
-        if (data.success) {
+        if (response.ok && data.success) {
             alert('Clasificación guardada exitosamente');
             // Redirigir al guia_template
             window.location.href = `/ver_guia/${codigo}`;
         } else {
-            throw new Error(data.message || 'Error al guardar la clasificación');
+            throw new Error(data.message || 'Error al guardar la clasificación final');
         }
 
     } catch (error) {
@@ -576,4 +519,216 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Verificar estado inicial de las clasificaciones
     verificarClasificacionesCompletadas();
+
+    // Agregar event listeners para los campos manuales
+    const camposManual = ['verdeManual', 'sobreMaduroManual', 'danioCoronaManual', 'pendunculoLargoManual', 'podridoManual'];
+    
+    camposManual.forEach(campo => {
+        const elemento = document.getElementById(campo);
+        if (elemento) {
+            elemento.addEventListener('input', verificarClasificacionesCompletadas);
+        }
+    });
+});
+
+function obtenerNombreProveedor() {
+    const elemento = document.getElementById('nombreProveedor');
+    return elemento ? elemento.value : '';
+}
+
+// Función para actualizar el estado visual de las fotos
+function actualizarEstadoFotos() {
+    for (let i = 1; i <= 3; i++) {
+        const estadoFoto = document.getElementById(`estadoFoto${i}`);
+        const foto = estadoFotos[`foto${i}`];
+        
+        if (estadoFoto) {
+            estadoFoto.className = `indicator ${foto.procesada ? 'uploaded' : 'pending'}`;
+            estadoFoto.nextElementSibling.textContent = `Foto ${i}: ${foto.estado}`;
+        }
+    }
+}
+
+// Función para procesar una foto específica
+async function procesarFoto(file, numeroFoto) {
+    try {
+        mostrarCarga(true);
+        
+        const formData = new FormData();
+        formData.append('foto', file);
+        formData.append('numero_foto', numeroFoto);
+        formData.append('codigo', document.getElementById('codigo').value);
+        
+        const response = await fetch('/procesar_clasificacion_automatica', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            estadoFotos[`foto${numeroFoto}`] = {
+                procesada: true,
+                estado: 'completada',
+                imagen: data.imagen_etiquetada
+            };
+            
+            acumularResultados(data);
+            mostrarResultadosClasificacion(data);
+            actualizarEstadoFotos();
+            
+            if (numeroFoto < 3) {
+                fotoActual++;
+            } else {
+                clasificacionAutomaticaCompletada = true;
+                verificarProcesoCompleto();
+            }
+            
+            return true;
+        } else {
+            throw new Error(data.message || 'Error en el procesamiento');
+        }
+    } catch (error) {
+        console.error('Error procesando foto:', error);
+        estadoFotos[`foto${numeroFoto}`].estado = 'error';
+        actualizarEstadoFotos();
+        alert(`Error procesando la foto ${numeroFoto}: ${error.message}`);
+        return false;
+    } finally {
+        mostrarCarga(false);
+    }
+}
+
+// Función para reintentar el procesamiento de una foto
+async function reintentarFoto(numeroFoto) {
+    const fileInput = document.getElementById('clasificacionFoto');
+    if (fileInput.files[0]) {
+        await procesarFoto(fileInput.files[0], numeroFoto);
+    } else {
+        alert('Por favor, seleccione una imagen para procesar');
+    }
+}
+
+// Función para verificar si el proceso está completo
+function verificarProcesoCompleto() {
+    const clasificacionAutomaticaCheck = document.getElementById('clasificacionAutomatica');
+    const clasificacionManualCheck = document.getElementById('clasificacionManual');
+    const btnRegistrar = document.querySelector('button[onclick="registrarClasificacion()"]');
+    
+    let procesoCompleto = false;
+    
+    if (clasificacionAutomaticaCheck.checked && clasificacionManualCheck.checked) {
+        procesoCompleto = clasificacionAutomaticaCompletada && clasificacionManualCompletada;
+    } else if (clasificacionAutomaticaCheck.checked) {
+        procesoCompleto = clasificacionAutomaticaCompletada;
+    } else if (clasificacionManualCheck.checked) {
+        procesoCompleto = clasificacionManualCompletada;
+    }
+    
+    if (btnRegistrar) {
+        btnRegistrar.disabled = !procesoCompleto;
+    }
+    
+    return procesoCompleto;
+}
+
+// Función para reiniciar el proceso
+function reiniciarProceso() {
+    if (confirm('¿Está seguro de reiniciar el proceso? Se perderán todos los datos no guardados.')) {
+        estadoFotos = {
+            foto1: { procesada: false, estado: 'pendiente', imagen: null },
+            foto2: { procesada: false, estado: 'pendiente', imagen: null },
+            foto3: { procesada: false, estado: 'pendiente', imagen: null }
+        };
+        
+        resultadosAcumulados = {
+            total_racimos: 0,
+            clasificacion: {
+                verde: 0,
+                sobremaduro: 0,
+                danio_corona: 0,
+                pendunculo_largo: 0,
+                podrido: 0
+            },
+            porcentajes: {
+                verde: 0,
+                sobremaduro: 0,
+                danio_corona: 0,
+                pendunculo_largo: 0,
+                podrido: 0
+            },
+            imagenes: []
+        };
+        
+        clasificacionManualCompletada = false;
+        clasificacionAutomaticaCompletada = false;
+        fotoActual = 1;
+        
+        // Limpiar formularios
+        document.getElementById('clasificacionFoto').value = '';
+        document.getElementById('manualForm').reset();
+        
+        // Habilitar campos del formulario manual
+        const inputs = document.querySelectorAll('#manualForm input');
+        inputs.forEach(input => input.disabled = false);
+        
+        // Actualizar estado visual
+        actualizarEstadoFotos();
+        verificarProcesoCompleto();
+        
+        // Limpiar resultados
+        const resultadosDiv = document.getElementById('resultadosClasificacion');
+        if (resultadosDiv) {
+            resultadosDiv.style.display = 'none';
+        }
+    }
+}
+
+// Event Listeners
+document.addEventListener('DOMContentLoaded', function() {
+    // Configurar event listeners para el formulario de clasificación automática
+    const clasificacionForm = document.getElementById('clasificacionForm');
+    if (clasificacionForm) {
+        clasificacionForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const fileInput = document.getElementById('clasificacionFoto');
+            if (fileInput.files[0]) {
+                await procesarFoto(fileInput.files[0], fotoActual);
+            }
+        });
+    }
+    
+    // Event listeners para los checkboxes de tipo de clasificación
+    const checkAutomatica = document.getElementById('clasificacionAutomatica');
+    const checkManual = document.getElementById('clasificacionManual');
+    
+    if (checkAutomatica) {
+        checkAutomatica.addEventListener('change', function() {
+            const seccionAutomatica = document.getElementById('seccionAutomatica');
+            if (seccionAutomatica) {
+                seccionAutomatica.style.display = this.checked ? 'block' : 'none';
+            }
+            verificarProcesoCompleto();
+        });
+    }
+    
+    if (checkManual) {
+        checkManual.addEventListener('change', function() {
+            const seccionManual = document.getElementById('seccionManual');
+            if (seccionManual) {
+                seccionManual.style.display = this.checked ? 'block' : 'none';
+            }
+            verificarProcesoCompleto();
+        });
+    }
+    
+    // Event listeners para los campos del formulario manual
+    const camposManual = document.querySelectorAll('#manualForm input[type="number"]');
+    camposManual.forEach(campo => {
+        campo.addEventListener('input', verificarProcesoCompleto);
+    });
+    
+    // Inicializar estado de las fotos
+    actualizarEstadoFotos();
+    verificarProcesoCompleto();
 }); 

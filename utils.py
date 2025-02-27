@@ -7,6 +7,8 @@ import traceback
 import logging
 from weasyprint import HTML
 from flask import session, render_template, current_app
+from bs4 import BeautifulSoup
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -155,7 +157,7 @@ class Utils:
 
     def generate_pdf(self, parsed_data, image_filename, fecha_procesamiento, hora_procesamiento, revalidation_data=None, codigo_guia=None):
         """
-        Genera un PDF a partir de los datos del tiquete.
+        Genera un PDF a partir de los datos del webhook.
         """
         try:
             now = datetime.now()
@@ -177,20 +179,24 @@ class Utils:
                 }
             else:
                 logger.warning("No se encontró webhook_response en la sesión")
+                return None
 
             # Obtener el QR filename de la sesión
             qr_filename = session.get('qr_filename')
-            if qr_filename:
-                # Verificar si el archivo existe
-                qr_path = os.path.join(self.app.static_folder, 'qr', qr_filename)
-                if not os.path.exists(qr_path):
-                    logger.warning(f"Archivo QR no encontrado en: {qr_path}")
-                    qr_filename = None
-
-            # Log para debugging
-            logger.info(f"Datos validados para PDF: {data}")
-            logger.info(f"Datos de revalidación: {revalidation_data}")
-            logger.info(f"Datos originales del tiquete: {parsed_data}")
+            if not qr_filename:
+                # Si no hay QR filename, crear uno predeterminado
+                qr_filename = f"default_qr_{now.strftime('%Y%m%d%H%M%S')}.png"
+                try:
+                    # Generar un QR simple con el código de guía
+                    codigo = data.get('codigo', 'unknown')
+                    default_qr_data = f"codigo:{codigo}_fecha:{now.strftime('%Y%m%d%H%M%S')}"
+                    self.generate_qr(default_qr_data, qr_filename)
+                    session['qr_filename'] = qr_filename
+                    session.modified = True
+                except Exception as e:
+                    logger.error(f"Error generando QR predeterminado: {str(e)}")
+                    # Si todo falla, usar un QR estático
+                    qr_filename = "default_qr.png"
 
             # Preparar datos para el template
             template_data = {
@@ -207,7 +213,16 @@ class Utils:
                 'fecha_emision': now.strftime("%d/%m/%Y"),
                 'hora_emision': now.strftime("%H:%M:%S"),
                 'nota': data.get('nota', ''),
-                'qr_filename': qr_filename
+                'qr_filename': qr_filename,
+                # Agregar indicadores de campos modificados
+                'codigo_modificado': session.get('modified_fields', {}).get('codigo', False),
+                'nombre_agricultor_modificado': session.get('modified_fields', {}).get('nombre_agricultor', False),
+                'cantidad_de_racimos_modificado': session.get('modified_fields', {}).get('racimos', False),
+                'placa_modificado': session.get('modified_fields', {}).get('placa', False),
+                'acarreo_modificado': session.get('modified_fields', {}).get('acarreo', False),
+                'cargo_modificado': session.get('modified_fields', {}).get('cargo', False),
+                'transportador_modificado': session.get('modified_fields', {}).get('transportador', False),
+                'fecha_modificado': session.get('modified_fields', {}).get('fecha_tiquete', False)
             }
 
             # Renderizar plantilla
@@ -274,13 +289,18 @@ class Utils:
                 webhook_data = session['webhook_response']['data']
                 codigo_proveedor = webhook_data.get('codigo', codigo_proveedor)
             
+            # Limpiar el código de proveedor (eliminar espacios y caracteres especiales)
+            codigo_proveedor = re.sub(r'[^a-zA-Z0-9]', '', codigo_proveedor)
+            
+            # Generar formato estándar: CODIGO_AAAAMMDD_HHMMSS
             now = datetime.now()
             fecha_formateada = now.strftime('%Y%m%d')
             hora_formateada = now.strftime('%H%M%S')
             return f"{codigo_proveedor}_{fecha_formateada}_{hora_formateada}"
         except Exception as e:
             logger.error(f"Error generando código de guía: {str(e)}")
-            return f"{codigo_proveedor}_{int(time.time())}"
+            # Fallback seguro con formato consistente
+            return f"{re.sub(r'[^a-zA-Z0-9]', '', str(codigo_proveedor))}_{int(time.time())}"
 
     def registrar_fecha_porteria(self):
         """
@@ -334,6 +354,9 @@ class Utils:
         try:
             data = {}
             
+            # Obtener el peso bruto directamente de la sesión
+            peso_bruto = session.get('peso_bruto', '')
+            
             # Obtener datos del webhook response
             if 'webhook_response' in session and session['webhook_response'].get('data'):
                 webhook_data = session['webhook_response']['data']
@@ -350,7 +373,7 @@ class Utils:
                 }
             else:
                 logger.warning("No se encontró webhook_response en la sesión")
-
+            
             # Preparar datos finales
             datos = {
                 'codigo': data.get('codigo', codigo),
@@ -370,21 +393,340 @@ class Utils:
                 'nota': data.get('nota', '')
             }
 
-            # Obtener datos de pesaje
+            # Datos de pesaje directo de la sesión
             datos.update({
-                'peso_bruto': session.get('peso_bruto', ''),
+                'peso_bruto': peso_bruto,
                 'tipo_pesaje': session.get('tipo_pesaje', ''),
                 'hora_pesaje': session.get('hora_pesaje', ''),
                 'pdf_pesaje': session.get('pdf_pesaje', ''),
                 'fecha_pesaje': session.get('fecha_pesaje', '')
             })
+            
+            # Añadir campos con nombres alternativos para mantener compatibilidad
+            datos.update({
+                'codigo_proveedor': datos.get('codigo', ''),  # Alias para código
+                'nombre_agricultor': datos.get('nombre', ''), # Alias para nombre
+                'racimos': datos.get('cantidad_racimos', ''), # Alias para cantidad_racimos
+                'imagen_peso': session.get('imagen_peso', '') # Imagen del pesaje
+            })
+            
+            # Asegurar que el estado se actualice correctamente si hay peso
+            if peso_bruto:
+                datos['estado_actual'] = 'pesaje_completado'
+                # También actualizamos la sesión para mantener coherencia
+                session['estado_actual'] = 'pesaje_completado'
+                session.modified = True
+                logger.info(f"Estado actualizado a pesaje_completado debido a peso_bruto={peso_bruto}")
 
-            logger.info(f"Datos obtenidos para guía {codigo}: {datos}")
+            logger.info(f"Datos obtenidos para guía {codigo}: estado_actual={datos['estado_actual']}, peso_bruto={datos['peso_bruto']}")
             return datos
 
         except Exception as e:
             logger.error(f"Error obteniendo datos de guía: {str(e)}")
+            logger.error(traceback.format_exc())
             raise
+
+    def get_datos_registro(self, codigo_guia):
+        """
+        Obtiene los datos de un registro a partir del código de guía.
+        
+        Args:
+            codigo_guia (str): Código de guía del registro
+            
+        Returns:
+            dict: Diccionario con los datos del registro
+        """
+        logger.info(f"Intentando recuperar datos para el registro de guía {codigo_guia}")
+        
+        try:
+            # Verificar si el archivo de guía existe
+            ruta_guia = os.path.join(current_app.static_folder, 'guias', f'guia_{codigo_guia}.html')
+            if not os.path.exists(ruta_guia):
+                logger.warning(f"Archivo de guía no encontrado para {codigo_guia}")
+                return None
+            
+            # Normalizar el código de guía para buscar patrones
+            codigo_guia_std = codigo_guia.strip().lower()
+            
+            # Intentar extraer información del código de guía
+            # Patrón 1: codigo_AAAAMMDD_HHMMSS (ej. 12345_20230401_120000)
+            pattern1 = r'^([^_]+)_(\d{8})_(\d{6})$'
+            # Patrón 2: fecha-codigo (ej. 20230401-12345)
+            pattern2 = r'^(\d{8})-(.+)$'
+            
+            # Valores por defecto
+            codigo_proveedor = 'No disponible'
+            fecha_str = 'No disponible'
+            hora_str = 'No disponible'
+            
+            # Intentar extraer información del código de guía
+            match1 = re.match(pattern1, codigo_guia_std)
+            
+            if match1:
+                codigo_proveedor = match1.group(1)
+                fecha_str = match1.group(2)
+                hora_str = match1.group(3)
+                # Formatear fecha de AAAAMMDD a DD/MM/AAAA
+                if len(fecha_str) == 8:
+                    try:
+                        fecha_obj = datetime.strptime(fecha_str, '%Y%m%d')
+                        fecha_str = fecha_obj.strftime('%d/%m/%Y')
+                    except:
+                        pass
+                # Formatear hora de HHMMSS a HH:MM:SS
+                if len(hora_str) == 6:
+                    try:
+                        hora_fmt = f"{hora_str[0:2]}:{hora_str[2:4]}:{hora_str[4:6]}"
+                        hora_str = hora_fmt
+                    except:
+                        pass
+            else:
+                match2 = re.match(pattern2, codigo_guia_std)
+                if match2:
+                    codigo_proveedor = match2.group(2)
+                    fecha_str = match2.group(1)
+                    if len(fecha_str) == 8:
+                        try:
+                            fecha_obj = datetime.strptime(fecha_str, '%Y%m%d')
+                            fecha_str = fecha_obj.strftime('%d/%m/%Y')
+                        except:
+                            pass
+            
+            # Leer el archivo
+            with open(ruta_guia, 'r', encoding='utf-8') as file:
+                content = file.read()
+            
+            # Inicializar diccionario para almacenar los datos del registro
+            registro = {
+                'codigo_guia': codigo_guia,
+                'nombre_proveedor': 'No disponible',
+                'codigo_proveedor': codigo_proveedor,  # Usar el valor extraído del código de guía
+                'cantidad_racimos': 'No disponible',
+                'placa': 'No disponible',
+                'acarreo': 'No',
+                'cargo': 'No',
+                'transportador': 'No disponible',
+                'fecha_tiquete': 'No disponible',
+                'fecha_registro': fecha_str,  # Usar la fecha extraída del código de guía
+                'hora_registro': hora_str,    # Usar la hora extraída del código de guía
+                'image_filename': None,
+                'nota': '',
+                'modified_fields': {}
+            }
+            
+            # Intentar cargar como JSON primero
+            try:
+                json_data = json.loads(content)
+                logger.info(f"Datos cargados como JSON para guía {codigo_guia}")
+                
+                # Asignar valores del JSON al registro
+                for key, value in json_data.items():
+                    registro[key] = value
+                
+                # Asegurar que tenemos valores para campos críticos
+                if 'codigo' in json_data and not registro.get('codigo_proveedor') or registro.get('codigo_proveedor') == 'No disponible':
+                    registro['codigo_proveedor'] = json_data.get('codigo', codigo_proveedor)
+                
+                if 'nombre' in json_data and not registro.get('nombre_proveedor') or registro.get('nombre_proveedor') == 'No disponible':
+                    registro['nombre_proveedor'] = json_data.get('nombre', '')
+                
+                if 'racimos' in json_data and not registro.get('cantidad_racimos') or registro.get('cantidad_racimos') == 'No disponible':
+                    registro['cantidad_racimos'] = json_data.get('racimos', '')
+                
+                # Si no hay modified_fields en el JSON, crear un diccionario vacío
+                if 'modified_fields' not in registro:
+                    registro['modified_fields'] = {}
+                
+                return registro
+                
+            except json.JSONDecodeError:
+                # Si no es JSON, continuar con el parseo de HTML
+                logger.info(f"El archivo no es JSON, intentando parsear como HTML para guía {codigo_guia}")
+                
+                soup = BeautifulSoup(content, 'html.parser')
+                
+                # Extraer los datos de la tabla
+                details_table = soup.find('table', {'class': 'data-table'})
+                if details_table:
+                    rows = details_table.find_all('tr')
+                    for row in rows:
+                        header = row.find('th')
+                        value_cell = row.find('td')
+                        
+                        if header and value_cell:
+                            titulo = header.text.strip()
+                            valor = value_cell.text.strip()
+                            
+                            if "Nombre del Agricultor" in titulo:
+                                registro['nombre_proveedor'] = valor
+                            elif "Código" in titulo:
+                                registro['codigo_proveedor'] = valor
+                            elif "Cantidad de Racimos" in titulo:
+                                registro['cantidad_racimos'] = valor
+                            elif "Placa" in titulo:
+                                registro['placa'] = valor
+                            elif "Se Acarreó" in titulo:
+                                registro['acarreo'] = valor
+                            elif "Se Cargó" in titulo:
+                                registro['cargo'] = valor
+                            elif "Transportador" in titulo:
+                                registro['transportador'] = valor
+                            elif "Fecha" in titulo and not "Fecha de Emisión" in titulo and not "Hora de Registro" in titulo:
+                                registro['fecha_tiquete'] = valor
+                            elif "Hora de Registro" in titulo:
+                                registro['hora_registro'] = valor
+                
+                # Si no se encontró una tabla de detalles, buscar en otras estructuras HTML
+                if registro['nombre_proveedor'] == 'No disponible' or registro['codigo_proveedor'] == 'No disponible':
+                    # Buscar en elementos con id o class específicos
+                    nombre_element = soup.find(id='nombre') or soup.find(class_='nombre')
+                    if nombre_element:
+                        registro['nombre_proveedor'] = nombre_element.text.strip()
+                    
+                    codigo_element = soup.find(id='codigo') or soup.find(class_='codigo')
+                    if codigo_element:
+                        registro['codigo_proveedor'] = codigo_element.text.strip()
+                    
+                    racimos_element = soup.find(id='racimos') or soup.find(class_='racimos')
+                    if racimos_element:
+                        registro['cantidad_racimos'] = racimos_element.text.strip()
+                
+                # Buscar en cualquier texto dentro del documento
+                if registro['nombre_proveedor'] == 'No disponible':
+                    nombre_pattern = re.compile(r'nombre\s*(?:del\s*agricultor|proveedor)?[:\s]+([^<>\n]+)', re.IGNORECASE)
+                    nombre_match = re.search(nombre_pattern, content)
+                    if nombre_match:
+                        registro['nombre_proveedor'] = nombre_match.group(1).strip()
+                
+                if registro['codigo_proveedor'] == 'No disponible':
+                    codigo_pattern = re.compile(r'código[:\s]+(\d+)', re.IGNORECASE)
+                    codigo_match = re.search(codigo_pattern, content)
+                    if codigo_match:
+                        registro['codigo_proveedor'] = codigo_match.group(1).strip()
+                
+                if registro['cantidad_racimos'] == 'No disponible':
+                    racimos_pattern = re.compile(r'(?:cantidad\s*de\s*)?racimos[:\s]+(\d+)', re.IGNORECASE)
+                    racimos_match = re.search(racimos_pattern, content)
+                    if racimos_match:
+                        registro['cantidad_racimos'] = racimos_match.group(1).strip()
+                    
+                # Buscar la imagen del tiquete
+                img_tag = soup.find('img', {'alt': 'Tiquete'})
+                if img_tag and 'src' in img_tag.attrs:
+                    src = img_tag['src']
+                    # Extraer el nombre de archivo de la URL
+                    matches = re.search(r'uploads/([^/]+)', src)
+                    if matches:
+                        registro['image_filename'] = matches.group(1)
+                
+                # Buscar la nota
+                nota_div = soup.find('div', {'class': 'validation-note'})
+                if nota_div:
+                    nota_p = nota_div.find('p')
+                    if nota_p:
+                        registro['nota'] = nota_p.text.strip()
+                
+                # Buscar indicadores de edición manual
+                modified_fields = {}
+                
+                # Buscar todos los indicadores de edición
+                edit_indicators = soup.find_all('span', {'class': 'edit-indicator'})
+                for indicator in edit_indicators:
+                    parent_row = indicator.find_parent('tr')
+                    if parent_row:
+                        header = parent_row.find('th')
+                        if header:
+                            field_title = header.text.strip(':').strip().lower()
+                            if "nombre del agricultor" in field_title:
+                                modified_fields['nombre_agricultor'] = True
+                            elif "código" in field_title:
+                                modified_fields['codigo'] = True
+                            elif "cantidad de racimos" in field_title:
+                                modified_fields['racimos'] = True
+                            elif "placa" in field_title:
+                                modified_fields['placa'] = True
+                            elif "se acarreó" in field_title:
+                                modified_fields['acarreo'] = True
+                            elif "se cargó" in field_title:
+                                modified_fields['cargo'] = True
+                            elif "transportador" in field_title:
+                                modified_fields['transportador'] = True
+                            elif "fecha" in field_title and not "emisión" in field_title and not "registro" in field_title:
+                                modified_fields['fecha_tiquete'] = True
+                
+                # Almacenar los campos modificados en el registro
+                registro['modified_fields'] = modified_fields
+                
+                # Buscar la fecha de emisión (podemos usarla como fecha de registro si no hay otra)
+                footer = soup.find('div', {'class': 'footer'})
+                if footer:
+                    fecha_emisión_p = footer.find('p', string=re.compile(r'Fecha de Emisión:'))
+                    if fecha_emisión_p:
+                        match = re.search(r'Fecha de Emisión: (\d{2}/\d{2}/\d{4})', fecha_emisión_p.text)
+                        if match:
+                            registro['fecha_registro'] = match.group(1)
+                
+                # Intentar extraer la fecha del nombre del archivo si no se encontró en el HTML
+                if registro['fecha_registro'] == 'No disponible':
+                    # El formato de nombre de archivo suele ser: guia_CODIGO_AAAAMMDD_HHMMSS.html
+                    date_match = re.search(r'_(\d{8})_', codigo_guia)
+                    if date_match:
+                        date_str = date_match.group(1)
+                        try:
+                            # Convertir de AAAAMMDD a DD/MM/AAAA
+                            date_obj = datetime.strptime(date_str, '%Y%m%d')
+                            registro['fecha_registro'] = date_obj.strftime('%d/%m/%Y')
+                        except:
+                            pass
+            
+            logger.info(f"Datos recuperados para el registro de guía {codigo_guia}")
+            return registro
+            
+        except Exception as e:
+            logger.error(f"Error obteniendo datos de registro: {str(e)}")
+            logger.error(traceback.format_exc())
+            return None
+
+    def generar_qr(self, url, output_path):
+        """
+        Genera un código QR simple para una URL dada y lo guarda en la ruta especificada
+        
+        Args:
+            url (str): La URL o texto a codificar en el QR
+            output_path (str): La ruta donde guardar el archivo QR generado
+            
+        Returns:
+            bool: True si se generó correctamente, False en caso contrario
+        """
+        try:
+            # Crear el código QR
+            qr = qrcode.QRCode(
+                version=1,
+                error_correction=qrcode.constants.ERROR_CORRECT_L,
+                box_size=10,
+                border=4,
+            )
+            qr.add_data(url)
+            qr.make(fit=True)
+            
+            # Crear la imagen
+            img = qr.make_image(fill_color="black", back_color="white")
+            
+            # Guardar la imagen
+            img.save(output_path)
+            
+            # Verificar que se guardó correctamente
+            if os.path.exists(output_path):
+                logger.info(f"QR generado correctamente en: {output_path}")
+                return True
+            else:
+                logger.error(f"No se pudo verificar la creación del QR en: {output_path}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Error generando QR: {str(e)}")
+            logger.error(traceback.format_exc())
+            return False
 
 # Para mantener compatibilidad con código existente que no use la clase
 utils = None

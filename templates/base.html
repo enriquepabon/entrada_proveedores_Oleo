@@ -18,6 +18,7 @@
         body {
             background-color: #f5f6fa;
             color: #2c3e50;
+            padding-top: 70px; /* Espacio para la barra de navegación */
         }
 
         .info-section {
@@ -62,6 +63,27 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body>
+    <!-- Barra de navegación -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="/">Sistema de Tiquetes</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
+                    aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/"><i class="fas fa-home"></i> Inicio</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/clasificaciones"><i class="fas fa-clipboard-list"></i> Clasificaciones</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
     <!-- Overlay de carga -->
     <div id="loadingOverlay">
         <div class="text-center">
