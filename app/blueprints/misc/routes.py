@@ -11,7 +11,7 @@ import glob
 from werkzeug.utils import secure_filename
 from app.blueprints.misc import bp
 from app.utils.common import CommonUtils as Utils
-from app.utils.common import standardize_template_data
+from app.utils.common import standardize_template_data, convert_to_bogota_time
 import time
 import sqlite3
 import base64
