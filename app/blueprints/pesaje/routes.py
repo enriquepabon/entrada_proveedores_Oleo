@@ -1145,39 +1145,39 @@ def ver_resultados_pesaje(codigo_guia):
 
         # --- Explicitly fetch Racimos from entry_records DB ---
         # Initialize with value from datos_guia as default or 'No registrado' if completely missing
-        racimos_from_db = datos_guia.get('cantidad_racimos', datos_guia.get('racimos', 'No registrado'))
-        logger.debug(f"Initial racimos value for {codigo_guia} from datos_guia: {racimos_from_db}")
+        #racimos_from_db = datos_guia.get('cantidad_racimos', datos_guia.get('racimos', 'No registrado'))
+        #logger.debug(f"Initial racimos value for {codigo_guia} from datos_guia: {racimos_from_db}")
 
-        try:
+        #try:
             # Usar la ruta configurada en la aplicación Flask para buscar racimos
-            db_path_racimos = current_app.config['TIQUETES_DB_PATH']
-            conn_racimos = sqlite3.connect(db_path_racimos) # Use the correct path variable
-            cursor_racimos = conn_racimos.cursor()
+            #db_path_racimos = current_app.config['TIQUETES_DB_PATH']
+            #conn_racimos = sqlite3.connect(db_path_racimos) # Use the correct path variable
+            #cursor_racimos = conn_racimos.cursor()
             # Fetch 'cantidad_racimos' from entry_records using the specific codigo_guia
-            logger.info(f"Querying racimos in '{db_path_racimos}' for codigo_guia: {codigo_guia}") # Update log message
-            cursor_racimos.execute("SELECT cantidad_racimos FROM entry_records WHERE codigo_guia = ?", (codigo_guia,))
-            racimos_result = cursor_racimos.fetchone()
-            conn_racimos.close()
+            #logger.info(f"Querying racimos in '{db_path_racimos}' for codigo_guia: {codigo_guia}") # Update log message
+            #cursor_racimos.execute("SELECT cantidad_racimos FROM entry_records WHERE codigo_guia = ?", (codigo_guia,))
+            #racimos_result = cursor_racimos.fetchone()
+            #conn_racimos.close()
 
             # Update if a valid result is found in the database
-            if racimos_result and racimos_result[0] and str(racimos_result[0]).strip() not in ('No disponible', 'N/A', '', 'None', None):
-                racimos_from_db = str(racimos_result[0]).strip() # Ensure it's a string and clean
-                logger.info(f"Successfully fetched and updated racimos from DB for {codigo_guia}: {racimos_from_db}")
-            elif racimos_result:
+            #if racimos_result and racimos_result[0] and str(racimos_result[0]).strip() not in ('No disponible', 'N/A', '', 'None', None):
+                #racimos_from_db = str(racimos_result[0]).strip() # Ensure it's a string and clean
+                #logger.info(f"Successfully fetched and updated racimos from DB for {codigo_guia}: {racimos_from_db}")
+            #elif racimos_result:
                  # Log if record found but value is invalid
-                 logger.warning(f"Record found for {codigo_guia}, but racimos value ('{racimos_result[0]}') is invalid/empty. Keeping value: {racimos_from_db}")
-            else:
+                 #logger.warning(f"Record found for {codigo_guia}, but racimos value ('{racimos_result[0]}') is invalid/empty. Keeping value: {racimos_from_db}")
+            #else:
                  # Log if no record was found at all for this codigo_guia
-                 logger.warning(f"No record found in entry_records for racimos lookup using codigo_guia: {codigo_guia}. Keeping value: {racimos_from_db}")
+                 #logger.warning(f"No record found in entry_records for racimos lookup using codigo_guia: {codigo_guia}. Keeping value: {racimos_from_db}")
 
-        except sqlite3.Error as db_err:
-            logger.error(f"DB error fetching racimos for {codigo_guia}: {db_err}")
+        #except sqlite3.Error as db_err:
+            #logger.error(f"DB error fetching racimos for {codigo_guia}: {db_err}")
             # Ensure racimos_from_db has a value even on DB error
-            if 'racimos_from_db' not in locals(): racimos_from_db = 'Error DB'
-        except Exception as e:
-             logger.error(f"Unexpected error fetching racimos for {codigo_guia}: {e}")
+            #if 'racimos_from_db' not in locals(): racimos_from_db = 'Error DB'
+        #except Exception as e:
+             #logger.error(f"Unexpected error fetching racimos for {codigo_guia}: {e}")
              # Ensure racimos_from_db has a value on other errors
-             if 'racimos_from_db' not in locals(): racimos_from_db = 'Error General'
+             #if 'racimos_from_db' not in locals(): racimos_from_db = 'Error General'
         # --- End fetching Racimos ---
 
         # Preparar datos para el template
@@ -1210,7 +1210,7 @@ def ver_resultados_pesaje(codigo_guia):
             'nombre_proveedor': datos_guia.get('nombre_agricultor', datos_guia.get('nombre_proveedor', 'No disponible')),
             'transportador': datos_guia.get('transportador', 'No disponible'),
             'placa': datos_guia.get('placa', 'No disponible'),
-            'racimos': racimos_from_db, # Use the potentially updated value
+            'racimos': datos_guia.get('cantidad_racimos', datos_guia.get('racimos', 'No registrado')), # Use value directly from datos_guia
             'guia_sap': datos_guia.get('codigo_guia_transporte_sap', datos_guia.get('guia_sap', 'No registrada')),
             'imagen_pesaje': imagen_pesaje, # Use the potentially corrected URL
             'qr_code': url_for('static', filename=f'qr/{qr_filename}'),
