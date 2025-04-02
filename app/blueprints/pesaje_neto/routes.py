@@ -248,7 +248,7 @@ def registrar_peso_neto_directo():
                     'directo',
                     comentarios,
                     respuesta_sap,
-                    # datos_originales.get('peso_bruto'), # Store peso_bruto from entry/bruto record
+                    datos_originales.get('peso_bruto'), # Uncommented
                     codigo_guia
                 ))
             else:
@@ -269,9 +269,9 @@ def registrar_peso_neto_directo():
                     'directo',
                     comentarios,
                     respuesta_sap,
-                    # datos_originales.get('codigo_proveedor'), 
-                    # datos_originales.get('nombre_proveedor'), 
-                    # datos_originales.get('peso_bruto') 
+                    datos_originales.get('codigo_proveedor'), # Uncommented
+                    datos_originales.get('nombre_proveedor'), # Uncommented
+                    datos_originales.get('peso_bruto')         # Uncommented
                 ))
             
             conn.commit()
