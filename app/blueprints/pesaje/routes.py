@@ -440,8 +440,7 @@ def registrar_peso_directo():
                 'peso_bruto': peso_bruto,
                 'tipo_pesaje': 'directo',
                 'fecha_pesaje': fecha_pesaje,
-                'hora_pesaje': hora_pesaje,
-                'estado_actual': 'pesaje_completado'
+                'hora_pesaje': hora_pesaje
             })
             
             if codigo_guia_transporte_sap:
@@ -602,8 +601,7 @@ def registrar_peso_virtual():
                 'peso_bruto': peso_bruto,
                 'tipo_pesaje': 'virtual',
                 'fecha_pesaje': fecha_pesaje,
-                'hora_pesaje': hora_pesaje,
-                'estado_actual': 'pesaje_completado'
+                'hora_pesaje': hora_pesaje
             })
             
             if codigo_guia_transporte_sap:
@@ -944,124 +942,6 @@ def lista_pesajes_neto():
         logger.error(f"Error listando pesajes neto: {str(e)}")
         flash(f"Error al cargar la lista de pesajes neto: {str(e)}", "error")
         return redirect(url_for('home'))
-
-
-
-@bp.route('/registrar_peso_neto', methods=['POST'])
-def registrar_peso_neto():
-    """Registra el peso neto para una guía específica."""
-    
-    # Inicializar registro de errores con información detallada
-    error_message = None
-    data_received = {}
-    
-    try:
-        # Obtener el objeto de acceso a datos
-        from data_access import DataAccess
-        dal = DataAccess(current_app)
-        
-        # Obtener datos de la solicitud
-        if request.is_json:
-            data = request.get_json()
-            data_received = data
-            codigo_guia = data.get('codigo_guia')
-            peso_tara = data.get('peso_tara')
-        else:
-            data_received = {k: v for k, v in request.form.items()}
-            codigo_guia = request.form.get('codigo_guia')
-            peso_tara = request.form.get('peso_tara')
-        
-        logger.info(f"Registrando pesaje neto para guía {codigo_guia}")
-        
-        # Validar datos requeridos
-        if not codigo_guia:
-            error_message = "El código de guía es obligatorio"
-            raise ValueError(error_message)
-        
-        if not peso_tara:
-            error_message = "El peso tara es obligatorio"
-            raise ValueError(error_message)
-        
-        # Preparar datos para guardar
-        datos_pesaje = {
-            'codigo_guia': codigo_guia,
-            'peso_tara': peso_tara
-        }
-        
-        # Obtener datos adicionales del formulario o JSON
-        for key in ['peso_bruto', 'peso_producto', 'tipo_pesaje_neto', 'imagen_pesaje_neto']:
-            if request.is_json:
-                if key in data:
-                    datos_pesaje[key] = data.get(key)
-            else:
-                if key in request.form:
-                    datos_pesaje[key] = request.form.get(key)
-        
-        # Manejar imagen si está presente
-        if 'imagen_pesaje_neto' not in datos_pesaje and 'imagen' in request.files:
-            file = request.files['imagen']
-            if file and file.filename:
-                # Guardar imagen temporalmente
-                timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-                filename = f"pesaje_neto_{codigo_guia}_{timestamp}.jpg"
-                
-                # Asegurarse de que el directorio existe
-                os.makedirs('static/uploads', exist_ok=True)
-                
-                # Guardar archivo
-                filepath = os.path.join('static/uploads', filename)
-                file.save(filepath)
-                
-                # Guardar ruta relativa en datos_pesaje
-                datos_pesaje['imagen_pesaje_neto'] = f"uploads/{filename}"
-        
-        # Establecer fecha y hora actuales si no se proporcionan
-        if 'fecha_pesaje_neto' not in datos_pesaje:
-            datos_pesaje['fecha_pesaje_neto'] = datetime.now().strftime('%d/%m/%Y')
-        
-        if 'hora_pesaje_neto' not in datos_pesaje:
-            datos_pesaje['hora_pesaje_neto'] = datetime.now().strftime('%H:%M:%S')
-        
-        # Guardar datos utilizando la capa DAL
-        if dal.save_pesaje_neto(datos_pesaje):
-            # Actualizar datos en sesión
-            session['codigo_guia'] = codigo_guia
-            session['peso_tara'] = peso_tara
-            
-            # Si peso_neto está en datos_pesaje, usarlo; si no, será calculado por la función DAL
-            if 'peso_neto' in datos_pesaje:
-                session['peso_neto'] = datos_pesaje['peso_neto']
-            
-            # Determinar redirección basada en si es una solicitud AJAX
-            if request.is_json:
-                return jsonify({
-                    'status': 'success',
-                    'message': 'Pesaje neto registrado correctamente',
-                    'redirect_url': url_for('pesaje_neto.ver_resultados_pesaje_neto', codigo_guia=codigo_guia)
-                })
-            else:
-                return redirect(url_for('pesaje_neto.ver_resultados_pesaje_neto', codigo_guia=codigo_guia))
-        else:
-            logger.error(f"Error al guardar pesaje neto en la base de datos para {codigo_guia}")
-            error_message = "No se pudo guardar el pesaje neto en la base de datos"
-            raise Exception(error_message)
-    
-    except Exception as e:
-        logger.error(f"Error al registrar pesaje neto: {str(e)}")
-        logger.error(f"Datos recibidos: {data_received}")
-        logger.error(traceback.format_exc())
-        
-        if not error_message:
-            error_message = f"Error al registrar pesaje neto: {str(e)}"
-        
-        if request.is_json:
-            return jsonify({
-                'status': 'error',
-                'message': error_message
-            }), 400
-        else:
-            flash(error_message, 'danger')
-            return redirect(url_for('pesaje_neto'))
 
 
 @bp.route('/ver_resultados_pesaje/<codigo_guia>')

@@ -14,6 +14,10 @@ from app.blueprints.entrada import bp
 from app.utils.common import CommonUtils as Utils
 from app.blueprints.misc.routes import PROCESS_WEBHOOK_URL, PLACA_WEBHOOK_URL, REVALIDATION_WEBHOOK_URL, REGISTER_WEBHOOK_URL
 import glob
+from app.utils.image_processing import process_plate_image
+import db_utils  # Importar db_utils para operaciones de base de datos
+import db_operations  # Importar db_operations
+from tiquete_parser import parse_markdown_response
 
 # Configurar logging
 logger = logging.getLogger(__name__)
@@ -171,7 +175,7 @@ def process_tiquete_image(image_path, filename):
                 return {"result": "error", "message": error_msg}
         
         # Importar la función de parser.py
-        from parser import parse_markdown_response
+        from tiquete_parser import parse_markdown_response
         
         parsed_data = parse_markdown_response(response_text)
         

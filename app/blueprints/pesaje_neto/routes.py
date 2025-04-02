@@ -16,8 +16,10 @@ def ensure_pesajes_neto_schema():
     """
     Asegura que la tabla pesajes_neto tenga todas las columnas necesarias.
     """
+    conn = None # Initialize conn
     try:
-        db_path = 'tiquetes.db'
+        # Use the configured DB path
+        db_path = current_app.config['TIQUETES_DB_PATH'] 
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         
@@ -40,6 +42,13 @@ def ensure_pesajes_neto_schema():
         if 'respuesta_sap' not in columns:
             columns_to_add.append("respuesta_sap TEXT")
             
+        # Add new date/time columns if missing
+        if 'fecha_pesaje_neto' not in columns:
+            columns_to_add.append("fecha_pesaje_neto TEXT")
+            
+        if 'hora_pesaje_neto' not in columns:
+            columns_to_add.append("hora_pesaje_neto TEXT")
+            
         # Ejecutar alters para añadir columnas faltantes
         for column_def in columns_to_add:
             column_name = column_def.split()[0]
@@ -54,13 +63,38 @@ def ensure_pesajes_neto_schema():
                 else:
                     raise
                     
+        # --- REMOVE OLD/INCORRECT COLUMNS --- 
+        # Check if old columns exist and drop them if they do
+        old_columns_to_drop = ['fecha_pesaje', 'hora_pesaje', 'imagen_pesaje']
+        current_columns_info = {col[1]: col for col in cursor.execute("PRAGMA table_info(pesajes_neto)").fetchall()}
+        
+        for old_col in old_columns_to_drop:
+            if old_col in current_columns_info:
+                logger.warning(f"Encontrada columna obsoleta '{old_col}' en pesajes_neto. Se eliminará.")
+                try:
+                    # SQLite doesn't directly support DROP COLUMN in older versions easily.
+                    # A common workaround is to recreate the table, but for simplicity, 
+                    # we will log a warning and the code saving data should ignore these columns.
+                    # cursor.execute(f"ALTER TABLE pesajes_neto DROP COLUMN {old_col}") # This might fail
+                    # conn.commit()
+                    # logger.info(f"Columna obsoleta '{old_col}' eliminada.")
+                    logger.warning(f"Por favor, considera eliminar manualmente la columna '{old_col}' de la tabla pesajes_neto si causa problemas.")
+                except sqlite3.OperationalError as drop_err:
+                    logger.error(f"Error al intentar eliminar columna obsoleta '{old_col}': {drop_err}. Se continuará, pero considera limpieza manual.")
+        # --- END REMOVE OLD COLUMNS ---
+            
         conn.commit()
         logger.info("Esquema de la tabla pesajes_neto verificado/actualizado")
         conn.close()
         return True
+    except KeyError:
+        logger.error("Error: 'TIQUETES_DB_PATH' no está configurada en la aplicación Flask.")
+        if 'conn' in locals() and conn:
+            conn.close()
+        return False
     except Exception as e:
         logger.error(f"Error verificando/actualizando esquema de pesajes_neto: {str(e)}")
-        if 'conn' in locals():
+        if 'conn' in locals() and conn:
             conn.close()
         return False
 
@@ -130,10 +164,12 @@ def registrar_peso_neto_directo():
     # Inicializar variables
     error_message = None
     data_received = {}
+    conn = None # Initialize conn
     
     try:
         # Inicializar Utils dentro del contexto de la aplicación
         utils = current_app.config.get('utils', Utils(current_app))
+        db_path = current_app.config['TIQUETES_DB_PATH'] # Get DB path
         
         logger.info("Procesando solicitud de registro de peso neto directo")
         
@@ -143,6 +179,7 @@ def registrar_peso_neto_directo():
         peso_neto = request.form.get('peso_neto')
         comentarios = request.form.get('comentarios', '')
         respuesta_sap = request.form.get('respuesta_sap')
+        # Implicitly get peso_producto from calculation or SAP response later if needed
         
         data_received = {k: v for k, v in request.form.items()}
         logger.info(f"Datos recibidos para pesaje neto directo: {data_received}")
@@ -165,16 +202,28 @@ def registrar_peso_neto_directo():
             raise ValueError(error_message)
             
         now = datetime.now()
+        fecha_actual = now.strftime('%d/%m/%Y')
+        hora_actual = now.strftime('%H:%M:%S')
         
-        # Obtener datos originales de la guía
+        # Obtener datos originales de la guía (incluyendo peso bruto)
         datos_originales = utils.get_datos_guia(codigo_guia)
         if not datos_originales:
             error_message = "No se encontraron los datos originales de la guía"
             raise ValueError(error_message)
-        
+            
+        # Calcular peso_producto si es posible
+        peso_bruto = datos_originales.get('peso_bruto')
+        peso_producto = None
+        if peso_bruto is not None and peso_tara is not None:
+            try:
+                 peso_bruto_float = float(peso_bruto)
+                 peso_producto = round(peso_bruto_float - peso_tara, 3) # Calculate with 3 decimals
+            except (ValueError, TypeError):
+                 logger.warning(f"No se pudo calcular peso_producto para {codigo_guia}, peso_bruto o peso_tara no son numéricos.")
+
         # Actualizar directamente en la base de datos
         try:
-            conn = sqlite3.connect('tiquetes.db')
+            conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
             
             # Primero verificar si existe el registro
@@ -185,75 +234,83 @@ def registrar_peso_neto_directo():
                 # Actualizar registro existente
                 cursor.execute("""
                     UPDATE pesajes_neto 
-                    SET peso_tara = ?,
-                        peso_neto = ?,
-                        fecha_pesaje = ?,
-                        hora_pesaje = ?,
-                        tipo_pesaje_neto = ?,
-                        comentarios = ?,
-                        respuesta_sap = ?
+                    SET peso_tara = ?, peso_neto = ?, peso_producto = ?, 
+                        fecha_pesaje_neto = ?, hora_pesaje_neto = ?, 
+                        tipo_pesaje_neto = ?, comentarios = ?, respuesta_sap = ?, 
+                        peso_bruto = ?
                     WHERE codigo_guia = ?
                 """, (
                     peso_tara,
                     peso_neto,
-                    now.strftime('%d/%m/%Y'),
-                    now.strftime('%H:%M:%S'),
+                    peso_producto,
+                    fecha_actual, # Use correct column name
+                    hora_actual,  # Use correct column name
                     'directo',
                     comentarios,
                     respuesta_sap,
+                    # datos_originales.get('peso_bruto'), # Store peso_bruto from entry/bruto record
                     codigo_guia
                 ))
             else:
                 # Insertar nuevo registro
                 cursor.execute("""
                     INSERT INTO pesajes_neto (
-                        codigo_guia, peso_tara, peso_neto, fecha_pesaje, 
-                        hora_pesaje, tipo_pesaje_neto, comentarios, respuesta_sap
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        codigo_guia, peso_tara, peso_neto, peso_producto, 
+                        fecha_pesaje_neto, hora_pesaje_neto, tipo_pesaje_neto, 
+                        comentarios, respuesta_sap, codigo_proveedor, nombre_proveedor, peso_bruto
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     codigo_guia,
                     peso_tara,
                     peso_neto,
-                    now.strftime('%d/%m/%Y'),
-                    now.strftime('%H:%M:%S'),
+                    peso_producto,
+                    fecha_actual, # Use correct column name
+                    hora_actual,  # Use correct column name
                     'directo',
                     comentarios,
-                    respuesta_sap
+                    respuesta_sap,
+                    # datos_originales.get('codigo_proveedor'), 
+                    # datos_originales.get('nombre_proveedor'), 
+                    # datos_originales.get('peso_bruto') 
                 ))
             
             conn.commit()
             logger.info(f"Datos actualizados en la base de datos para guía {codigo_guia}")
             
+        except sqlite3.Error as db_e: # Catch specifically DB errors
+            logger.error(f"Error actualizando la base de datos: {str(db_e)}")
+            # Check for specific errors like missing columns if needed
+            if "no column named" in str(db_e):
+                error_message = f"Error de base de datos: {db_e}. Por favor, verifica la estructura de la tabla."
+            else:
+                error_message = f"Error de base de datos al guardar pesaje neto: {db_e}"
+            raise sqlite3.Error(error_message) # Re-raise DB error
         except Exception as e:
-            logger.error(f"Error actualizando la base de datos: {str(e)}")
-            raise
+            logger.error(f"Error inesperado durante la operación de base de datos: {str(e)}")
+            error_message = f"Error inesperado: {str(e)}"
+            raise # Re-raise other exceptions
         finally:
-            if 'conn' in locals():
+            if conn:
                 conn.close()
         
         # Actualizar solo los datos del pesaje en la UI, manteniendo los datos originales del proveedor
         datos_ui = {
             'peso_tara': peso_tara,
             'peso_neto': peso_neto,
+            'peso_producto': peso_producto, # Add calculated value
             'tipo_pesaje_neto': 'directo',
-            'fecha_pesaje_neto': now.strftime('%d/%m/%Y'),
-            'hora_pesaje_neto': now.strftime('%H:%M:%S'),
+            'fecha_pesaje_neto': fecha_actual,
+            'hora_pesaje_neto': hora_actual,
             'comentarios_neto': comentarios,
             'respuesta_sap': respuesta_sap,
             'pesaje_neto_completado': True
         }
         
-        # Mantener los datos originales del proveedor
-        datos_ui.update({
-            'codigo_proveedor': datos_originales.get('codigo_proveedor', datos_originales.get('codigo')),
-            'nombre_proveedor': datos_originales.get('nombre_proveedor', datos_originales.get('nombre')),
-            'transportador': datos_originales.get('transportador'),
-            'placa': datos_originales.get('placa'),
-            'codigo_guia_transporte_sap': datos_originales.get('codigo_guia_transporte_sap')
-        })
+        # Combine with original data fetched earlier, ensuring peso_bruto is present
+        datos_originales.update(datos_ui)
         
-        # Guardar los datos actualizados
-        if utils.update_datos_guia(codigo_guia, datos_ui):
+        # Guardar los datos actualizados (using the combined dict)
+        if utils.update_datos_guia(codigo_guia, datos_originales): # Save combined data
             logger.info(f"Pesaje neto directo guardado correctamente para guía {codigo_guia}")
             
             return jsonify({
@@ -262,22 +319,194 @@ def registrar_peso_neto_directo():
                 'redirect_url': url_for('pesaje_neto.ver_resultados_pesaje_neto', codigo_guia=codigo_guia)
             })
         else:
-            logger.error(f"Error al guardar pesaje neto directo para {codigo_guia}")
-            error_message = "No se pudo guardar el pesaje neto"
-            raise Exception(error_message)
+            logger.error(f"Error al guardar pesaje neto directo para {codigo_guia} (en utils.update_datos_guia)")
+            error_message = "No se pudo guardar el pesaje neto (error post-DB)"
+            # Even if DB save was ok, if update_datos_guia fails, report error
+            return jsonify({
+                'success': False,
+                'message': error_message
+            }), 500 # Internal server error
             
+    except (ValueError, sqlite3.Error) as ve:
+        # Catch validation errors and DB errors raised earlier
+        logger.error(f"Error (Validation/DB) al registrar peso neto directo: {str(ve)}")
+        logger.error(f"Datos recibidos: {data_received}")
+        # Use the error message set in the specific exception block if available
+        final_error_message = error_message or str(ve) 
+        return jsonify({
+            'success': False,
+            'message': final_error_message
+        }), 400 # Bad request for validation, potentially 500 for DB
     except Exception as e:
-        logger.error(f"Error al registrar peso neto directo: {str(e)}")
+        # Catch any other unexpected errors
+        logger.error(f"Error general al registrar peso neto directo: {str(e)}")
         logger.error(f"Datos recibidos: {data_received}")
         logger.error(traceback.format_exc())
         
-        if not error_message:
-            error_message = f"Error al registrar peso neto directo: {str(e)}"
+        final_error_message = error_message or f"Error inesperado al registrar peso neto: {str(e)}"
         
         return jsonify({
             'success': False,
-            'message': error_message
-        }), 400
+            'message': final_error_message
+        }), 500 # Internal Server Error
+
+@bp.route('/registrar_peso_neto', methods=['POST'])
+def registrar_peso_neto():
+    """Registra el peso neto para una guía específica."""
+    
+    # Asegurar que la tabla pesajes_neto tenga el esquema correcto
+    ensure_pesajes_neto_schema()
+    
+    error_message = None
+    data_received = {}
+    conn = None
+    
+    try:
+        # Inicializar Utils y obtener la ruta de la DB
+        utils = current_app.config.get('utils', Utils(current_app))
+        db_path = current_app.config['TIQUETES_DB_PATH']
+        
+        # Obtener datos de la solicitud (JSON o Formulario)
+        if request.is_json:
+            data = request.get_json()
+            data_received = data
+        else:
+            data = request.form
+            data_received = {k: v for k, v in data.items()}
+
+        codigo_guia = data.get('codigo_guia')
+        peso_tara_str = data.get('peso_tara')
+        
+        logger.info(f"Registrando pesaje neto para guía {codigo_guia}. Datos recibidos: {data_received}")
+        
+        # Validar datos requeridos
+        if not codigo_guia:
+            raise ValueError("El código de guía es obligatorio")
+        if not peso_tara_str:
+            raise ValueError("El peso tara es obligatorio")
+            
+        # Convertir peso tara a float
+        try:
+            peso_tara = float(peso_tara_str)
+        except ValueError:
+            raise ValueError("El peso tara debe ser un valor numérico")
+
+        # Obtener datos originales de la guía (incluyendo peso bruto)
+        datos_originales = utils.get_datos_guia(codigo_guia)
+        if not datos_originales:
+            raise ValueError(f"No se encontraron datos originales para la guía {codigo_guia}")
+        
+        peso_bruto_str = datos_originales.get('peso_bruto')
+        
+        # Calcular peso neto y peso producto
+        peso_neto = None
+        peso_producto = None
+        if peso_bruto_str and peso_bruto_str != 'Pendiente' and peso_bruto_str != 'N/A':
+             try:
+                 peso_bruto = float(peso_bruto_str)
+                 peso_neto = round(peso_bruto - peso_tara, 3)
+                 # Asumimos que peso_producto es igual a peso_neto en este contexto
+                 peso_producto = peso_neto 
+             except (ValueError, TypeError):
+                 logger.warning(f"No se pudo calcular peso neto/producto para {codigo_guia}. Peso bruto: {peso_bruto_str}")
+                 raise ValueError("No se pudo calcular el peso neto debido a un valor de peso bruto inválido.")
+        else:
+             raise ValueError("El peso bruto no está disponible para calcular el peso neto.")
+
+        now = datetime.now()
+        fecha_actual = now.strftime('%d/%m/%Y')
+        hora_actual = now.strftime('%H:%M:%S')
+
+        # Preparar datos para la base de datos
+        datos_db = {
+            'codigo_guia': codigo_guia,
+            'peso_tara': peso_tara,
+            'peso_neto': peso_neto,
+            'peso_producto': peso_producto,
+            'fecha_pesaje_neto': fecha_actual,
+            'hora_pesaje_neto': hora_actual,
+            'tipo_pesaje_neto': data.get('tipo_pesaje_neto', 'formulario'), # Indicar origen
+            'comentarios': data.get('comentarios', ''),
+            'respuesta_sap': data.get('respuesta_sap', ''), # Si viene de SAP
+            'codigo_proveedor': datos_originales.get('codigo_proveedor'),
+            'nombre_proveedor': datos_originales.get('nombre_proveedor'),
+            'peso_bruto': peso_bruto # Guardar el peso bruto usado para el cálculo
+        }
+        
+        # Guardar en la base de datos
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        # Usar INSERT OR REPLACE para simplificar (o verificar y luego INSERT/UPDATE como en directo)
+        column_names = ', '.join(datos_db.keys())
+        placeholders = ', '.join(['?'] * len(datos_db))
+        values = list(datos_db.values())
+        
+        try:
+            # Intenta insertar primero
+            cursor.execute(f"INSERT INTO pesajes_neto ({column_names}) VALUES ({placeholders})", values)
+            logger.info(f"Insertado nuevo registro de pesaje neto para {codigo_guia}")
+        except sqlite3.IntegrityError:
+            # Si ya existe (por codigo_guia UNIQUE), actualiza
+            update_set = ', '.join([f"{key} = ?" for key in datos_db if key != 'codigo_guia'])
+            update_values = [v for k, v in datos_db.items() if k != 'codigo_guia'] + [codigo_guia]
+            cursor.execute(f"UPDATE pesajes_neto SET {update_set} WHERE codigo_guia = ?", update_values)
+            logger.info(f"Actualizado registro existente de pesaje neto para {codigo_guia}")
+            
+        conn.commit()
+        logger.info(f"Pesaje neto registrado/actualizado en DB para {codigo_guia}")
+
+        # Actualizar datos en sesión si es necesario (o si la lógica lo requiere)
+        session['codigo_guia'] = codigo_guia
+        session['peso_tara'] = peso_tara
+        session['peso_neto'] = peso_neto
+
+        # Determinar redirección o respuesta JSON
+        redirect_url = url_for('pesaje_neto.ver_resultados_pesaje_neto', codigo_guia=codigo_guia)
+        if request.is_json:
+            return jsonify({
+                'status': 'success',
+                'message': 'Pesaje neto registrado correctamente',
+                'redirect_url': redirect_url
+            })
+        else:
+            flash('Pesaje neto registrado correctamente.', 'success')
+            return redirect(redirect_url)
+
+    except (ValueError, sqlite3.Error) as ve:
+        error_msg = str(ve)
+        logger.error(f"Error (Validation/DB) al registrar peso neto: {error_msg}")
+        logger.error(f"Datos recibidos: {data_received}")
+        if request.is_json:
+             return jsonify({'status': 'error', 'message': error_msg}), 400
+        else:
+             flash(error_msg, 'danger')
+             # Redirigir a alguna vista relevante, tal vez la vista centralizada o el formulario
+             # Si codigo_guia está disponible, redirige al formulario de pesaje neto
+             if 'codigo_guia' in data_received and data_received['codigo_guia']:
+                 return redirect(url_for('.pesaje_neto', codigo_guia=data_received['codigo_guia']))
+             else: # Si no hay código guía, redirige a la página principal o de búsqueda
+                 return redirect(url_for('misc.upload_file')) 
+                 
+    except Exception as e:
+        error_msg = f"Error inesperado al registrar pesaje neto: {str(e)}"
+        logger.error(error_msg)
+        logger.error(f"Datos recibidos: {data_received}")
+        logger.error(traceback.format_exc())
+        
+        if request.is_json:
+            return jsonify({'status': 'error', 'message': error_msg}), 500
+        else:
+            flash(error_msg, 'danger')
+            # Redirigir de forma segura
+            if 'codigo_guia' in data_received and data_received['codigo_guia']:
+                 return redirect(url_for('.pesaje_neto', codigo_guia=data_received['codigo_guia']))
+            else: 
+                 return redirect(url_for('misc.upload_file'))
+                 
+    finally:
+        if conn:
+            conn.close()
 
 @bp.route('/pesaje/<codigo_guia>')
 def pesaje_neto(codigo_guia):

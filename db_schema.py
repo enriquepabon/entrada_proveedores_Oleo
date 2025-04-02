@@ -102,9 +102,8 @@ CREATE TABLE IF NOT EXISTS pesajes_neto (
     peso_producto REAL,
     tipo_pesaje TEXT,
     tipo_pesaje_neto TEXT,
-    fecha_pesaje TEXT,
-    hora_pesaje TEXT,
-    imagen_pesaje TEXT,
+    fecha_pesaje_neto TEXT,
+    hora_pesaje_neto TEXT,
     comentarios TEXT,
     estado TEXT DEFAULT 'activo',
     fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
