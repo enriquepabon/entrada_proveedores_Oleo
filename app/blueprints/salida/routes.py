@@ -78,7 +78,7 @@ def registro_salida(codigo_guia):
         # Verificar que el pesaje neto esté completado
         if not datos_guia.get('peso_neto'):
             flash("El pesaje neto no ha sido registrado para esta guía.", "warning")
-            return redirect(url_for('pesaje_neto.registrar_peso_neto', codigo_guia=codigo_guia))
+            return redirect(url_for('pesaje_neto.pesaje_neto', codigo_guia=codigo_guia))
             
         # Obtener fecha y hora actuales para mostrar en el formulario
         now = datetime.now()
