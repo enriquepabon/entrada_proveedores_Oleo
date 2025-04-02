@@ -201,9 +201,10 @@ def registrar_peso_neto_directo():
             error_message = "Los valores de peso deben ser numéricos"
             raise ValueError(error_message)
             
-        now = datetime.now()
-        fecha_actual = now.strftime('%d/%m/%Y')
-        hora_actual = now.strftime('%H:%M:%S')
+        # Convertir fechas y horas a UTC
+        fecha_hora_actual_utc = datetime.utcnow()
+        fecha_actual = fecha_hora_actual_utc.strftime('%d/%m/%Y')
+        hora_actual = fecha_hora_actual_utc.strftime('%H:%M:%S')
         
         # Obtener datos originales de la guía (incluyendo peso bruto)
         datos_originales = utils.get_datos_guia(codigo_guia)
@@ -413,9 +414,10 @@ def registrar_peso_neto():
         else:
              raise ValueError("El peso bruto no está disponible para calcular el peso neto.")
 
-        now = datetime.now()
-        fecha_actual = now.strftime('%d/%m/%Y')
-        hora_actual = now.strftime('%H:%M:%S')
+        # Convertir fechas y horas a UTC
+        fecha_hora_actual_utc = datetime.utcnow()
+        fecha_actual = fecha_hora_actual_utc.strftime('%d/%m/%Y')
+        hora_actual = fecha_hora_actual_utc.strftime('%H:%M:%S')
 
         # Preparar datos para la base de datos
         datos_db = {

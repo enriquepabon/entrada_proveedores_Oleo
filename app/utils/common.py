@@ -12,9 +12,39 @@ import sqlite3
 import qrcode
 from io import BytesIO
 import base64
+import pytz
 
 # Configurar logging
 logger = logging.getLogger(__name__)
+
+# Define timezones
+UTC = pytz.utc
+BOGOTA_TZ = pytz.timezone('America/Bogota')
+
+def format_datetime_bogota(date_str, time_str):
+    """Combines date and time strings, assumes UTC, converts to Bogota TZ, and formats."""
+    if not date_str or not time_str:
+        return None, None # Return None for both if either is missing
+    
+    try:
+        # Combine date and time strings into a naive datetime object
+        # Assuming format DD/MM/YYYY HH:MM:SS
+        naive_dt = datetime.strptime(f"{date_str} {time_str}", "%d/%m/%Y %H:%M:%S")
+        
+        # Localize the naive datetime object to UTC
+        utc_dt = UTC.localize(naive_dt)
+        
+        # Convert to Bogota timezone
+        bogota_dt = utc_dt.astimezone(BOGOTA_TZ)
+        
+        # Format back into separate date and time strings in Bogota time
+        formatted_date = bogota_dt.strftime('%d/%m/%Y')
+        formatted_time = bogota_dt.strftime('%H:%M:%S')
+        
+        return formatted_date, formatted_time
+    except (ValueError, TypeError) as e:
+        logger.error(f"Error formatting/converting datetime ({date_str} {time_str}): {e}")
+        return date_str, time_str # Return original strings on error
 
 class CommonUtils:
     def __init__(self, app):
@@ -123,7 +153,7 @@ class CommonUtils:
                     pb.peso_bruto, pb.fecha_pesaje, pb.hora_pesaje, pb.tipo_pesaje, pb.codigo_guia_transporte_sap, 
                     c.fecha_clasificacion, c.hora_clasificacion, c.clasificacion_manual, c.clasificacion_automatica,
                     pn.peso_tara, pn.peso_neto, pn.peso_producto, 
-                    pn.fecha_pesaje as fecha_pesaje_neto_db, pn.hora_pesaje as hora_pesaje_neto_db, 
+                    pn.fecha_pesaje_neto as fecha_pesaje_neto_db, pn.hora_pesaje_neto as hora_pesaje_neto_db,
                     pn.tipo_pesaje_neto, pn.comentarios as comentarios_neto, pn.respuesta_sap,
                     s.fecha_salida, s.hora_salida, s.nota_salida, s.comentarios_salida
                 FROM entry_records e
@@ -141,9 +171,28 @@ class CommonUtils:
                 logger.warning(f"No entry_record found for codigo_guia: {codigo_guia}")
                 return None
 
+            # Log raw timestamp values retrieved from DB
+            logger.debug(f"Raw data for {codigo_guia} from DB - fecha_clasificacion: {row['fecha_clasificacion']}, hora_clasificacion: {row['hora_clasificacion']}")
+            logger.debug(f"Raw data for {codigo_guia} from DB - fecha_pesaje_neto_db: {row['fecha_pesaje_neto_db']}, hora_pesaje_neto_db: {row['hora_pesaje_neto_db']}")
+            
             # Convert the row to a dictionary
             datos_guia = dict(row)
             logger.info(f"Datos combinados obtenidos para guía {codigo_guia}")
+
+            # --- Timezone Conversion --- 
+            datos_guia['fecha_pesaje'], datos_guia['hora_pesaje'] = format_datetime_bogota(
+                datos_guia.get('fecha_pesaje'), datos_guia.get('hora_pesaje')
+            )
+            datos_guia['fecha_clasificacion'], datos_guia['hora_clasificacion'] = format_datetime_bogota(
+                datos_guia.get('fecha_clasificacion'), datos_guia.get('hora_clasificacion')
+            )
+            datos_guia['fecha_pesaje_neto'], datos_guia['hora_pesaje_neto'] = format_datetime_bogota(
+                datos_guia.get('fecha_pesaje_neto_db'), datos_guia.get('hora_pesaje_neto_db')
+            )
+            datos_guia['fecha_salida'], datos_guia['hora_salida'] = format_datetime_bogota(
+                datos_guia.get('fecha_salida'), datos_guia.get('hora_salida')
+            )
+            # --- End Timezone Conversion ---
 
             # --- Data Cleaning and Structuring ---
             
@@ -164,8 +213,8 @@ class CommonUtils:
             datos_guia['peso_tara'] = datos_guia.get('peso_tara')
             datos_guia['peso_neto'] = datos_guia.get('peso_neto')
             datos_guia['peso_producto'] = datos_guia.get('peso_producto')
-            datos_guia['fecha_pesaje_neto'] = datos_guia.get('fecha_pesaje_neto_db') # Use aliased name
-            datos_guia['hora_pesaje_neto'] = datos_guia.get('hora_pesaje_neto_db') # Use aliased name
+            datos_guia['fecha_pesaje_neto'] = datos_guia.get('fecha_pesaje_neto_db') # Use corrected alias
+            datos_guia['hora_pesaje_neto'] = datos_guia.get('hora_pesaje_neto_db') # Use corrected alias
             datos_guia['tipo_pesaje_neto'] = datos_guia.get('tipo_pesaje_neto')
             datos_guia['comentarios_neto'] = datos_guia.get('comentarios_neto')
             datos_guia['respuesta_sap'] = datos_guia.get('respuesta_sap')

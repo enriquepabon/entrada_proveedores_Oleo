@@ -3698,8 +3698,8 @@ def guardar_clasificacion_final(codigo_guia):
                     'codigo_guia': codigo_guia,
                     'codigo_proveedor': datos_guia.get('codigo_proveedor'),
                     'nombre_proveedor': datos_guia.get('nombre_proveedor'),
-                    'fecha_clasificacion': datetime.now().strftime('%d/%m/%Y'),
-                    'hora_clasificacion': datetime.now().strftime('%H:%M:%S'),
+                    'fecha_clasificacion': datetime.utcnow().strftime('%d/%m/%Y'), # Use UTC now
+                    'hora_clasificacion': datetime.utcnow().strftime('%H:%M:%S'), # Use UTC now
                     'estado': 'completado'
                 }
                 
