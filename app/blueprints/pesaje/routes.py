@@ -1088,12 +1088,11 @@ def ver_resultados_pesaje(codigo_guia):
         hora_pesaje_db = None
         guia_sap_db = None
         try:
-            # Usar DB_PATH definido globalmente o desde config
-            # Asegúrate que DB_PATH esté correctamente definido y accesible aquí.
-            # Si no, usa current_app.config['TIQUETES_DB_PATH']
-            conn_check = sqlite3.connect(DB_PATH) 
+            # Usar la ruta configurada en la aplicación Flask
+            db_path = current_app.config['TIQUETES_DB_PATH']
+            conn_check = sqlite3.connect(db_path) 
             cursor_check = conn_check.cursor()
-            logger.info(f"Consultando pesajes_bruto para {codigo_guia}")
+            logger.info(f"Consultando pesajes_bruto en '{db_path}' para {codigo_guia}")
             cursor_check.execute("""
                 SELECT peso_bruto, fecha_pesaje, hora_pesaje, codigo_guia_transporte_sap 
                 FROM pesajes_bruto 
