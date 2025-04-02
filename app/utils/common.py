@@ -106,133 +106,132 @@ class CommonUtils:
     
     def get_datos_guia(self, codigo_guia, force_reload=False):
         """
-        Obtiene todos los datos relacionados con una guía específica.
+        Obtiene todos los datos relacionados con una guía específica usando LEFT JOINs.
         """
+        conn = None # Initialize conn
         try:
-            conn = sqlite3.connect('tiquetes.db')
+            # Use the configured DB path
+            db_path = current_app.config['TIQUETES_DB_PATH']
+            conn = sqlite3.connect(db_path)
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
+
+            # Single query using LEFT JOINs
+            query = """
+                SELECT 
+                    e.*, 
+                    pb.peso_bruto, pb.fecha_pesaje, pb.hora_pesaje, pb.tipo_pesaje, pb.codigo_guia_transporte_sap, 
+                    c.fecha_clasificacion, c.hora_clasificacion, c.clasificacion_manual, c.clasificacion_automatica,
+                    pn.peso_tara, pn.peso_neto, pn.peso_producto, 
+                    pn.fecha_pesaje as fecha_pesaje_neto_db, pn.hora_pesaje as hora_pesaje_neto_db, 
+                    pn.tipo_pesaje_neto, pn.comentarios as comentarios_neto, pn.respuesta_sap,
+                    s.fecha_salida, s.hora_salida, s.nota_salida, s.comentarios_salida
+                FROM entry_records e
+                LEFT JOIN pesajes_bruto pb ON e.codigo_guia = pb.codigo_guia
+                LEFT JOIN clasificaciones c ON e.codigo_guia = c.codigo_guia
+                LEFT JOIN pesajes_neto pn ON e.codigo_guia = pn.codigo_guia
+                LEFT JOIN salidas s ON e.codigo_guia = s.codigo_guia
+                WHERE e.codigo_guia = ?
+            """
             
-            # Obtener datos básicos de la guía
-            cursor.execute("""
-                SELECT * FROM entry_records 
-                WHERE codigo_guia = ?
-            """, (codigo_guia,))
-            result = cursor.fetchone()
-            if result:
-                datos_guia = dict(result)
-                # Asegurar que los campos del proveedor se mantengan
-                datos_guia['codigo_proveedor'] = datos_guia.get('codigo_proveedor') or datos_guia.get('codigo')
-                datos_guia['nombre_proveedor'] = datos_guia.get('nombre_proveedor') or datos_guia.get('nombre_agricultor') or datos_guia.get('nombre')
-            else:
-                datos_guia = {}
-                    
-            # Obtener datos de pesaje bruto
-            cursor.execute("""
-                SELECT * FROM pesajes_bruto 
-                WHERE codigo_guia = ?
-            """, (codigo_guia,))
-            pesaje_bruto = cursor.fetchone()
-            if pesaje_bruto:
-                pesaje_bruto_dict = dict(pesaje_bruto)
-                # Campos específicos del pesaje bruto
-                datos_guia.update({
-                    'peso_bruto': pesaje_bruto_dict.get('peso_bruto'),
-                    'fecha_pesaje': pesaje_bruto_dict.get('fecha_pesaje'),
-                    'hora_pesaje': pesaje_bruto_dict.get('hora_pesaje'),
-                    'tipo_pesaje': pesaje_bruto_dict.get('tipo_pesaje'),
-                    'codigo_guia_transporte_sap': pesaje_bruto_dict.get('codigo_guia_transporte_sap')
-                })
+            cursor.execute(query, (codigo_guia,))
+            row = cursor.fetchone()
+
+            if not row:
+                logger.warning(f"No entry_record found for codigo_guia: {codigo_guia}")
+                return None
+
+            # Convert the row to a dictionary
+            datos_guia = dict(row)
+            logger.info(f"Datos combinados obtenidos para guía {codigo_guia}")
+
+            # --- Data Cleaning and Structuring ---
             
-            # Obtener datos de pesaje neto
-            cursor.execute("""
-                SELECT * FROM pesajes_neto 
-                WHERE codigo_guia = ?
-            """, (codigo_guia,))
-            pesaje_neto = cursor.fetchone()
-            if pesaje_neto:
-                pesaje_neto_dict = dict(pesaje_neto)
-                # Campos específicos del pesaje neto
-                datos_guia.update({
-                    'peso_tara': pesaje_neto_dict.get('peso_tara'),
-                    'peso_neto': pesaje_neto_dict.get('peso_neto'),
-                    'peso_producto': pesaje_neto_dict.get('peso_producto'),
-                    'fecha_pesaje_neto': pesaje_neto_dict.get('fecha_pesaje'),
-                    'hora_pesaje_neto': pesaje_neto_dict.get('hora_pesaje'),
-                    'tipo_pesaje_neto': pesaje_neto_dict.get('tipo_pesaje_neto'),
-                    'comentarios_neto': pesaje_neto_dict.get('comentarios'),
-                    'respuesta_sap': pesaje_neto_dict.get('respuesta_sap')
-                })
+            # Ensure provider fields are present and consistent
+            datos_guia['codigo_proveedor'] = datos_guia.get('codigo_proveedor') or datos_guia.get('codigo') or (codigo_guia.split('_')[0] if '_' in codigo_guia else codigo_guia)
+            datos_guia['nombre_proveedor'] = datos_guia.get('nombre_proveedor') or datos_guia.get('nombre_agricultor') or datos_guia.get('nombre') or 'No disponible'
+            datos_guia['racimos'] = datos_guia.get('cantidad_racimos') or datos_guia.get('racimos') # Prioritize cantidad_racimos
+            if not datos_guia.get('racimos'): # If still None or empty, set default
+                datos_guia['racimos'] = 'No registrado' # Set default if missing
+
+            # Handle potentially missing values from JOINs with defaults
+            datos_guia['peso_bruto'] = datos_guia.get('peso_bruto')
+            datos_guia['fecha_pesaje'] = datos_guia.get('fecha_pesaje')
+            datos_guia['hora_pesaje'] = datos_guia.get('hora_pesaje')
+            datos_guia['tipo_pesaje'] = datos_guia.get('tipo_pesaje')
+            datos_guia['codigo_guia_transporte_sap'] = datos_guia.get('codigo_guia_transporte_sap') or datos_guia.get('guia_sap')
+
+            datos_guia['peso_tara'] = datos_guia.get('peso_tara')
+            datos_guia['peso_neto'] = datos_guia.get('peso_neto')
+            datos_guia['peso_producto'] = datos_guia.get('peso_producto')
+            datos_guia['fecha_pesaje_neto'] = datos_guia.get('fecha_pesaje_neto_db') # Use aliased name
+            datos_guia['hora_pesaje_neto'] = datos_guia.get('hora_pesaje_neto_db') # Use aliased name
+            datos_guia['tipo_pesaje_neto'] = datos_guia.get('tipo_pesaje_neto')
+            datos_guia['comentarios_neto'] = datos_guia.get('comentarios_neto')
+            datos_guia['respuesta_sap'] = datos_guia.get('respuesta_sap')
+
+            datos_guia['fecha_salida'] = datos_guia.get('fecha_salida')
+            datos_guia['hora_salida'] = datos_guia.get('hora_salida')
+            datos_guia['nota_salida'] = datos_guia.get('nota_salida')
+            datos_guia['comentarios_salida'] = datos_guia.get('comentarios_salida')
+
+            # Process classification data (manual)
+            manual_data_str = datos_guia.get('clasificacion_manual')
+            manual_data = None
+            if manual_data_str:
+                try:
+                    manual_data = json.loads(manual_data_str)
+                except json.JSONDecodeError:
+                    manual_data = {}
+            datos_guia['clasificacion_manual'] = {
+                'verde': manual_data.get('verdes') if manual_data else None,
+                'sobremaduro': manual_data.get('sobremaduros') if manual_data else None,
+                'danio_corona': manual_data.get('danio_corona') if manual_data else None,
+                'pendunculo_largo': manual_data.get('pendunculo_largo') if manual_data else None,
+                'podrido': manual_data.get('podridos') if manual_data else None
+            }
+
+            # Process classification data (automatic)
+            auto_data_str = datos_guia.get('clasificacion_automatica')
+            auto_data = None
+            if auto_data_str:
+                try:
+                    auto_data = json.loads(auto_data_str)
+                except json.JSONDecodeError:
+                    auto_data = {}
+            datos_guia['clasificacion_automatica'] = {
+                'verde': auto_data.get('verdes', {}).get('porcentaje') if auto_data else None,
+                'sobremaduro': auto_data.get('sobremaduros', {}).get('porcentaje') if auto_data else None,
+                'danio_corona': auto_data.get('danio_corona', {}).get('porcentaje') if auto_data else None,
+                'pendunculo_largo': auto_data.get('pendunculo_largo', {}).get('porcentaje') if auto_data else None,
+                'podrido': auto_data.get('podridos', {}).get('porcentaje') if auto_data else None
+            }
+            # Add classification date/time if available
+            datos_guia['fecha_clasificacion'] = datos_guia.get('fecha_clasificacion')
+            datos_guia['hora_clasificacion'] = datos_guia.get('hora_clasificacion')
             
-            # Obtener datos de clasificación
-            cursor.execute("""
-                SELECT * FROM clasificaciones 
-                WHERE codigo_guia = ?
-            """, (codigo_guia,))
-            clasificacion = cursor.fetchone()
-            if clasificacion:
-                clasificacion_dict = dict(clasificacion)
-                logger.info(f"[DEBUG] Raw classification data from DB for {codigo_guia}: {clasificacion_dict}")
-                
-                # Estructurar datos de clasificación manual - Parseando JSON
-                manual_data_str = clasificacion_dict.get('clasificacion_manual')
-                manual_data = None
-                if manual_data_str:
-                    try:
-                        manual_data = json.loads(manual_data_str)
-                    except json.JSONDecodeError as e:
-                        logger.error(f"Error decoding clasificacion_manual JSON for {codigo_guia}: {e}")
-                
-                datos_guia['clasificacion_manual'] = {
-                    'verde': manual_data.get('verdes') if manual_data else None,
-                    'sobremaduro': manual_data.get('sobremaduros') if manual_data else None,
-                    'danio_corona': manual_data.get('danio_corona') if manual_data else None,
-                    'pendunculo_largo': manual_data.get('pendunculo_largo') if manual_data else None,
-                    'podrido': manual_data.get('podridos') if manual_data else None
-                }
-                
-                # Estructurar datos de clasificación automática - Parseando JSON
-                auto_data_str = clasificacion_dict.get('clasificacion_automatica')
-                auto_data = None
-                if auto_data_str:
-                    try:
-                        auto_data = json.loads(auto_data_str)
-                    except json.JSONDecodeError as e:
-                        logger.error(f"Error decoding clasificacion_automatica JSON for {codigo_guia}: {e}")
-                
-                datos_guia['clasificacion_automatica'] = {
-                    'verde': auto_data.get('verdes', {}).get('porcentaje') if auto_data else None,
-                    'sobremaduro': auto_data.get('sobremaduros', {}).get('porcentaje') if auto_data else None,
-                    'danio_corona': auto_data.get('danio_corona', {}).get('porcentaje') if auto_data else None,
-                    'pendunculo_largo': auto_data.get('pendunculo_largo', {}).get('porcentaje') if auto_data else None,
-                    'podrido': auto_data.get('podridos', {}).get('porcentaje') if auto_data else None
-                }
-                # Agregar fecha y hora de clasificación
-                datos_guia['fecha_clasificacion'] = clasificacion_dict.get('fecha_clasificacion')
-                datos_guia['hora_clasificacion'] = clasificacion_dict.get('hora_clasificacion')
+            # Final check for essential fields, setting defaults if needed
+            essential_fields = ['placa', 'transportador', 'acarreo', 'cargo']
+            for field in essential_fields:
+                if not datos_guia.get(field):
+                    datos_guia[field] = 'No disponible'
             
-            # Obtener datos de salida
-            cursor.execute("""
-                SELECT * FROM salidas 
-                WHERE codigo_guia = ?
-            """, (codigo_guia,))
-            salida = cursor.fetchone()
-            if salida:
-                salida_dict = dict(salida)
-                datos_guia.update({
-                    'fecha_salida': salida_dict.get('fecha_salida'),
-                    'hora_salida': salida_dict.get('hora_salida'),
-                    'nota_salida': salida_dict.get('nota_salida'),
-                    'comentarios_salida': salida_dict.get('comentarios_salida')
-                })
-            
-            # Asegurar que los campos del proveedor estén presentes
-            if not datos_guia.get('codigo_proveedor'):
-                datos_guia['codigo_proveedor'] = codigo_guia.split('_')[0] if '_' in codigo_guia else codigo_guia
-            
+            # Log the final combined data for debugging
+            # Be careful logging potentially sensitive data in production
+            # logger.debug(f"Final combined datos_guia for {codigo_guia}: {datos_guia}")
+
             return datos_guia
+
+        except KeyError as ke:
+            logger.error(f"Configuration error in get_datos_guia: {ke}. Ensure TIQUETES_DB_PATH is set.")
+            return None
+        except sqlite3.Error as e:
+            logger.error(f"Database error getting data for guide {codigo_guia}: {str(e)}")
+            logger.error(traceback.format_exc())
+            return None
         except Exception as e:
-            logger.error(f"Error obteniendo datos de guía {codigo_guia}: {str(e)}")
+            logger.error(f"Unexpected error getting data for guide {codigo_guia}: {str(e)}")
+            logger.error(traceback.format_exc())
             return None
         finally:
             if conn:
