@@ -1149,10 +1149,12 @@ def ver_resultados_pesaje(codigo_guia):
         logger.debug(f"Initial racimos value for {codigo_guia} from datos_guia: {racimos_from_db}")
 
         try:
-            conn_racimos = sqlite3.connect(DB_PATH)
+            # Usar la ruta configurada en la aplicación Flask para buscar racimos
+            db_path_racimos = current_app.config['TIQUETES_DB_PATH']
+            conn_racimos = sqlite3.connect(db_path_racimos) # Use the correct path variable
             cursor_racimos = conn_racimos.cursor()
             # Fetch 'cantidad_racimos' from entry_records using the specific codigo_guia
-            logger.info(f"Querying racimos for codigo_guia: {codigo_guia}")
+            logger.info(f"Querying racimos in '{db_path_racimos}' for codigo_guia: {codigo_guia}") # Update log message
             cursor_racimos.execute("SELECT cantidad_racimos FROM entry_records WHERE codigo_guia = ?", (codigo_guia,))
             racimos_result = cursor_racimos.fetchone()
             conn_racimos.close()
