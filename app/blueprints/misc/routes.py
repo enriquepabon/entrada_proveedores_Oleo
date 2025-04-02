@@ -11,13 +11,17 @@ import glob
 from werkzeug.utils import secure_filename
 from app.blueprints.misc import bp
 from app.utils.common import CommonUtils as Utils
-from app.utils.common import standardize_template_data, convert_to_bogota_time
+from app.utils.common import standardize_template_data
 import time
 import sqlite3
 import base64
 import qrcode
 from app.utils.image_processing import process_plate_image
 from app.utils.common import get_estado_guia
+import pytz
+from config import app as app_config
+from config import Config, DevelopmentConfig, ProductionConfig
+from app.utils.pdf_generator import PDFGenerator
 
 # Database path (assuming it's at the workspace root)
 DB_PATH = 'tiquetes.db'
@@ -962,9 +966,6 @@ def ver_guia_centralizada(codigo_guia):
         # Inicializar Utils dentro del contexto de la aplicación
         utils = current_app.config.get('utils', Utils(current_app))
         
-        # Limpiar el código de guía si tiene un sufijo _vX
-        # codigo_guia_base = re.sub(r'_v\d+$', '', codigo_guia)
-        
         # Obtener datos de la guía utilizando el código original
         datos_guia = utils.get_datos_guia(codigo_guia)
         if not datos_guia:
@@ -1011,8 +1012,8 @@ def ver_guia_centralizada(codigo_guia):
             'estado_info': estado_info,
             'es_pepa': es_pepa,
             'qr_url': qr_url,
-            'now_timestamp': now_timestamp,
-            'convert_to_bogota_time': convert_to_bogota_time # Pasar la función
+            'now_timestamp': now_timestamp
+            # Ya no pasamos la función aquí
         }
         
         return render_template('guia_centralizada.html', **context)
