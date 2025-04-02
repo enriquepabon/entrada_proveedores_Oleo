@@ -1,0 +1,365 @@
+<!-- templates/index.html -->
+{% extends 'base.html' %}
+
+{% block title %}Registro de Entrada Proveedores Extractora Maria la Baja{% endblock %}
+
+{% block extra_css %}
+<style>
+    .main-container {
+        max-width: 800px;
+        margin: 40px auto;
+        padding: 20px;
+    }
+    .upload-section {
+        background-color: white;
+        border-radius: 8px;
+        padding: 30px;
+        border: 1px solid #dee2e6;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .logo-container {
+        text-align: center;
+        margin-bottom: 20px;
+    }
+    .logo-container img {
+        max-height: 200px;
+        margin-bottom: 5px;
+    }
+    .back-home {
+        text-align: center;
+        margin-top: 30px;
+    }
+    /* Estilos para la cámara */
+    .camera-container {
+        position: relative;
+        width: 100%;
+        max-width: 640px;
+        margin: 0 auto;
+        display: none;
+    }
+    .camera-preview {
+        width: 100%;
+        border-radius: 8px;
+    }
+    .camera-controls {
+        margin-top: 10px;
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+    }
+    .mirror-control {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: rgba(255,255,255,0.8);
+        padding: 5px;
+        border-radius: 4px;
+        z-index: 100;
+    }
+    .camera-button {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        margin-left: 10px;
+    }
+    .preview-container {
+        position: relative;
+        width: 100%;
+        margin-top: 10px;
+    }
+    .retake-button {
+        position: absolute;
+        bottom: 10px;
+        right: 10px;
+        background: rgba(255,255,255,0.8);
+        border: none;
+        padding: 5px 10px;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="main-container">
+    <div class="logo-container">
+        <img src="{{ url_for('static', filename='images/logo.png') }}" 
+             alt="Logo Extractora Maria la Baja" 
+             class="img-fluid">
+        <h2 class="mb-2">Registro de Entrada Proveedores</h2>
+        <h4 class="text-center mb-4">Extractora Maria la Baja</h4>
+    </div>
+    
+    <div class="upload-section">
+        <form id="uploadForm" method="POST" action="{{ url_for('misc.upload_file') }}" enctype="multipart/form-data">
+            <div class="mb-3">
+                <label for="imageInput" class="form-label">Seleccionar imagen del tiquete:</label>
+                <div class="input-group">
+                    <input type="file" class="form-control" id="imageInput" name="file" accept="image/*" required>
+                    <button type="button" class="btn btn-secondary camera-button" id="openCameraBtn">
+                        <i class="fas fa-camera"></i> Usar Cámara
+                    </button>
+                </div>
+            </div>
+            <div class="camera-container" id="tiqueteCameraContainer">
+                <video id="tiqueteVideo" class="camera-preview" autoplay playsinline></video>
+                <div class="mirror-control">
+                    <input type="checkbox" id="tiqueteMirror" checked>
+                    <label for="tiqueteMirror">Espejo</label>
+                </div>
+                <div class="camera-controls">
+                    <button type="button" class="btn btn-primary" id="captureTiqueteBtn">
+                        <i class="fas fa-camera"></i> Capturar
+                    </button>
+                    <button type="button" class="btn btn-secondary" id="closeTiqueteCameraBtn">
+                        <i class="fas fa-times"></i> Cerrar
+                    </button>
+                </div>
+            </div>
+            <div class="mb-3 preview-container">
+                <img id="previewImage" class="preview-image hidden">
+                <button type="button" class="btn btn-secondary retake-button hidden" id="retakeTiqueteBtn">
+                    <i class="fas fa-redo"></i> Volver a tomar
+                </button>
+            </div>
+            
+            <!-- Sección para la imagen de la placa -->
+            <div class="mb-3">
+                <label for="plateImageInput" class="form-label">Seleccionar imagen de la placa (opcional):</label>
+                <div class="input-group">
+                    <input type="file" class="form-control" id="plateImageInput" name="plate_file" accept="image/*">
+                    <button type="button" class="btn btn-secondary camera-button" id="openPlateCameraBtn">
+                        <i class="fas fa-camera"></i> Usar Cámara
+                    </button>
+                </div>
+            </div>
+            <div class="camera-container" id="plateCameraContainer">
+                <video id="plateVideo" class="camera-preview" autoplay playsinline></video>
+                <div class="mirror-control">
+                    <input type="checkbox" id="plateMirror" checked>
+                    <label for="plateMirror">Espejo</label>
+                </div>
+                <div class="camera-controls">
+                    <button type="button" class="btn btn-primary" id="capturePlateBtn">
+                        <i class="fas fa-camera"></i> Capturar
+                    </button>
+                    <button type="button" class="btn btn-secondary" id="closePlateCameraBtn">
+                        <i class="fas fa-times"></i> Cerrar
+                    </button>
+                </div>
+            </div>
+            <div class="mb-3 preview-container">
+                <img id="previewPlateImage" class="preview-image hidden">
+                <button type="button" class="btn btn-secondary retake-button hidden" id="retakePlateBtn">
+                    <i class="fas fa-redo"></i> Volver a tomar
+                </button>
+            </div>
+
+            <div class="d-grid">
+                <button type="submit" class="btn btn-primary">Procesar Imágenes</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Botón para volver al home -->
+    <div class="back-home">
+        <a href="{{ url_for('entrada.home') }}" class="btn btn-outline-primary">
+            <i class="fas fa-home me-2"></i>Volver al Panel Principal
+        </a>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Función para mostrar/ocultar el overlay de carga
+    function mostrarCarga(mostrar) {
+        const overlay = document.getElementById('loadingOverlay');
+        overlay.style.display = mostrar ? 'flex' : 'none';
+    }
+
+    // Clase para manejar la cámara
+    class CameraHandler {
+        constructor(videoId, containerId, mirrorId, previewImageId, retakeButtonId) {
+            this.video = document.getElementById(videoId);
+            this.container = document.getElementById(containerId);
+            this.mirrorCheckbox = document.getElementById(mirrorId);
+            this.previewImage = document.getElementById(previewImageId);
+            this.retakeButton = document.getElementById(retakeButtonId);
+            this.stream = null;
+            this.mirrorState = localStorage.getItem(mirrorId) === 'true' || true;
+            this.mirrorCheckbox.checked = this.mirrorState;
+
+            // Aplicar estado del espejo desde localStorage
+            this.mirrorCheckbox.addEventListener('change', () => {
+                this.mirrorState = this.mirrorCheckbox.checked;
+                localStorage.setItem(mirrorId, this.mirrorState);
+                this.updateMirror();
+            });
+        }
+
+        async startCamera() {
+            try {
+                this.stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: 'environment'
+                    } 
+                });
+                this.video.srcObject = this.stream;
+                this.container.style.display = 'block';
+                this.updateMirror();
+                this.previewImage.classList.add('hidden');
+                this.retakeButton.classList.add('hidden');
+            } catch (err) {
+                if (err.name === 'NotAllowedError') {
+                    alert('Debes autorizar el uso de la cámara para utilizar esta función.');
+                } else if (err.name === 'NotFoundError') {
+                    alert('No se detectó ninguna cámara en el dispositivo.');
+                } else {
+                    alert('Error al acceder a la cámara: ' + err.message);
+                }
+            }
+        }
+
+        stopCamera() {
+            if (this.stream) {
+                this.stream.getTracks().forEach(track => track.stop());
+                this.stream = null;
+            }
+            this.container.style.display = 'none';
+            this.video.srcObject = null;
+        }
+
+        updateMirror() {
+            this.video.style.transform = this.mirrorState ? 'scaleX(-1)' : 'scaleX(1)';
+        }
+
+        captureImage() {
+            const canvas = document.createElement('canvas');
+            canvas.width = this.video.videoWidth;
+            canvas.height = this.video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            
+            // Aplicar el efecto espejo si está activado
+            if (this.mirrorState) {
+                ctx.translate(canvas.width, 0);
+                ctx.scale(-1, 1);
+            }
+            
+            ctx.drawImage(this.video, 0, 0);
+            
+            // Convertir a blob para el formulario
+            canvas.toBlob(blob => {
+                const file = new File([blob], "camera_capture.jpg", { type: "image/jpeg" });
+                const dataTransfer = new DataTransfer();
+                dataTransfer.items.add(file);
+                
+                // Determinar qué input actualizar basado en el ID del preview
+                const inputId = this.previewImage.id === 'previewImage' ? 'imageInput' : 'plateImageInput';
+                document.getElementById(inputId).files = dataTransfer.files;
+                
+                // Mostrar preview y botón de retomar
+                this.previewImage.src = canvas.toDataURL('image/jpeg');
+                this.previewImage.classList.remove('hidden');
+                this.retakeButton.classList.remove('hidden');
+            }, 'image/jpeg', 0.8);
+            
+            this.stopCamera();
+        }
+    }
+
+    // Inicializar manejadores de cámara
+    const tiqueteCamera = new CameraHandler(
+        'tiqueteVideo',
+        'tiqueteCameraContainer',
+        'tiqueteMirror',
+        'previewImage',
+        'retakeTiqueteBtn'
+    );
+
+    const plateCamera = new CameraHandler(
+        'plateVideo',
+        'plateCameraContainer',
+        'plateMirror',
+        'previewPlateImage',
+        'retakePlateBtn'
+    );
+
+    // Event Listeners para tiquete
+    document.getElementById('openCameraBtn').addEventListener('click', () => tiqueteCamera.startCamera());
+    document.getElementById('closeTiqueteCameraBtn').addEventListener('click', () => tiqueteCamera.stopCamera());
+    document.getElementById('captureTiqueteBtn').addEventListener('click', () => tiqueteCamera.captureImage());
+    document.getElementById('retakeTiqueteBtn').addEventListener('click', () => tiqueteCamera.startCamera());
+
+    // Event Listeners para placa
+    document.getElementById('openPlateCameraBtn').addEventListener('click', () => plateCamera.startCamera());
+    document.getElementById('closePlateCameraBtn').addEventListener('click', () => plateCamera.stopCamera());
+    document.getElementById('capturePlateBtn').addEventListener('click', () => plateCamera.captureImage());
+    document.getElementById('retakePlateBtn').addEventListener('click', () => plateCamera.startCamera());
+
+    // Preview de imagen del tiquete para archivo
+    document.getElementById('imageInput').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const preview = document.getElementById('previewImage');
+                preview.src = e.target.result;
+                preview.classList.remove('hidden');
+                document.getElementById('retakeTiqueteBtn').classList.add('hidden');
+            }
+            reader.readAsDataURL(file);
+        }
+    });
+
+    // Preview de imagen de la placa para archivo
+    document.getElementById('plateImageInput').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const preview = document.getElementById('previewPlateImage');
+                preview.src = e.target.result;
+                preview.classList.remove('hidden');
+                document.getElementById('retakePlateBtn').classList.add('hidden');
+            }
+            reader.readAsDataURL(file);
+        }
+    });
+
+    // Manejar el envío del formulario
+    document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const fileInput = document.getElementById('imageInput');
+        if (!fileInput.files[0]) {
+            alert('Por favor seleccione una imagen del tiquete');
+            return;
+        }
+
+        mostrarCarga(true);
+        const formData = new FormData(this);
+
+        try {
+            const uploadResponse = await fetch('{{ url_for("misc.upload_file") }}', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (uploadResponse.redirected) {
+                window.location.href = uploadResponse.url;
+            } else {
+                const data = await uploadResponse.json();
+                if (!data.success) {
+                    throw new Error(data.message || 'Error procesando la imagen');
+                }
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Error procesando la imagen: ' + error.message);
+            mostrarCarga(false);
+        }
+    });
+</script>
+{% endblock %}

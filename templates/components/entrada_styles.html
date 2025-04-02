@@ -1,0 +1,90 @@
+{% macro entrada_styles() %}
+<style>
+    .tiquete-image {
+        max-width: 100%;
+        max-height: 300px;
+        border-radius: 5px;
+        margin: 10px 0;
+        object-fit: contain;
+        border: 1px solid #dee2e6;
+    }
+    .processing-status {
+        display: flex;
+        padding: 2rem;
+        border-radius: 10px;
+        margin-bottom: 1.5rem;
+    }
+    .processing-status.processing {
+        background-color: #e9f5fe;
+        border: 1px solid #c2e5fe;
+    }
+    .processing-status.success {
+        background-color: #e8f8f0;
+        border: 1px solid #c2e5d5;
+    }
+    .processing-status.error {
+        background-color: #feebee;
+        border: 1px solid #f8c9cf;
+    }
+    .status-icon {
+        font-size: 3rem;
+        margin-right: 1.5rem;
+    }
+    .processing-status.processing .status-icon {
+        color: #0d6efd;
+    }
+    .processing-status.success .status-icon {
+        color: #198754;
+    }
+    .processing-status.error .status-icon {
+        color: #dc3545;
+    }
+    .status-content {
+        flex: 1;
+    }
+    .status-title {
+        margin-bottom: 0.5rem;
+        font-size: 1.25rem;
+    }
+    .status-message {
+        margin-bottom: 1rem;
+    }
+    .progress {
+        height: 0.75rem;
+        background-color: rgba(255, 255, 255, 0.5);
+    }
+    .upload-container {
+        border: 2px dashed #dee2e6;
+        border-radius: 10px;
+        padding: 2rem;
+        text-align: center;
+        background-color: #f8f9fa;
+        transition: all 0.3s ease;
+    }
+    .upload-container:hover,
+    .upload-container.dragover {
+        border-color: #0d6efd;
+        background-color: #e9f5fe;
+    }
+    .upload-icon {
+        font-size: 3rem;
+        color: #6c757d;
+        margin-bottom: 1rem;
+    }
+    .upload-container:hover .upload-icon,
+    .upload-container.dragover .upload-icon {
+        color: #0d6efd;
+    }
+    .upload-title {
+        font-size: 1.25rem;
+        margin-bottom: 0.5rem;
+    }
+    .upload-info {
+        color: #6c757d;
+        margin-bottom: 1rem;
+    }
+    .file-input {
+        display: none;
+    }
+</style>
+{% endmacro %} 

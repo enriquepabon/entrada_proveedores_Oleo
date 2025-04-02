@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pesaje Neto</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .info-section {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .weighing-section {
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .preview-image {
+            max-width: 100%;
+            height: auto;
+            margin-top: 15px;
+            border-radius: 4px;
+        }
+        #loadingOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.9);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .hidden {
+            display: none;
+        }
+        .verification-box {
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+        }
+        .verification-success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+        }
+        .verification-fail {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            color: white;
+        }
+        .badge-success {
+            background-color: #28a745;
+        }
+        .badge-danger {
+            background-color: #dc3545;
+        }
+        .photo-gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .photo-preview {
+            position: relative;
+            height: 150px;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .photo-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .remove-photo {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: rgba(255, 255, 255, 0.7);
+            border-radius: 50%;
+            width: 25px;
+            height: 25px;
+            text-align: center;
+            line-height: 25px;
+            cursor: pointer;
+        }
+        .response-section {
+            background-color: #eef6ff;
+            border: 1px solid #cce5ff;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+        .validation-item {
+            padding: 8px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+        }
+        .validation-success {
+            background-color: #d4edda;
+            border-left: 4px solid #28a745;
+        }
+        .validation-error {
+            background-color: #f8d7da;
+            border-left: 4px solid #dc3545;
+        }
+        .weight-display {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #0d6efd;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('misc.upload_file') }}">
+                <i class="fas fa-palm-tree me-2"></i>Oleoflores - Extractora MLB
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" 
+                    aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('misc.upload_file') }}">
+                            <i class="fas fa-home me-1"></i>Inicio
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('entrada.lista_entradas') }}">
+                            <i class="fas fa-clipboard-list me-1"></i>Listado de Entradas
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('entrada.nueva_entrada') }}">
+                            <i class="fas fa-plus-circle me-1"></i>Nueva Entrada
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Overlay de carga -->
+    <div id="loadingOverlay">
+        <div class="text-center">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Procesando...</span>
+            </div>
+            <h4 class="mt-3">Procesando pesaje neto...</h4>
+        </div>
+    </div>
+
+    <div class="container py-4">
+        <h2 class="text-center mb-2">Pesaje Neto (Producto)</h2>
+        <h4 class="text-center mb-2">{{ datos.codigo_guia }}</h4>
+        <h4 class="text-center mb-4">{{ datos.nombre_proveedor|default(datos.nombre, true) }}</h4>
+        
+        <!-- Información General -->
+        <div class="info-section">
+            <div class="row">
+                <div class="col-md-6">
+                    <p><strong>Código:</strong> {{ datos.codigo_proveedor|default(datos.codigo, true) }}</p>
+                    <p><strong>Guía:</strong> {{ datos.codigo_guia }}</p>
+                    <p><strong>Proveedor:</strong> {{ datos.nombre_proveedor|default(datos.nombre_agricultor|default(datos.nombre, true), true) }}</p>
+                    <p><strong>Cantidad de Racimos:</strong> {{ datos.cantidad_racimos }}</p>
+                    <p><strong>Peso Bruto:</strong> {{ datos.peso_bruto }} kg</p>
+                </div>
+                <div class="col-md-6">
+                    <p><strong>Tipo de Pesaje Bruto:</strong> {{ datos.tipo_pesaje }}</p>
+                    <p><strong>Fecha de Registro:</strong> {{ datos.fecha_registro }}</p>
+                    <p><strong>Hora de Registro:</strong> {{ datos.hora_registro }}</p>
+                    <p><strong>Transportador:</strong> {{ datos.transportador|default(datos.transportista, true) }}</p>
+                    <p><strong>Placa:</strong> {{ datos.placa }}</p>
+                    <p><strong>Guía Transporte SAP:</strong> {{ datos.codigo_guia_transporte_sap|default('No disponible', true) }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sección de pesaje directo con webhook -->
+        <div id="seccionDirecta" class="weighing-section mb-4">
+            <h4 class="mb-3">Pesaje Neto con Sistema SAP</h4>
+            <div id="solicitarPesajeSection">
+                <p>Haga clic en el botón para obtener los datos de pesaje desde el sistema SAP:</p>
+                <button type="button" class="btn btn-primary" id="btnConsultarSAP">
+                    <i class="fas fa-sync me-2"></i>Consultar Datos de Pesaje SAP
+                </button>
+            </div>
+
+            <div id="respuestaSAPSection" class="response-section hidden">
+                <h5 class="mb-3">Respuesta del Sistema SAP</h5>
+                <div id="validacionesContainer">
+                    <!-- Aquí se mostrarán las validaciones -->
+                </div>
+                
+                <div class="row mt-4">
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label class="form-label">Peso Tara:</label>
+                            <div class="weight-display" id="pesoTaraDisplay">0 kg</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label class="form-label">Peso Neto:</label>
+                            <div class="weight-display" id="pesoNetoDisplay">0 kg</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label class="form-label">Peso Producto:</label>
+                            <div class="weight-display" id="pesoProductoDisplay">0 kg</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label class="form-label">Fecha y Hora:</label>
+                            <div id="fechaHoraDisplay">-</div>
+                        </div>
+                    </div>
+            </div>
+        </div>
+
+            <!-- Sección para verificación de placa -->
+            <div class="mb-3 mt-4 hidden" id="verificacionPlacaSection">
+                <h5 class="mb-2">Verificación de Placa</h5>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group mb-3">
+                            <label class="form-label">Foto de la placa:</label>
+                            <input type="file" class="form-control" id="placaFoto" accept="image/*" capture="environment">
+                            <img id="previewPlacaImage" class="preview-image hidden" style="max-height: 150px;">
+                </div>
+                </div>
+                    <div class="col-md-6">
+                        <div class="form-check mt-3">
+                            <input class="form-check-input" type="checkbox" id="verificarPlaca" disabled>
+                            <label class="form-check-label" for="verificarPlaca">
+                                Verificar placa en la imagen
+                            </label>
+                </div>
+                        <button type="button" class="btn btn-outline-secondary mt-2" id="btnVerificarPlaca" disabled>
+                            <i class="fas fa-search me-2"></i>Verificar Placa
+                </button>
+        </div>
+                </div>
+                
+                <div id="resultadoVerificacion" class="verification-box hidden">
+                    <div class="row mb-2">
+                        <div class="col-md-5"><strong>Placa Registrada:</strong></div>
+                        <div class="col-md-7">{{ datos.placa }}</div>
+                    </div>
+                    <div class="row mb-2">
+                        <div class="col-md-5"><strong>Placa Detectada:</strong></div>
+                        <div class="col-md-7" id="placaDetectada">...</div>
+                    </div>
+                    <div class="text-center mt-3">
+                        <strong>Estado: </strong>
+                        <span class="status-badge" id="estadoVerificacion">...</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Sección para fotos adicionales -->
+            <div class="mb-3 mt-4 hidden" id="fotosAdicionalesSection">
+                <h5 class="mb-2">Fotos de Soporte (Opcional)</h5>
+                <input type="file" class="form-control" id="fotosAdicionales" accept="image/*" multiple>
+                <div id="galeriaFotos" class="photo-gallery mt-2"></div>
+                </div>
+
+            <!-- Sección para comentarios -->
+            <div class="mb-3 mt-4 hidden" id="comentariosSection">
+                <h5 class="mb-2">Comentarios (Opcional)</h5>
+                <textarea class="form-control" id="comentariosNeto" rows="3"></textarea>
+                </div>
+
+            <!-- Botón para guardar el pesaje -->
+            <div class="mt-4 text-center hidden" id="guardarPesajeSection">
+                <button type="button" class="btn btn-success btn-lg" id="btnGuardarPesaje">
+                    <i class="fas fa-save me-2"></i>Guardar Pesaje Neto
+                </button>
+            </div>
+        </div>
+
+        <!-- Botones de acción -->
+        <div class="d-flex justify-content-end gap-2 mt-4">
+            <button onclick="window.location.href=`/ver_resultados_clasificacion/${codigoGuia}`" class="btn btn-secondary">
+                Cancelar
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Variables globales
+        const codigoGuia = "{{ datos.codigo_guia }}";
+        const codigoProveedor = "{{ datos.codigo_proveedor|default(datos.codigo, true) }}";
+        const pesoBruto = "{{ datos.peso_bruto }}";
+        const placaRegistrada = "{{ datos.placa }}";
+        const codigoGuiaTransporteSAP = "{{ datos.codigo_guia_transporte_sap|default('', true) }}";
+        let fotosAdicionales = [];
+        let datosRespuestaSAP = null;
+
+        // Mostrar/ocultar overlay de carga
+        function mostrarCarga(mostrar) {
+            document.getElementById('loadingOverlay').style.display = mostrar ? 'flex' : 'none';
+        }
+
+        // Manejo del botón para consultar datos de SAP
+        document.getElementById('btnConsultarSAP').addEventListener('click', async function() {
+            try {
+                mostrarCarga(true);
+                
+                // Preparar datos para enviar al webhook
+                const datos = {
+                    codigo_proveedor: codigoProveedor,
+                    peso_bruto: pesoBruto,
+                    guia_transporte_sap: codigoGuiaTransporteSAP
+                };
+
+                // Enviar datos al webhook
+                const response = await fetch('https://hook.us2.make.com/b7r4cic76sundyy2nc8f305llik3tprx', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(datos)
+                });
+
+                // Procesar texto de respuesta
+                const responseText = await response.text();
+                console.log('Respuesta del webhook (texto):', responseText);
+                
+                // Parsear texto de respuesta a formato estructurado
+                const respuestaSAP = parseWebhookResponse(responseText);
+                console.log('Respuesta parseada:', respuestaSAP);
+                
+                // Guardar los datos de la respuesta para usarlos después
+                datosRespuestaSAP = respuestaSAP;
+                
+                // Mostrar la sección de respuesta SAP
+                document.getElementById('respuestaSAPSection').classList.remove('hidden');
+                
+                // Mostrar las validaciones
+                const validacionesContainer = document.getElementById('validacionesContainer');
+                validacionesContainer.innerHTML = '';
+                
+                // Añadir validaciones al contenedor
+                if (respuestaSAP.guia_transito_sap) {
+                    agregarValidacion(validacionesContainer, 'Guía Tránsito SAP', respuestaSAP.guia_transito_sap);
+                }
+                
+                if (respuestaSAP.codigo_proveedor) {
+                    agregarValidacion(validacionesContainer, 'Código Proveedor', respuestaSAP.codigo_proveedor);
+                }
+                
+                if (respuestaSAP.peso_bruto) {
+                    agregarValidacion(validacionesContainer, 'Peso Bruto', respuestaSAP.peso_bruto);
+                }
+                
+                // Mostrar la nota si existe
+                if (respuestaSAP.nota) {
+                    const notaDiv = document.createElement('div');
+                    notaDiv.className = 'alert alert-warning mt-3';
+                    notaDiv.innerHTML = `
+                        <strong>Nota:</strong> ${respuestaSAP.nota}
+                    `;
+                    validacionesContainer.appendChild(notaDiv);
+                }
+                
+                // Mostrar los pesos y la fecha/hora
+                if (respuestaSAP.peso_tara_valor) {
+                    document.getElementById('pesoTaraDisplay').textContent = `${respuestaSAP.peso_tara_valor} kg`;
+                } else if (respuestaSAP.peso_tara) {
+                    document.getElementById('pesoTaraDisplay').textContent = respuestaSAP.peso_tara;
+                }
+                
+                if (respuestaSAP.peso_neto_valor) {
+                    document.getElementById('pesoNetoDisplay').textContent = `${respuestaSAP.peso_neto_valor} kg`;
+                } else if (respuestaSAP.peso_neto) {
+                    document.getElementById('pesoNetoDisplay').textContent = respuestaSAP.peso_neto;
+                }
+                
+                // Mostrar el peso del producto si está disponible
+                if (respuestaSAP.peso_producto_valor) {
+                    document.getElementById('pesoProductoDisplay').textContent = `${respuestaSAP.peso_producto_valor} kg`;
+                } else if (respuestaSAP.peso_bruto_valor && respuestaSAP.peso_tara_valor) {
+                    // Calcular el peso del producto si no está disponible pero tenemos bruto y tara
+                    const pesoBruto = parseFloat(respuestaSAP.peso_bruto_valor);
+                    const pesoTara = parseFloat(respuestaSAP.peso_tara_valor);
+                    const pesoProducto = (pesoBruto - pesoTara).toFixed(3);
+                    document.getElementById('pesoProductoDisplay').textContent = `${pesoProducto} kg`;
+                }
+                
+                if (respuestaSAP.fecha && respuestaSAP.hora) {
+                    document.getElementById('fechaHoraDisplay').textContent = `${respuestaSAP.fecha} ${respuestaSAP.hora}`;
+                } else {
+                    // Si no hay fecha y hora específicas, usar la fecha y hora actual
+                    const now = new Date();
+                    const fecha = now.toLocaleDateString('es-ES');
+                    const hora = now.toLocaleTimeString('es-ES');
+                    document.getElementById('fechaHoraDisplay').textContent = `${fecha} ${hora}`;
+                }
+                
+                // Mostrar las secciones adicionales
+                document.getElementById('verificacionPlacaSection').classList.remove('hidden');
+                document.getElementById('fotosAdicionalesSection').classList.remove('hidden');
+                document.getElementById('comentariosSection').classList.remove('hidden');
+                document.getElementById('guardarPesajeSection').classList.remove('hidden');
+                
+                // Habilitar el botón de verificar placa cuando se suba una foto
+                document.getElementById('placaFoto').addEventListener('change', function() {
+                    document.getElementById('btnVerificarPlaca').disabled = !this.files[0];
+                    document.getElementById('verificarPlaca').disabled = !this.files[0];
+                });
+                
+            } catch (error) {
+                console.error('Error al consultar datos SAP:', error);
+                alert('Error al comunicarse con el sistema SAP. Por favor intente nuevamente.');
+            } finally {
+                mostrarCarga(false);
+            }
+        });
+
+        // Función para parsear la respuesta del webhook que viene en texto plano
+        function parseWebhookResponse(text) {
+            const lines = text.trim().split('\n');
+            const result = {
+                fecha: new Date().toLocaleDateString('es-ES'),
+                hora: new Date().toLocaleTimeString('es-ES')
+            };
+
+            for (const line of lines) {
+                if (line.includes('Guia de transporte:')) {
+                    const [_, valueWithStatus] = line.split('Guia de transporte:');
+                    const value = valueWithStatus.trim();
+                    const valido = value.endsWith('Valido');
+                    result.guia_transito_sap = value;
+                } 
+                else if (line.includes('Código Interno:') || line.includes('Codigo Interno:')) {
+                    const [_, valueWithStatus] = line.includes('Código Interno:') ? 
+                                                line.split('Código Interno:') : 
+                                                line.split('Codigo Interno:');
+                    const value = valueWithStatus.trim();
+                    const valido = value.endsWith('Valido');
+                    result.codigo_proveedor = value;
+                }
+                else if (line.includes('Peso Bruto:')) {
+                    const [_, valueWithStatus] = line.split('Peso Bruto:');
+                    const value = valueWithStatus.trim();
+                    const valido = value.endsWith('Valido');
+                    result.peso_bruto = value;
+                    
+                    // Extraer solo el valor numérico para cálculos
+                    const numericMatch = value.match(/(\d+[.,]\d+)/);
+                    if (numericMatch) {
+                        result.peso_bruto_valor = numericMatch[0].replace(',', '.');
+                    }
+                }
+                else if (line.includes('Tara:')) {
+                    const [_, value] = line.split('Tara:');
+                    result.peso_tara = value.trim();
+                    
+                    // Extraer solo el valor numérico para cálculos
+                    const numericMatch = value.match(/(\d+[.,]\d+)/);
+                    if (numericMatch) {
+                        result.peso_tara_valor = numericMatch[0].replace(',', '.');
+                    }
+                }
+                else if (line.includes('Peso Neto:')) {
+                    const [_, value] = line.split('Peso Neto:');
+                    result.peso_neto = value.trim();
+                    
+                    // Extraer solo el valor numérico para cálculos
+                    const numericMatch = value.match(/(\d+[.,]\d+)/);
+                    if (numericMatch) {
+                        result.peso_neto_valor = numericMatch[0].replace(',', '.');
+                    }
+                }
+                else if (line.includes('Nota:')) {
+                    // Extraer la nota
+                    const [_, value] = line.split('Nota:');
+                    result.nota = value.trim();
+                }
+            }
+            
+            // Calcular el peso del producto si tenemos los valores necesarios
+            if (result.peso_bruto_valor && result.peso_tara_valor) {
+                const pesoBruto = parseFloat(result.peso_bruto_valor);
+                const pesoTara = parseFloat(result.peso_tara_valor);
+                result.peso_producto_valor = (pesoBruto - pesoTara).toFixed(3);
+                result.peso_producto = `${result.peso_producto_valor} kg`;
+            }
+            
+            console.log("Datos parseados:", result);
+            return result;
+        }
+
+        // Función para agregar una validación al contenedor
+        function agregarValidacion(container, nombre, texto) {
+            const isSuccess = texto.includes('Valido');
+            const div = document.createElement('div');
+            div.className = `validation-item ${isSuccess ? 'validation-success' : 'validation-error'}`;
+            div.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center">
+                    <strong>${nombre}:</strong>
+                    <span>${texto}</span>
+                </div>
+            `;
+            container.appendChild(div);
+        }
+
+        // Preview de la imagen de placa
+        document.getElementById('placaFoto').addEventListener('change', function(e) {
+            const preview = document.getElementById('previewPlacaImage');
+            const file = e.target.files[0];
+            
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    preview.src = e.target.result;
+                    preview.classList.remove('hidden');
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Manejo del botón de verificar placa
+        document.getElementById('btnVerificarPlaca').addEventListener('click', verificarPlacaEnImagen);
+        
+        // Verificación de placa checkbox
+        document.getElementById('verificarPlaca').addEventListener('change', function() {
+            if (this.checked) {
+                verificarPlacaEnImagen();
+            } else {
+                document.getElementById('resultadoVerificacion').classList.add('hidden');
+            }
+        });
+
+        // Función para verificar la placa en la imagen
+        async function verificarPlacaEnImagen() {
+            try {
+                mostrarCarga(true);
+                const fotoInput = document.getElementById('placaFoto');
+                
+                if (!fotoInput.files[0]) {
+                    alert('Por favor seleccione primero una foto de la placa');
+                    mostrarCarga(false);
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('foto', fotoInput.files[0]);
+                formData.append('placa_registrada', placaRegistrada);
+
+                const response = await fetch('/verificar_placa', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+                const resultadoBox = document.getElementById('resultadoVerificacion');
+                
+                if (data.success) {
+                    document.getElementById('placaDetectada').textContent = data.placa_detectada;
+                    
+                    const estadoBadge = document.getElementById('estadoVerificacion');
+                    if (data.coincide) {
+                        resultadoBox.className = 'verification-box verification-success';
+                        estadoBadge.className = 'status-badge badge-success';
+                        estadoBadge.textContent = 'VERIFICADO ✓';
+                    } else {
+                        resultadoBox.className = 'verification-box verification-fail';
+                        estadoBadge.className = 'status-badge badge-danger';
+                        estadoBadge.textContent = 'NO COINCIDE ✗';
+                    }
+                    
+                    resultadoBox.classList.remove('hidden');
+                    document.getElementById('verificarPlaca').checked = true;
+                } else {
+                    alert(data.message || 'No se pudo verificar la placa en la imagen');
+                    document.getElementById('verificarPlaca').checked = false;
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error verificando la placa');
+                document.getElementById('verificarPlaca').checked = false;
+            } finally {
+                mostrarCarga(false);
+            }
+        }
+
+        // Manejo de fotos adicionales
+        document.getElementById('fotosAdicionales').addEventListener('change', function(e) {
+            const files = e.target.files;
+            const gallery = document.getElementById('galeriaFotos');
+            
+            if (files.length > 0) {
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    const reader = new FileReader();
+                    
+                    reader.onload = function(e) {
+                        const photoIndex = fotosAdicionales.length;
+                        fotosAdicionales.push(file);
+                        
+                        const photoDiv = document.createElement('div');
+                        photoDiv.className = 'photo-preview';
+                        photoDiv.innerHTML = `
+                            <img src="${e.target.result}" alt="Foto adicional">
+                            <div class="remove-photo" data-index="${photoIndex}">
+                                <i class="fas fa-times"></i>
+                            </div>
+                        `;
+                        
+                        gallery.appendChild(photoDiv);
+                        
+                        // Añadir evento para eliminar foto
+                        photoDiv.querySelector('.remove-photo').addEventListener('click', function() {
+                            const index = parseInt(this.getAttribute('data-index'));
+                            fotosAdicionales.splice(index, 1);
+                            gallery.removeChild(photoDiv);
+                            // Actualizar índices de las fotos restantes
+                            document.querySelectorAll('.remove-photo').forEach((elem, i) => {
+                                elem.setAttribute('data-index', i);
+                            });
+                        });
+                    }
+                    
+                    reader.readAsDataURL(file);
+                }
+            }
+        });
+
+        // Guardar pesaje neto
+        document.getElementById('btnGuardarPesaje').addEventListener('click', async function() {
+            try {
+                if (!datosRespuestaSAP) {
+                    alert('No hay datos de pesaje para guardar');
+                    return;
+                }
+
+                mostrarCarga(true);
+                
+                const comentarios = document.getElementById('comentariosNeto').value;
+                const formData = new FormData();
+                
+                // Usar los valores numéricos extraídos directamente
+                let peso_tara = datosRespuestaSAP.peso_tara_valor || '';
+                let peso_neto = datosRespuestaSAP.peso_neto_valor || '';
+                
+                // Si no tenemos los valores numéricos, intentar extraerlos de los textos
+                if (!peso_tara && datosRespuestaSAP.peso_tara) {
+                    const match = datosRespuestaSAP.peso_tara.match(/(\d+[.,]\d+)/);
+                    if (match) {
+                        peso_tara = match[0].replace(',', '.');
+                    }
+                }
+                
+                if (!peso_neto && datosRespuestaSAP.peso_neto) {
+                    const match = datosRespuestaSAP.peso_neto.match(/(\d+[.,]\d+)/);
+                    if (match) {
+                        peso_neto = match[0].replace(',', '.');
+                    }
+                }
+                
+                console.log("Valores a enviar:", {
+                    peso_tara,
+                    peso_neto,
+                    fecha: datosRespuestaSAP.fecha,
+                    hora: datosRespuestaSAP.hora
+                });
+                
+                // Datos básicos
+                formData.append('codigo_guia', codigoGuia);
+                formData.append('peso_tara', peso_tara);
+                formData.append('peso_neto', peso_neto);
+                formData.append('fecha_pesaje', datosRespuestaSAP.fecha || '');
+                formData.append('hora_pesaje', datosRespuestaSAP.hora || '');
+                formData.append('comentarios', comentarios);
+                
+                // Información original de respuesta SAP
+                formData.append('respuesta_sap', JSON.stringify(datosRespuestaSAP));
+                
+                // Añadir información de verificación de placa si existe
+                if (document.getElementById('verificarPlaca').checked) {
+                    const placaDetectada = document.getElementById('placaDetectada').textContent;
+                    const coincide = document.getElementById('estadoVerificacion').textContent.includes('VERIFICADO');
+                    formData.append('verificacion_placa', 'true');
+                    formData.append('placa_detectada', placaDetectada);
+                    formData.append('placa_coincide', coincide ? 'true' : 'false');
+                }
+
+                // Añadir foto de placa
+                const fotoPlacaInput = document.getElementById('placaFoto');
+                if (fotoPlacaInput.files[0]) {
+                    formData.append('foto_placa', fotoPlacaInput.files[0]);
+                }
+                
+                // Añadir fotos adicionales si existen
+                fotosAdicionales.forEach((foto, index) => {
+                    formData.append(`foto_adicional_${index}`, foto);
+                });
+
+                const response = await fetch('/pesaje-neto/registrar_peso_neto_directo', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    window.location.href = data.redirect_url;
+                } else {
+                    alert(data.message || 'Error registrando el peso');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error al guardar el pesaje neto');
+            } finally {
+                mostrarCarga(false);
+            }
+        });
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> 

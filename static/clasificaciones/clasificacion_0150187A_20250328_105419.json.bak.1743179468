@@ -1,0 +1,35 @@
+{
+    "id": "Clasificacion_0150187A_20250328_105419",
+    "codigo_guia": "0150187A_20250328_105419",
+    "codigo_proveedor": "0150187A",
+    "nombre_proveedor": "IND - SANTIAGO POSADA PAUTT",
+    "fecha_registro": "28/03/2025",
+    "hora_registro": "11:30:53",
+    "fecha_clasificacion": "28/03/2025",
+    "hora_clasificacion": "11:30:53",
+    "clasificacion_manual": {
+        "verdes": 1.0,
+        "maduros": 0.0,
+        "sobremaduros": 1.0,
+        "danio_corona": 2.0,
+        "pendunculo_largo": 2.0,
+        "podridos": 3.0
+    },
+    "clasificaciones": {
+        "verdes": 1.0,
+        "maduros": 0.0,
+        "sobremaduros": 1.0,
+        "danio_corona": 2.0,
+        "pendunculo_largo": 2.0,
+        "podridos": 3.0
+    },
+    "observaciones": "",
+    "estado": "completado",
+    "total_racimos_detectados": 9.0,
+    "fotos": [
+        "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/app/../static/uploads/temp_clasificacion/temp_clasificacion_0150187A_20250328_105419_1_1743179453.jpg",
+        "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/app/../static/uploads/temp_clasificacion/temp_clasificacion_0150187A_20250328_105419_2_1743179453.jpg",
+        "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/app/../static/uploads/temp_clasificacion/temp_clasificacion_0150187A_20250328_105419_3_1743179453.jpg"
+    ],
+    "clasificacion_automatica": {}
+}

@@ -1,0 +1,14 @@
+| Campo | Información Original | Registro Sugerido |
+|-------|---------------------|-------------------|
+| Fecha | No visible | [Fecha no disponible] |
+| Nombre del Agricultor | No visible | [Nombre no disponible] |
+| Código | 01500786A | 0150078A |
+| Placa | No visible | [Placa no disponible] |
+| Cantidad de Racimos | Peso Bruto: 10.050 | 10.050 |
+| Se Acarreó | No visible | [No disponible] |
+| Se Cargó | No visible | [No disponible] |
+| Transportador | Banco de Occidente | [No aplica] |
+| Codigo Transportador | No visible | [No disponible] |
+
+Nota de Validación:
+En la imagen se puede ver un código de proveedor "01500786A", pero no está completamente claro si el penúltimo dígito es un "6" o un "7". La estructura debería ser de 7 dígitos numéricos seguidos de una "A" mayúscula. El formato visible parece tener 8 caracteres numéricos antes de la "A", lo cual no coincide con la estructura esperada. Sugiero verificar si el código correcto es "0150078A" u otra variación que cumpla con el formato de 7 dígitos + A.

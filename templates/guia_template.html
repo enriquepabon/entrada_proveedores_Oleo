@@ -386,7 +386,7 @@
                         {% endif %}
                     </div>
                     {% if peso_bruto and not clasificacion_completa %}
-                    <a href="{{ url_for('clasificacion', codigo=codigo) }}" 
+                    <a href="{{ url_for('clasificacion.clasificacion', codigo=codigo_guia) }}" 
                        class="btn-action btn-register">
                         Iniciar Clasificación
                     </a>
@@ -409,7 +409,7 @@
                         {% endif %}
                     </div>
                     {% if clasificacion_completa and not peso_tara %}
-                    <a href="{{ url_for('pesaje_tara', codigo=codigo) }}" 
+                    <a href="{{ url_for('pesaje.pesaje_tara', codigo=codigo) }}" 
                        class="btn-action btn-register">
                         Registrar Tara
                     </a>
@@ -431,7 +431,7 @@
                         {% endif %}
                     </div>
                     {% if peso_tara and not salida_completa %}
-                    <a href="{{ url_for('registro_salida', codigo=codigo) }}" 
+                    <a href="{{ url_for('salida.registro_salida', codigo=codigo) }}" 
                        class="btn-action btn-register">
                         Registrar Salida
                     </a>

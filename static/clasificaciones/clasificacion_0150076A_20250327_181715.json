@@ -1,0 +1,34 @@
+{
+    "id": "Clasificacion_0150076A_20250327_181715",
+    "codigo_guia": "0150076A_20250327_181715",
+    "codigo_proveedor": "0150076A",
+    "nombre_proveedor": "IND - INVERSIONES SALAS Y ARAUJO",
+    "fecha_registro": "27/03/2025",
+    "hora_registro": "18:18:31",
+    "fecha_clasificacion": "27/03/2025",
+    "hora_clasificacion": "18:18:31",
+    "clasificacion_manual": {
+        "verdes": 1,
+        "sobremaduros": 3,
+        "danio_corona": 1,
+        "pendunculo_largo": 3,
+        "podridos": 3
+    },
+    "clasificaciones": {
+        "verdes": 1.0,
+        "maduros": 0.0,
+        "sobremaduros": 3.0,
+        "danio_corona": 1.0,
+        "pendunculo_largo": 3.0,
+        "podridos": 3.0
+    },
+    "observaciones": "",
+    "estado": "completado",
+    "total_racimos_detectados": 11.0,
+    "fotos": [
+        "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/app/../static/uploads/temp_clasificacion/temp_clasificacion_0150076A_20250327_181715_1_1743117511.jpg",
+        "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/app/../static/uploads/temp_clasificacion/temp_clasificacion_0150076A_20250327_181715_2_1743117511.jpg",
+        "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/app/../static/uploads/temp_clasificacion/temp_clasificacion_0150076A_20250327_181715_3_1743117511.jpg"
+    ],
+    "clasificacion_automatica": {}
+}

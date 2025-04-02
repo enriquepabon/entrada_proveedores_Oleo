@@ -1,0 +1,34 @@
+{
+    "id": "Clasificacion_0150294A_20250327_133837",
+    "codigo_guia": "0150294A_20250327_133837",
+    "codigo_proveedor": "0150294A",
+    "nombre_proveedor": "IND - MUCACAL COMERCIALIZADORA DE F",
+    "fecha_registro": "27/03/2025",
+    "hora_registro": "13:57:38",
+    "fecha_clasificacion": "27/03/2025",
+    "hora_clasificacion": "13:57:38",
+    "clasificacion_manual": {
+        "verdes": 1,
+        "sobremaduros": 2,
+        "danio_corona": 1,
+        "pendunculo_largo": 3,
+        "podridos": 2
+    },
+    "clasificaciones": {
+        "verdes": 1.0,
+        "maduros": 0.0,
+        "sobremaduros": 2.0,
+        "danio_corona": 1.0,
+        "pendunculo_largo": 3.0,
+        "podridos": 2.0
+    },
+    "observaciones": "",
+    "estado": "completado",
+    "total_racimos_detectados": 9.0,
+    "fotos": [
+        "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/app/../static/uploads/temp_clasificacion/temp_clasificacion_0150294A_20250327_133837_1_1743101858.jpg",
+        "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/app/../static/uploads/temp_clasificacion/temp_clasificacion_0150294A_20250327_133837_2_1743101858.jpg",
+        "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/app/../static/uploads/temp_clasificacion/temp_clasificacion_0150294A_20250327_133837_3_1743101858.jpg"
+    ],
+    "clasificacion_automatica": {}
+}

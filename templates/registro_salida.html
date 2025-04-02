@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+
+{% block title %}Registro de Salida{% endblock %}
+
+{% block extra_css %}
+<style>
+    .main-container {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+    .info-card {
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .form-card {
+        background-color: #fff;
+        border-radius: 8px;
+        padding: 20px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .timeline {
+        display: flex;
+        justify-content: space-between;
+        margin: 30px 0;
+        position: relative;
+    }
+    .timeline::after {
+        content: '';
+        position: absolute;
+        top: 15px;
+        left: 0;
+        width: 100%;
+        height: 2px;
+        background-color: #dee2e6;
+        z-index: 1;
+    }
+    .step {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: #dee2e6;
+        color: #fff;
+        position: relative;
+        z-index: 2;
+    }
+    .step.completed {
+        background-color: #28a745;
+    }
+    .step.active {
+        background-color: #007bff;
+    }
+    .step-label {
+        position: absolute;
+        top: 35px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 12px;
+        white-space: nowrap;
+    }
+    .info-row {
+        margin-bottom: 10px;
+    }
+    .info-label {
+        font-weight: bold;
+        color: #495057;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="main-container">
+        <h2 class="text-center mb-4">Registro de Salida</h2>
+        <h4 class="text-center mb-4">Guía: {{ datos.codigo_guia }}</h4>
+        
+        <!-- Línea de Tiempo -->
+        <div class="timeline">
+            <div class="step completed">
+                <i class="fas fa-clipboard-check"></i>
+                <div class="step-label">Entrada</div>
+            </div>
+            <div class="step completed">
+                <i class="fas fa-weight"></i>
+                <div class="step-label">Pesaje</div>
+            </div>
+            <div class="step completed">
+                <i class="fas fa-tasks"></i>
+                <div class="step-label">Clasificación</div>
+            </div>
+            <div class="step completed">
+                <i class="fas fa-balance-scale"></i>
+                <div class="step-label">Pesaje Neto</div>
+            </div>
+            <div class="step active">
+                <i class="fas fa-truck"></i>
+                <div class="step-label">Salida</div>
+            </div>
+        </div>
+        
+        <!-- Información de la Guía -->
+        <div class="info-card">
+            <h4 class="mb-3">Información de la Guía</h4>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="info-row">
+                        <span class="info-label">Proveedor:</span> {{ datos.nombre_proveedor }}
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Transportador:</span> {{ datos.transportador }}
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Placa:</span> {{ datos.placa }}
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="info-row">
+                        <span class="info-label">Peso Bruto:</span> {{ datos.peso_bruto }} kg
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Peso Neto:</span> {{ datos.peso_neto }} kg
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Racimos:</span> {{ datos.cantidad_racimos }}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Formulario de Salida -->
+        <div class="form-card">
+            <h4 class="mb-3">Registrar Salida</h4>
+            <form action="{{ url_for('salida.completar_registro_salida') }}" method="POST">
+                <input type="hidden" name="codigo_guia" value="{{ datos.codigo_guia }}">
+                
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="fecha_salida" class="form-label">Fecha de Salida:</label>
+                        <input type="text" class="form-control" id="fecha_salida" name="fecha_salida" value="{{ now_date }}" readonly>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="hora_salida" class="form-label">Hora de Salida:</label>
+                        <input type="text" class="form-control" id="hora_salida" name="hora_salida" value="{{ now_time }}" readonly>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="comentarios" class="form-label">Comentarios (Opcional):</label>
+                    <textarea class="form-control" id="comentarios" name="comentarios" rows="3" placeholder="Ingrese comentarios adicionales"></textarea>
+                </div>
+                
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                    <a href="{{ url_for('misc.ver_guia_centralizada', codigo_guia=datos.codigo_guia) }}" class="btn btn-secondary me-md-2">Cancelar</a>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-check-circle me-2"></i>Registrar Salida
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.getElementById('salidaForm');
+        console.log('Form initialized:', form);
+        
+        // First check if the route exists
+        fetch('/salida/debug_logs')
+            .then(response => response.json())
+            .then(data => {
+                console.log('Debug info:', data);
+                console.log('Available routes:', data.routes);
+                // Check if our route is in the list
+                const hasRoute = data.routes.some(route => route.includes('completar_registro_salida'));
+                console.log('completar_registro_salida route exists:', hasRoute);
+            })
+            .catch(error => {
+                console.error('Error checking routes:', error);
+            });
+        
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            console.log('Form submitted');
+            
+            // Mostrar loader o deshabilitar el botón
+            const submitBtn = form.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Procesando...';
+            
+            try {
+                const data = {
+                    codigo_guia: document.getElementById('codigo_guia').value,
+                    fecha_salida: document.getElementById('fecha_salida').value,
+                    hora_salida: document.getElementById('hora_salida').value,
+                    comentarios: document.getElementById('comentarios').value
+                };
+                console.log('Sending data:', data);
+                
+                // Use hardcoded URL as a test
+                const url = '/salida/completar_registro_salida';
+                console.log('Fetching URL:', url);
+                
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                console.log('Response status:', response.status);
+                const result = await response.json();
+                console.log('Response data:', result);
+                
+                if (result.success) {
+                    console.log('Success, redirecting to:', result.redirect_url);
+                    window.location.href = result.redirect_url;
+                } else {
+                    console.error('Error from server:', result.message);
+                    alert('Error: ' + result.message);
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="fas fa-check-circle me-2"></i>Registrar Salida';
+                }
+            } catch (error) {
+                console.error('Fetch error:', error);
+                alert('Ha ocurrido un error al procesar la solicitud.');
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-check-circle me-2"></i>Registrar Salida';
+            }
+        });
+    });
+</script>
+{% endblock %} 

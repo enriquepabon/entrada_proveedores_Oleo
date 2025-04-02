@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Tiquetes</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #0d6efd;
+            --success-color: #28a745;
+            --warning-color: #ffc107;
+            --light-gray: #f8f9fa;
+            --border-color: #dee2e6;
+        }
+        
+        body {
+            background-color: #f5f6fa;
+            color: #2c3e50;
+            padding-top: 70px; /* Espacio para la barra de navegación */
+        }
+
+        .info-section {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .weighing-section {
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .preview-image {
+            max-width: 100%;
+            height: auto;
+            margin-top: 15px;
+            border-radius: 4px;
+        }
+
+        #loadingOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.9);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+    
+</head>
+<body>
+    <!-- Barra de navegación -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="/">Sistema de Tiquetes</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
+                    aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/home"><i class="fas fa-th-large"></i> Panel Principal</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/index"><i class="fas fa-home"></i> Registro</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/clasificacion/clasificaciones/lista"><i class="fas fa-clipboard-list"></i> Clasificaciones</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/pesaje/pesajes-neto-lista"><i class="fas fa-weight"></i> Pesajes Neto</a>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fas fa-cogs"></i> Admin
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="adminDropdown">
+                            <li>
+                                <a class="dropdown-item" href="/admin/admin/migrar-registros">
+                                    <i class="fas fa-database"></i> Migrar Registros
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Overlay de carga -->
+    <div id="loadingOverlay">
+        <div class="text-center">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Procesando...</span>
+            </div>
+            <h4 class="mt-3">Procesando...</h4>
+        </div>
+    </div>
+
+    
+<div class="results-container">
+    <div class="results-header">
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <a href="/" class="back-link">
+                    <i class="fas fa-arrow-left me-2"></i>Volver
+                </a>
+                <h2>Resultados de Clasificación - Guía 0150076A_20250312_155241</h2>
+                <p class="text-muted">Detalles de la clasificación realizada</p>
+            </div>
+            <div>
+                
+<div class="d-flex gap-2">
+    <a href="/clasificacion/generar_pdf_clasificacion/0150076A_20250312_155241" class="btn btn-success" target="_blank">
+        <i class="fas fa-file-pdf me-2"></i>Descargar PDF
+    </a>
+    <a href="/clasificacion/print_view_clasificacion/0150076A_20250312_155241" class="btn btn-primary" target="_blank">
+        <i class="fas fa-print me-2"></i>Imprimir
+    </a>
+    <a href="/clasificacion/ver_detalles_clasificacion/0150076A_20250312_155241" class="btn btn-info">
+        <i class="fas fa-chart-bar me-2"></i>Ver Detalles por Foto
+    </a>
+    <a href="/clasificacion/0150076A_20250312_155241?reclasificar=true" class="btn btn-warning">
+        <i class="fas fa-sync-alt me-2"></i>Reclasificar
+    </a>
+    
+    <!-- Botón para iniciar clasificación automática -->
+    
+    <button type="button" id="btn-iniciar-procesamiento" class="btn btn-info" data-codigo-guia="0150076A_20250312_155241">
+        <i class="fas fa-robot me-2"></i>Iniciar Clasificación Automática
+    </button>
+    
+</div>
+
+            </div>
+        </div>
+    </div>
+
+    
+<div class="row mb-4">
+    <div class="col-md-3">
+        
+<div class="card h-100 shadow-sm">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <h6 class="text-muted mb-1 text-uppercase">Proveedor</h6>
+                <h2 class="mb-0 fw-bold">0150076A</h2>
+            </div>
+            <div class="bg-primary bg-opacity-10 rounded-circle p-3">
+                <i class="fas fa-user text-primary fa-lg"></i>
+            </div>
+        </div>
+        
+        <div class="mt-3 pt-2 border-top">
+            
+            <small class="text-muted">IND - INVERSIONES SALAS Y ARAUJO</small>
+            
+        </div>
+        
+    </div>
+</div>
+
+    </div>
+    <div class="col-md-3">
+        
+<div class="card h-100 shadow-sm">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <h6 class="text-muted mb-1 text-uppercase">Peso Bruto</h6>
+                <h2 class="mb-0 fw-bold">Pendiente kg</h2>
+            </div>
+            <div class="bg-success bg-opacity-10 rounded-circle p-3">
+                <i class="fas fa-weight-hanging text-success fa-lg"></i>
+            </div>
+        </div>
+        
+    </div>
+</div>
+
+    </div>
+    <div class="col-md-3">
+        
+<div class="card h-100 shadow-sm">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <h6 class="text-muted mb-1 text-uppercase">Racimos</h6>
+                <h2 class="mb-0 fw-bold">736</h2>
+            </div>
+            <div class="bg-info bg-opacity-10 rounded-circle p-3">
+                <i class="fas fa-layer-group text-info fa-lg"></i>
+            </div>
+        </div>
+        
+    </div>
+</div>
+
+    </div>
+    <div class="col-md-3">
+        
+<div class="card h-100 shadow-sm">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <h6 class="text-muted mb-1 text-uppercase">Fecha</h6>
+                <h2 class="mb-0 fw-bold">19/03/2025</h2>
+            </div>
+            <div class="bg-secondary bg-opacity-10 rounded-circle p-3">
+                <i class="fas fa-calendar-alt text-secondary fa-lg"></i>
+            </div>
+        </div>
+        
+        <div class="mt-3 pt-2 border-top">
+            
+            <small class="text-muted">14:09:41</small>
+            
+        </div>
+        
+    </div>
+</div>
+
+    </div>
+</div>
+
+<!-- Sección para mostrar el estado del procesamiento automático -->
+<div id="procesamiento-status" class="alert alert-info d-none">
+    <div class="d-flex align-items-center mb-2">
+        <div class="spinner-border spinner-border-sm me-2" role="status">
+            <span class="visually-hidden">Procesando...</span>
+        </div>
+        <span id="estado-mensaje">Iniciando procesamiento...</span>
+    </div>
+    <div class="progress mt-2" style="height: 10px;">
+        <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" 
+             role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+    </div>
+</div>
+
+    
+    
+<!-- DEBUG: Mostrar la estructura de clasificacion_automatica_consolidada -->
+<!-- Comentando sección de depuración - eliminar cuando la visualización esté funcionando correctamente
+<div class="card mb-4">
+    <div class="card-header bg-light">
+        <h5 class="mb-0">Debugging Information</h5>
+    </div>
+    <div class="card-body">
+        <h6>Clasificación Automática Consolidada:</h6>
+        <pre>{
+  "danio_corona": {
+    "cantidad": 0,
+    "porcentaje": 0.0
+  },
+  "maduro": {
+    "cantidad": 0,
+    "porcentaje": 0.0
+  },
+  "maduros": {
+    "cantidad": 0,
+    "porcentaje": 0.0
+  },
+  "pendunculo_largo": {
+    "cantidad": 0,
+    "porcentaje": 0.0
+  },
+  "podrido": {
+    "cantidad": 0,
+    "porcentaje": 0.0
+  },
+  "podridos": {
+    "cantidad": 0,
+    "porcentaje": 0.0
+  },
+  "sobremaduro": {
+    "cantidad": 4,
+    "porcentaje": 100.0
+  },
+  "sobremaduros": {
+    "cantidad": 4,
+    "porcentaje": 100.0
+  },
+  "total_racimos": 4,
+  "verde": {
+    "cantidad": 0,
+    "porcentaje": 0.0
+  },
+  "verdes": {
+    "cantidad": 0,
+    "porcentaje": 0.0
+  }
+}</pre>
+        
+        <h6>Total Racimos Detectados:</h6>
+        <pre>0</pre>
+        
+        <h6>Valores de clasificacion_automatica_consolidada.total_racimos:</h6>
+        
+            <pre>4</pre>
+        
+        
+        <h6>Tipos de datos:</h6>
+        <p>Tipo de clasificacion_automatica_consolidada: dict</p>
+        
+            
+                <p>verdes: dict</p>
+            
+                <p>verde: dict</p>
+            
+                <p>maduros: dict</p>
+            
+                <p>maduro: dict</p>
+            
+                <p>sobremaduros: dict</p>
+            
+                <p>sobremaduro: dict</p>
+            
+                <p>danio_corona: dict</p>
+            
+                <p>pendunculo_largo: dict</p>
+            
+                <p>podridos: dict</p>
+            
+                <p>podrido: dict</p>
+            
+                <p>total_racimos: int</p>
+            
+        
+    </div>
+</div>
+-->
+
+<div class="row">
+    <!-- Manual Classification Column -->
+    <div class="col-lg-7">
+        <div class="card mb-4 shadow-sm">
+            <div class="card-header bg-primary text-white">
+                <h5><i class="fas fa-clipboard-check me-2"></i>Resultados de Clasificación Manual</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Clasificación basada en muestra de 
+                    28 
+                    racimos de un total de 736 racimos
+                </div>
+                
+                
+                    <!-- Simple table for displaying classification results -->
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Categoría</th>
+                                    <th>Cantidad</th>
+                                    <th>Porcentaje</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                
+                                <tr>
+                                    <td>
+                                        <span class="d-flex align-items-center">
+                                            
+                                                <i class="fas fa-circle me-2 color-verde"></i>
+                                            
+                                            Verdes
+                                        </span>
+                                    </td>
+                                    <td>1.0</td>
+                                    <td>3.57%</td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>
+                                        <span class="d-flex align-items-center">
+                                            
+                                                <i class="fas fa-circle me-2 color-maduro"></i>
+                                            
+                                            Maduros
+                                        </span>
+                                    </td>
+                                    <td>1.0</td>
+                                    <td>3.57%</td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>
+                                        <span class="d-flex align-items-center">
+                                            
+                                                <i class="fas fa-circle me-2 color-sobremaduro"></i>
+                                            
+                                            Sobremaduros
+                                        </span>
+                                    </td>
+                                    <td>2.0</td>
+                                    <td>7.14%</td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>
+                                        <span class="d-flex align-items-center">
+                                            
+                                                <i class="fas fa-circle me-2 color-danio-corona"></i>
+                                            
+                                            Danio_corona
+                                        </span>
+                                    </td>
+                                    <td>1.0</td>
+                                    <td>3.57%</td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>
+                                        <span class="d-flex align-items-center">
+                                            
+                                                <i class="fas fa-circle me-2 color-pendunculo-largo"></i>
+                                            
+                                            Pendunculo_largo
+                                        </span>
+                                    </td>
+                                    <td>5.0</td>
+                                    <td>17.86%</td>
+                                </tr>
+                                
+                                <tr>
+                                    <td>
+                                        <span class="d-flex align-items-center">
+                                            
+                                                <i class="fas fa-circle me-2 color-default"></i>
+                                            
+                                            Podridos
+                                        </span>
+                                    </td>
+                                    <td>1.0</td>
+                                    <td>3.57%</td>
+                                </tr>
+                                
+                                <tr class="table-light">
+                                    <td><strong>Total</strong></td>
+                                    <td colspan="2"><strong>0</strong></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Simple progress bars -->
+                    <div class="mt-4">
+                        <h6 class="mb-3">Distribución de clasificación</h6>
+                        
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>
+                                    
+                                        <i class="fas fa-circle me-2 color-verde"></i>
+                                    
+                                    Verdes
+                                </span>
+                                <span>3.57%</span>
+                            </div>
+                            <div class="progress" style="height: 10px;">
+                                
+                                    <div class="progress-bar bg-verde" role="progressbar" 
+                                         data-width="3.571428571428571"
+                                         aria-valuenow="3.571428571428571" aria-valuemin="0" aria-valuemax="100">
+                                    </div>
+                                
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>
+                                    
+                                        <i class="fas fa-circle me-2 color-maduro"></i>
+                                    
+                                    Maduros
+                                </span>
+                                <span>3.57%</span>
+                            </div>
+                            <div class="progress" style="height: 10px;">
+                                
+                                    <div class="progress-bar bg-maduro" role="progressbar" 
+                                         data-width="3.571428571428571"
+                                         aria-valuenow="3.571428571428571" aria-valuemin="0" aria-valuemax="100">
+                                    </div>
+                                
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>
+                                    
+                                        <i class="fas fa-circle me-2 color-sobremaduro"></i>
+                                    
+                                    Sobremaduros
+                                </span>
+                                <span>7.14%</span>
+                            </div>
+                            <div class="progress" style="height: 10px;">
+                                
+                                    <div class="progress-bar bg-sobremaduro" role="progressbar" 
+                                         data-width="7.142857142857142"
+                                         aria-valuenow="7.142857142857142" aria-valuemin="0" aria-valuemax="100">
+                                    </div>
+                                
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>
+                                    
+                                        <i class="fas fa-circle me-2 color-danio-corona"></i>
+                                    
+                                    Danio_corona
+                                </span>
+                                <span>3.57%</span>
+                            </div>
+                            <div class="progress" style="height: 10px;">
+                                
+                                    <div class="progress-bar bg-danio-corona" role="progressbar" 
+                                         data-width="3.571428571428571"
+                                         aria-valuenow="3.571428571428571" aria-valuemin="0" aria-valuemax="100">
+                                    </div>
+                                
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>
+                                    
+                                        <i class="fas fa-circle me-2 color-pendunculo-largo"></i>
+                                    
+                                    Pendunculo_largo
+                                </span>
+                                <span>17.86%</span>
+                            </div>
+                            <div class="progress" style="height: 10px;">
+                                
+                                    <div class="progress-bar bg-pendunculo-largo" role="progressbar" 
+                                         data-width="17.857142857142858"
+                                         aria-valuenow="17.857142857142858" aria-valuemin="0" aria-valuemax="100">
+                                    </div>
+                                
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>
+                                    
+                                    Podridos
+                                </span>
+                                <span>3.57%</span>
+                            </div>
+                            <div class="progress" style="height: 10px;">
+                                
+                                    <div class="progress-bar bg-default" role="progressbar" 
+                                         data-width="3.571428571428571"
+                                         aria-valuenow="3.571428571428571" aria-valuemin="0" aria-valuemax="100">
+                                    </div>
+                                
+                            </div>
+                        </div>
+                        
+                    </div>
+                
+            </div>
+        </div>
+        
+        <!-- Automatic Classification (if available) -->
+        <div id="resultados-automaticos" class="d-none">
+            <h4 class="mb-3">Resultados Automáticos</h4>
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h6>Distribución de categorías</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-borderless">
+                            <thead>
+                                <tr>
+                                    <th>Categoría</th>
+                                    <th>Cantidad</th>
+                                    <th>Porcentaje</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                
+                                <tr class="table-light">
+                                    <td><strong>Total</strong></td>
+                                    <td colspan="2"><strong>0</strong></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Observations (if available) -->
+        
+    </div>
+    
+    <!-- Summary Column -->
+    <div class="col-lg-5">
+        <!-- Classification Images (if available) -->
+        
+        
+        <!-- Classification Summary -->
+        <div class="card mb-4 shadow-sm">
+            <div class="card-header bg-dark text-white">
+                <h5><i class="fas fa-chart-pie me-2"></i>Resumen de Clasificación</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-primary">
+                    <strong>Tamaño de muestra:</strong> 
+                    28 
+                    racimos de un total de 736 racimos
+                </div>
+                
+                <!-- Añadir sección para clasificación automática si existe -->
+                
+                <div class="mt-4">
+                    <h6 class="border-bottom pb-2 mb-3 text-primary">Resultados de Clasificación Automática</h6>
+                    
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i> No se encontraron datos de clasificación automática para esta guía. 
+                        
+                    </div>
+                    
+                </div>
+                <hr class="my-4">
+                
+                
+                
+                <div class="mt-4">
+                    <h6 class="border-bottom pb-2 mb-3 ">Resultados de Clasificación Manual</h6>
+                    <h6 class="mb-3 text-center">Distribución visual</h6>
+                    <div class="row text-center">
+                        
+                        <div class="col-4 mb-3">
+                            
+                                <div class="circle-container bg-verde">
+                                    <span class="text-white fw-bold">3.6%</span>
+                                </div>
+                            
+                            <div class="mt-2">
+                                <small>Verdes</small>
+                            </div>
+                        </div>
+                        
+                        <div class="col-4 mb-3">
+                            
+                                <div class="circle-container bg-maduro">
+                                    <span class="text-white fw-bold">3.6%</span>
+                                </div>
+                            
+                            <div class="mt-2">
+                                <small>Maduros</small>
+                            </div>
+                        </div>
+                        
+                        <div class="col-4 mb-3">
+                            
+                                <div class="circle-container bg-sobremaduro">
+                                    <span class="text-white fw-bold">7.1%</span>
+                                </div>
+                            
+                            <div class="mt-2">
+                                <small>Sobremaduros</small>
+                            </div>
+                        </div>
+                        
+                        <div class="col-4 mb-3">
+                            
+                                <div class="circle-container bg-danio-corona">
+                                    <span class="text-white fw-bold">3.6%</span>
+                                </div>
+                            
+                            <div class="mt-2">
+                                <small>Danio_corona</small>
+                            </div>
+                        </div>
+                        
+                        <div class="col-4 mb-3">
+                            
+                                <div class="circle-container bg-pendunculo-largo">
+                                    <span class="text-white fw-bold">17.9%</span>
+                                </div>
+                            
+                            <div class="mt-2">
+                                <small>Pendunculo_largo</small>
+                            </div>
+                        </div>
+                        
+                        <div class="col-4 mb-3">
+                            
+                            <div class="mt-2">
+                                <small>Podridos</small>
+                            </div>
+                        </div>
+                        
+                    </div>
+                </div>
+                
+                
+                <!-- General information about the classification -->
+                <div class="mt-4">
+                    <h6 class="border-bottom pb-2">Información de la Clasificación</h6>
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>Fecha</span>
+                            <span class="fw-bold">19/03/2025</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>Hora</span>
+                            <span class="fw-bold">14:09:41</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>Código Guía</span>
+                            <span class="fw-bold">0150076A_20250312_155241</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>Total Racimos</span>
+                            <span class="fw-bold">736</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Distribución de racimos detectados</h3>
+            </div>
+            <div class="card-body">
+                
+                <div class="mb-4 p-3 bg-light border rounded">
+                    <h5>Debugging Information</h5>
+                    <p>Clasificación Automática Consolidada: <pre>{"danio_corona": {"cantidad": 0, "porcentaje": 0.0}, "maduro": {"cantidad": 0, "porcentaje": 0.0}, "maduros": {"cantidad": 0, "porcentaje": 0.0}, "pendunculo_largo": {"cantidad": 0, "porcentaje": 0.0}, "podrido": {"cantidad": 0, "porcentaje": 0.0}, "podridos": {"cantidad": 0, "porcentaje": 0.0}, "sobremaduro": {"cantidad": 4, "porcentaje": 100.0}, "sobremaduros": {"cantidad": 4, "porcentaje": 100.0}, "total_racimos": 4, "verde": {"cantidad": 0, "porcentaje": 0.0}, "verdes": {"cantidad": 0, "porcentaje": 0.0}}</pre></p>
+                    <p>Total Racimos Detectados: <strong>0</strong></p>
+                    <p>Valores de clasificacion_automatica_consolidada.total_racimos: 
+                    
+                        <strong>4</strong>
+                    
+                    </p>
+                    <p>Tipos de datos:</p>
+                    <ul>
+                        <li>clasificacion_automatica_consolidada: {&#39;verdes&#39;: {&#39;cantidad&#39;: 0, &#39;porcentaje&#39;: 0.0}, &#39;verde&#39;: {&#39;cantidad&#39;: 0, &#39;porcentaje&#39;: 0.0}, &#39;maduros&#39;: {&#39;cantidad&#39;: 0, &#39;porcentaje&#39;: 0.0}, &#39;maduro&#39;: {&#39;cantidad&#39;: 0, &#39;porcentaje&#39;: 0.0}, &#39;sobremaduros&#39;: {&#39;cantidad&#39;: 4, &#39;porcentaje&#39;: 100.0}, &#39;sobremaduro&#39;: {&#39;cantidad&#39;: 4, &#39;porcentaje&#39;: 100.0}, &#39;danio_corona&#39;: {&#39;cantidad&#39;: 0, &#39;porcentaje&#39;: 0.0}, &#39;pendunculo_largo&#39;: {&#39;cantidad&#39;: 0, &#39;porcentaje&#39;: 0.0}, &#39;podridos&#39;: {&#39;cantidad&#39;: 0, &#39;porcentaje&#39;: 0.0}, &#39;podrido&#39;: {&#39;cantidad&#39;: 0, &#39;porcentaje&#39;: 0.0}, &#39;total_racimos&#39;: 4}</li>
+                        <li>total_racimos_detectados: 0</li>
+                    </ul>
+                </div>
+
+                
+                    <div class="alert alert-warning">
+                        No hay datos de clasificación automática disponibles o no se detectaron racimos.
+                    </div>
+                
+            </div>
+        </div>
+    </div>
+</div>
+
+    
+    
+    <div class="results-footer text-center">
+        <div class="btn-group">
+            
+<div class="d-flex gap-2 mt-3">
+    <a href="/pesaje/pesajes" class="btn btn-secondary">
+        <i class="fas fa-list me-2"></i>Ver Lista de Pesajes
+    </a>
+    
+    <a href="/pesaje/pesaje-neto/0150076A_20250312_155241" class="btn btn-primary">
+        <i class="fas fa-weight me-2"></i>Registrar Pesaje Neto
+    </a>
+    
+    
+    <!-- Reemplazar enlace por formulario con POST -->
+    <form action="/clasificacion/guardar_clasificacion_final/0150076A_20250312_155241" method="POST" class="d-inline">
+        <button type="submit" class="btn btn-success">
+            <i class="fas fa-save me-2"></i>Guardar Clasificación
+        </button>
+    </form>
+</div>
+
+        </div>
+    </div>
+    
+</div>
+
+
+
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const btnIniciarProcesamiento = document.getElementById('btn-iniciar-procesamiento');
+        const procesamientoStatus = document.getElementById('procesamiento-status');
+        const progressBar = document.getElementById('progress-bar');
+        const resultadosAutomaticos = document.getElementById('resultados-automaticos');
+        
+        if (btnIniciarProcesamiento) {
+            btnIniciarProcesamiento.addEventListener('click', function() {
+                // Obtener el código de guía
+                const codigoGuia = this.getAttribute('data-codigo-guia');
+                
+                // Deshabilitar el botón y mostrar la barra de progreso
+                this.disabled = true;
+                // Asegurar que el estado del procesamiento sea visible
+                procesamientoStatus.classList.remove('d-none');
+                procesamientoStatus.classList.add('d-block');
+                
+                // Actualizar referencia a la barra de progreso después de cambiar el DOM
+                const progressBar = document.getElementById('progress-bar');
+                
+                // Generar la URL para iniciar procesamiento
+                const iniciarUrl = "/clasificacion/iniciar_procesamiento/PLACEHOLDER".replace('PLACEHOLDER', codigoGuia);
+                
+                console.log("Iniciando procesamiento en:", iniciarUrl);
+                
+                // Iniciar el procesamiento
+                fetch(iniciarUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        // Si obtenemos un 404, probablemente no hay imágenes para procesar
+                        if (response.status === 404) {
+                            throw new Error('No se encontraron imágenes para procesar. Por favor suba las fotos de clasificación para esta guía.');
+                        }
+                        throw new Error(`Error del servidor: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log("Respuesta del servidor:", data);
+                    // Si el procesamiento ha comenzado, empezar a verificar el estado
+                    if (data.status === 'started' || data.status === 'processing') {
+                        console.log("Procesamiento iniciado, verificando estado...");
+                        // Asegurarnos que el elemento de estado sea visible y mostrar el progreso inicial
+                        procesamientoStatus.classList.remove('d-none');
+                        procesamientoStatus.classList.add('d-block');
+                        
+                        // Actualizar la barra de progreso
+                        if (progressBar) {
+                            progressBar.style.width = '5%';
+                            progressBar.setAttribute('aria-valuenow', '5');
+                        }
+                        
+                        // Iniciar la verificación periódica del estado
+                        checkProcesamiento(codigoGuia);
+                    } else {
+                        // Si hay un error, mostrar mensaje
+                        procesamientoStatus.classList.remove('d-none', 'alert-info');
+                        procesamientoStatus.classList.add('d-block', 'alert-danger');
+                        procesamientoStatus.innerHTML = `<i class="fas fa-exclamation-triangle me-2"></i> ${data.message || 'Error al iniciar el procesamiento'}`;
+                        
+                        // Habilitar el botón nuevamente después de 3 segundos
+                        setTimeout(() => {
+                            btnIniciarProcesamiento.disabled = false;
+                        }, 3000);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    procesamientoStatus.classList.remove('d-none', 'alert-info');
+                    procesamientoStatus.classList.add('d-block', 'alert-danger');
+                    procesamientoStatus.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i> ' + error.message;
+                    
+                    // Habilitar el botón nuevamente después de 3 segundos
+                    setTimeout(() => {
+                        btnIniciarProcesamiento.disabled = false;
+                    }, 3000);
+                });
+            });
+        }
+        
+        // Función para verificar el estado del procesamiento
+        function checkProcesamiento(codigoGuia) {
+            // Generar la URL para verificar estado
+            const statusUrl = "/clasificacion/check_procesamiento_status/PLACEHOLDER".replace('PLACEHOLDER', codigoGuia);
+            // Generar la URL para ver resultados - asegurarnos de usar la ruta correcta con el prefijo del blueprint
+            const resultadosUrl = "/clasificacion/mostrar_resultados_automaticos/PLACEHOLDER".replace('PLACEHOLDER', codigoGuia);
+            
+            console.log("Verificando estado en:", statusUrl);
+            console.log("URL de resultados final:", resultadosUrl);
+            
+            const checkInterval = setInterval(function() {
+                fetch(statusUrl)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Error del servidor: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log("Estado del procesamiento:", data);
+                    
+                    // Asegurarnos que el elemento de estado sea visible
+                    procesamientoStatus.classList.remove('d-none');
+                    procesamientoStatus.classList.add('d-block');
+                    
+                    // Actualizar la barra de progreso
+                    const progress = data.progress || 0;
+                    const progressBar = document.getElementById('progress-bar');
+                    if (progressBar) {
+                        progressBar.style.width = `${progress}%`;
+                        progressBar.setAttribute('aria-valuenow', progress);
+                    }
+                    
+                    // Actualizar mensaje de estado si existe
+                    if (data.message) {
+                        const statusText = document.getElementById('estado-mensaje');
+                        if (statusText) {
+                            statusText.textContent = data.message;
+                        }
+                    }
+                    
+                    // Si el procesamiento ha finalizado
+                    if (data.status === 'completed') {
+                        clearInterval(checkInterval);
+                        
+                        // Mostrar mensaje de éxito
+                        procesamientoStatus.classList.remove('alert-info');
+                        procesamientoStatus.classList.add('alert-success');
+                        procesamientoStatus.innerHTML = '<i class="fas fa-check-circle me-2"></i> Procesamiento completado con éxito. Mostrando resultados...';
+                        
+                        console.log("Procesamiento completado, redirigiendo a:", resultadosUrl);
+                        
+                        // Esperar 2 segundos y luego redirigir manualmente con recarga completa
+                        setTimeout(() => {
+                            // Redirección forzada usando la ruta completa
+                            window.location.href = resultadosUrl;
+                        }, 2000);
+                    } else if (data.status === 'error') {
+                        // Si hay un error, mostrar mensaje
+                        clearInterval(checkInterval);
+                        procesamientoStatus.classList.remove('alert-info');
+                        procesamientoStatus.classList.add('alert-danger');
+                        procesamientoStatus.innerHTML = `<i class="fas fa-exclamation-triangle me-2"></i> ${data.message || 'Error durante el procesamiento'}`;
+                        
+                        // Habilitar el botón nuevamente
+                        btnIniciarProcesamiento.disabled = false;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    clearInterval(checkInterval);
+                    procesamientoStatus.classList.remove('alert-info');
+                    procesamientoStatus.classList.add('alert-danger');
+                    procesamientoStatus.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i> ' + error.message;
+                    
+                    // Habilitar el botón nuevamente
+                    btnIniciarProcesamiento.disabled = false;
+                });
+            }, 2000); // Verificar cada 2 segundos
+        }
+    });
+</script>
+
+</body>
+</html> 

@@ -1,0 +1,76 @@
+{
+    "id": "Clasificacion_0105007A_20250303_160803",
+    "fecha_registro": "03/03/2025",
+    "hora_registro": "19:35:28",
+    "fotos": [
+        "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/static/fotos_racimos_temp/foto1_0105007A_20250303_160803.jpg",
+        "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/static/fotos_racimos_temp/foto2_0105007A_20250303_160803.jpg",
+        "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/static/fotos_racimos_temp/foto3_0105007A_20250303_160803.jpg"
+    ],
+    "estado": "completado",
+    "clasificacion_manual": {},
+    "clasificacion_automatica": {
+        "verdes": {
+            "cantidad": 0,
+            "porcentaje": 0
+        },
+        "maduros": {
+            "cantidad": 0,
+            "porcentaje": 0
+        },
+        "sobremaduros": {
+            "cantidad": 0,
+            "porcentaje": 0
+        },
+        "podridos": {
+            "cantidad": 0,
+            "porcentaje": 0
+        },
+        "danio_corona": {
+            "cantidad": 0,
+            "porcentaje": 0
+        },
+        "pendunculo_largo": {
+            "cantidad": 0,
+            "porcentaje": 0
+        }
+    },
+    "resultados_por_foto": {
+        "1": {
+            "potholes_detected": 0,
+            "detecciones": {
+                "verdes": 0,
+                "maduros": 0,
+                "sobremaduros": 0,
+                "podridos": 0,
+                "danio_corona": 0,
+                "pendunculo_largo": 0
+            }
+        },
+        "2": {
+            "potholes_detected": 0,
+            "detecciones": {
+                "verdes": 0,
+                "maduros": 0,
+                "sobremaduros": 0,
+                "podridos": 0,
+                "danio_corona": 0,
+                "pendunculo_largo": 0
+            }
+        },
+        "3": {
+            "potholes_detected": 0,
+            "detecciones": {
+                "verdes": 0,
+                "maduros": 0,
+                "sobremaduros": 0,
+                "podridos": 0,
+                "danio_corona": 0,
+                "pendunculo_largo": 0
+            }
+        }
+    },
+    "workflow_completado": true,
+    "tiempo_procesamiento": "11.83 segundos",
+    "modelo_utilizado": "enrique-p-workspace/clasificacion-racimos-3"
+}

@@ -1,0 +1,1743 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - Sistema de Tiquetes{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.css">
+<style>
+    .dashboard-card {
+        background-color: white;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        margin-bottom: 20px;
+        padding: 15px;
+        transition: transform 0.3s ease;
+    }
+    
+    .dashboard-card:hover {
+        transform: translateY(-5px);
+    }
+    
+    .dashboard-card h5 {
+        border-bottom: 1px solid #eee;
+        padding-bottom: 10px;
+        margin-bottom: 15px;
+        color: #333;
+    }
+    
+    .kpi-value {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #0d6efd;
+    }
+    
+    .kpi-label {
+        font-size: 0.9rem;
+        color: #6c757d;
+    }
+    
+    .kpi-trend-up {
+        color: #28a745;
+    }
+    
+    .kpi-trend-down {
+        color: #dc3545;
+    }
+    
+    .table-small {
+        font-size: 0.85rem;
+    }
+    
+    .filter-section {
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+    
+    .quality-indicator {
+        height: 15px;
+        width: 15px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 5px;
+    }
+    
+    .quality-good {
+        background-color: #28a745;
+    }
+    
+    .quality-medium {
+        background-color: #ffc107;
+    }
+    
+    .quality-bad {
+        background-color: #dc3545;
+    }
+    
+    /* Estilos para el timeline */
+    .timeline-wrapper {
+        position: relative;
+        padding: 5px 0;
+    }
+    
+    .timeline-stepper {
+        position: relative;
+        padding: 20px 0;
+    }
+    
+    .timeline-step {
+        text-align: center;
+        padding: 0 15px;
+        position: relative;
+        width: 20%;
+    }
+    
+    .timeline-content {
+        position: relative;
+    }
+    
+    .inner-circle {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto;
+        transition: all 0.3s ease;
+    }
+    
+    .inner-circle.bg-light {
+        border: 2px solid #dee2e6;
+    }
+    
+    .timeline-content:hover .inner-circle {
+        transform: scale(1.1);
+    }
+    
+    .timeline-wrapper .progress {
+        position: absolute;
+        top: 40px;
+        left: 10%;
+        width: 80%;
+        z-index: -1;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+    <!-- Header del Dashboard -->
+    <div class="row mb-4 align-items-center">
+        <div class="col-md-6">
+            <h2 class="mb-0"><i class="fas fa-tachometer-alt"></i> Dashboard Operativo</h2>
+            <p class="text-muted">Monitoreo en tiempo real del sistema de tiquetes</p>
+        </div>
+        <div class="col-md-6 text-end">
+            <div class="btn-group" role="group">
+                <button type="button" class="btn btn-outline-primary btn-sm" id="refreshBtn">
+                    <i class="fas fa-sync"></i> Actualizar
+                </button>
+                <button type="button" class="btn btn-outline-success btn-sm" id="exportBtn">
+                    <i class="fas fa-file-excel"></i> Exportar
+                </button>
+                <div class="btn-group" role="group">
+                    <button type="button" class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown">
+                        <i class="fas fa-calendar"></i> Período
+                    </button>
+                    <div class="dropdown-menu dropdown-menu-end">
+                        <a class="dropdown-item period-option" href="#" data-period="today">Hoy</a>
+                        <a class="dropdown-item period-option" href="#" data-period="week">Esta semana</a>
+                        <a class="dropdown-item period-option" href="#" data-period="month">Este mes</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="filter-section mb-4">
+        <div class="row">
+            <div class="col-md-3 mb-2">
+                <label for="dateRange" class="form-label">Rango de Fechas</label>
+                <input type="text" class="form-control form-control-sm" id="dateRange">
+            </div>
+            <div class="col-md-3 mb-2">
+                <label for="proveedorFilter" class="form-label">Proveedor</label>
+                <select class="form-select form-select-sm" id="proveedorFilter" multiple="multiple">
+                    <!-- Las opciones se cargarán dinámicamente -->
+                </select>
+            </div>
+            <div class="col-md-3 mb-2">
+                <label for="codigoProveedorFilter" class="form-label">Código Proveedor</label>
+                <select class="form-select form-select-sm" id="codigoProveedorFilter" multiple="multiple">
+                    <!-- Las opciones se cargarán dinámicamente -->
+                </select>
+            </div>
+            <div class="col-md-3 mb-2">
+                <label for="estadoFilter" class="form-label">Estado</label>
+                <select class="form-select form-select-sm" id="estadoFilter">
+                    <option value="">Todos los estados</option>
+                    <option value="activo">Activo</option>
+                    <option value="completado">Completado</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- KPIs principales -->
+    <div class="row mb-4">
+        <!-- Registros de Entrada (OK) -->
+        <div class="col-md-3">
+            <div class="dashboard-card text-center">
+                <h5><i class="fas fa-clipboard-list"></i> Registros de Entrada</h5>
+                <div class="kpi-value">78</div> <!-- Valor Estático por ahora -->
+                <div class="kpi-label">
+                    <span class="kpi-trend-up"><i class="fas fa-arrow-up"></i> 12%</span> vs. ayer
+                </div>
+            </div>
+        </div>
+        <!-- Número de Racimos (OK) -->
+        <div class="col-md-3">
+            <div class="dashboard-card text-center">
+                <h5><i class="fas fa-boxes-stacked"></i> Número de Racimos</h5>
+                <div class="kpi-value" id="kpi-total-racimos-valor">0</div>
+                <div class="kpi-label">
+                    <span class="kpi-trend-down"><i class="fas fa-arrow-down"></i> 5%</span> vs. ayer
+                </div>
+            </div>
+        </div>
+        <!-- Peso Neto Pepa (Movido de fila inferior) -->
+        <div class="col-md-3">
+            <div class="dashboard-card text-center">
+                <h5><i class="fas fa-seedling"></i> Peso Neto Pepa</h5>
+                <div class="kpi-value" id="kpi-peso-pepa-valor">0.0 t</div>
+                <div class="kpi-label">
+                    <span class="kpi-trend-up"><i class="fas fa-arrow-up"></i> 5%</span> vs. semana pasada
+                </div>
+            </div>
+        </div>
+        <!-- Peso Neto Fruta (Antes Peso Neto Total) -->
+        <div class="col-md-3">
+            <div class="dashboard-card text-center">
+                <h5><i class="fas fa-balance-scale"></i> Peso Neto Fruta</h5>
+                <div class="kpi-value" id="kpi-peso-neto-valor">0.0 t</div>
+                <div class="kpi-label">
+                    <span class="kpi-trend-up"><i class="fas fa-arrow-up"></i> 8%</span> vs. ayer
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Segunda fila de KPIs -->
+    <div class="row mb-4">
+        <!-- Índice de Calidad Manual (Movido de fila superior) -->
+         <div class="col-md-3">
+            <div class="dashboard-card text-center">
+                <h5><i class="fas fa-chart-line"></i> Índice de Calidad Manual</h5>
+                <div style="font-size: 0.85rem; margin-top: 5px; text-align: left;">
+                    <dl class="row mb-0">
+                        <dt class="col-8 ps-2">Verde:</dt>
+                        <dd class="col-4 text-end pe-2" id="calidad-verde-avg">0.0%</dd>
+                        
+                        <dt class="col-8 ps-2">Sobremaduro:</dt>
+                        <dd class="col-4 text-end pe-2" id="calidad-sobremaduro-avg">0.0%</dd>
+                        
+                        <dt class="col-8 ps-2">Daño Corona:</dt>
+                        <dd class="col-4 text-end pe-2" id="calidad-danocorona-avg">0.0%</dd>
+                        
+                        <dt class="col-8 ps-2">Pedúnculo Largo:</dt>
+                        <dd class="col-4 text-end pe-2" id="calidad-pendunculo-avg">0.0%</dd>
+                        
+                        <dt class="col-8 ps-2">Podrido:</dt>
+                        <dd class="col-4 text-end pe-2" id="calidad-podrido-avg">0.0%</dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+        <!-- Índice de Calidad Automática (OK) -->
+        <div class="col-md-3">
+            <div class="dashboard-card text-center">
+                <h5><i class="fas fa-robot"></i> Índice de Calidad Automática</h5>
+                <div style="font-size: 0.85rem; margin-top: 5px; text-align: left;">
+                    <dl class="row mb-0">
+                        <dt class="col-8 ps-2">Verde:</dt>
+                        <dd class="col-4 text-end pe-2" id="calidad-verde-auto-avg">0.0%</dd>
+                        
+                        <dt class="col-8 ps-2">Sobremaduro:</dt>
+                        <dd class="col-4 text-end pe-2" id="calidad-sobremaduro-auto-avg">0.0%</dd>
+                        
+                        <dt class="col-8 ps-2">Daño Corona:</dt>
+                        <dd class="col-4 text-end pe-2" id="calidad-danocorona-auto-avg">0.0%</dd>
+                        
+                        <dt class="col-8 ps-2">Pedúnculo Largo:</dt>
+                        <dd class="col-4 text-end pe-2" id="calidad-pendunculo-auto-avg">0.0%</dd>
+                        
+                        <dt class="col-8 ps-2">Podrido:</dt>
+                        <dd class="col-4 text-end pe-2" id="calidad-podrido-auto-avg">0.0%</dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+        <!-- Tiempos Promedio por Etapa (OK) -->
+        <div class="col-md-3">
+            <div class="dashboard-card text-center">
+                <h5><i class="fas fa-hourglass-half"></i> Tiempos Promedio por Etapa</h5>
+                 <div style="font-size: 0.85rem; margin-top: 5px; text-align: left;">
+                    <dl class="row mb-0">
+                        <dt class="col-8 ps-2">Entrada → P. Bruto:</dt>
+                        <dd class="col-4 text-end pe-2" id="tiempo-entrada-bruto-avg">0.0 min</dd>
+                        
+                        <dt class="col-8 ps-2">P. Bruto → Clasif.:</dt>
+                        <dd class="col-4 text-end pe-2" id="tiempo-bruto-clasif-avg">0.0 min</dd>
+                        
+                        <dt class="col-8 ps-2">Clasif. → P. Neto:</dt>
+                        <dd class="col-4 text-end pe-2" id="tiempo-clasif-neto-avg">0.0 min</dd>
+                        
+                        <dt class="col-8 ps-2">P. Neto → Salida:</dt>
+                        <dd class="col-4 text-end pe-2" id="tiempo-neto-salida-avg">0.0 min</dd>
+                        
+                        <dt class="col-8 ps-2 fw-bold">Total (Entrada → Salida):</dt>
+                        <dd class="col-4 text-end pe-2 fw-bold" id="tiempo-total-avg">0.0 min</dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+        <!-- Peso SAP (OK) -->
+        <div class="col-md-3">
+            <div class="dashboard-card text-center">
+                <h5><i class="fas fa-file-invoice-dollar"></i> Peso SAP</h5>
+                <div class="kpi-value" id="kpi-peso-sap-valor">0.0 t</div>
+                <div class="kpi-label">
+                    <span class="kpi-trend-up"><i class="fas fa-arrow-up"></i> 0%</span> vs. objetivo
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráficos - Primera fila -->
+    <div class="row mb-4">
+        <!-- Gráfico de barras - Registros por día -->
+        <div class="col-md-6">
+            <div class="dashboard-card">
+                <h5><i class="fas fa-chart-bar"></i> Registros Diarios (últimos 7 días)</h5>
+                <canvas id="registrosDiariosChart" height="250"></canvas>
+            </div>
+        </div>
+        
+        <!-- Gráfico de líneas - Peso Neto Diario -->
+        <div class="col-md-6">
+            <div class="dashboard-card">
+                <h5><i class="fas fa-chart-line"></i> Peso Neto Diario (últimos 7 días)</h5>
+                <canvas id="pesoNetoDiarioChart" height="250"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráficos - Segunda fila -->
+    <div class="row mb-4">
+        <!-- Gráfico Dona - Distribución Calidad Manual -->
+        <div class="col-md-4">
+            <div class="dashboard-card">
+                <h5><i class="fas fa-chart-pie"></i> Distribución Calidad Manual</h5>
+                <canvas id="tipoFrutaChart" height="220"></canvas>
+            </div>
+        </div>
+        
+        <!-- Gráfico Dona - Distribución Calidad Automática -->
+        <div class="col-md-4">
+            <div class="dashboard-card">
+                <h5><i class="fas fa-chart-pie"></i> Distribución Calidad Automática</h5>
+                <canvas id="calidadClasificacionChart" height="220"></canvas>
+            </div>
+        </div>
+        
+        <!-- Gráfico Barras - Comparativa Manual vs Automática -->
+        <div class="col-md-4">
+            <div class="dashboard-card">
+                <h5><i class="fas fa-chart-bar"></i> Comparativa Manual vs. Automática</h5>
+                <canvas id="comparativaCalidadChart" height="220"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tablas - Primera fila -->
+    <div class="row mb-4">
+        <!-- Últimos registros -->
+        <div class="col-md-6">
+            <div class="dashboard-card">
+                <h5><i class="fas fa-list-alt"></i> Últimos Registros</h5>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover table-small">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Código Guía</th>
+                                <th>Proveedor</th>
+                                <th>Fecha/Hora</th>
+                                <th>Tipo Fruta</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ultimos-registros-tbody">
+                            <!-- Las filas se cargarán dinámicamente -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="text-center mt-2">
+                    <a href="#" class="btn btn-sm btn-outline-primary">Ver todos los registros</a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Top 5 por Peso Neto -->
+        <div class="col-md-6">
+            <div class="dashboard-card">
+                <h5><i class="fas fa-trophy"></i> Top 5 Guías por Peso Neto (Hoy)</h5>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover table-small">
+                        <thead class="table-light">
+                            <tr>
+                                <th>#</th>
+                                <th>Código Guía</th>
+                                <th>Proveedor</th>
+                                <th>Tipo Fruta</th>
+                                <th>Peso Neto</th>
+                                <th>Calidad</th>
+                            </tr>
+                        </thead>
+                        <tbody id="top-5-peso-neto-tbody">
+                            <!-- Filas se cargarán dinámicamente -->
+                            <tr>
+                                <td>1</td>
+                                <td>GU-2023-0165</td>
+                                <td>PROV-002</td>
+                                <td>Banano</td>
+                                <td>12.8 t</td>
+                                <td>
+                                    <div class="progress" style="height: 8px;">
+                                        <div class="progress-bar bg-success" style="width: 92%"></div>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>2</td>
+                                <td>GU-2023-0168</td>
+                                <td>PROV-001</td>
+                                <td>Banano</td>
+                                <td>11.5 t</td>
+                                <td>
+                                    <div class="progress" style="height: 8px;">
+                                        <div class="progress-bar bg-success" style="width: 90%"></div>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>3</td>
+                                <td>GU-2023-0172</td>
+                                <td>PROV-005</td>
+                                <td>Plátano</td>
+                                <td>10.2 t</td>
+                                <td>
+                                    <div class="progress" style="height: 8px;">
+                                        <div class="progress-bar bg-warning" style="width: 78%"></div>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>4</td>
+                                <td>GU-2023-0169</td>
+                                <td>PROV-008</td>
+                                <td>Plátano</td>
+                                <td>9.7 t</td>
+                                <td>
+                                    <div class="progress" style="height: 8px;">
+                                        <div class="progress-bar bg-success" style="width: 85%"></div>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>5</td>
+                                <td>GU-2023-0173</td>
+                                <td>PROV-003</td>
+                                <td>Banano</td>
+                                <td>9.1 t</td>
+                                <td>
+                                    <div class="progress" style="height: 8px;">
+                                        <div class="progress-bar bg-success" style="width: 88%"></div>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sección de Seguimiento de Guías -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="dashboard-card">
+                <h5><i class="fas fa-search-location"></i> Seguimiento de Guías</h5>
+                <div class="row mb-3 gx-2 align-items-end">
+                    <div class="col-md-4">
+                        <label for="guiaSearchCodigoGuia" class="form-label form-label-sm">Código Guía</label>
+                        <input type="text" class="form-control form-control-sm" placeholder="Ej: 0150076A..." id="guiaSearchCodigoGuia">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="guiaSearchPlaca" class="form-label form-label-sm">Placa</label>
+                        <input type="text" class="form-control form-control-sm" placeholder="Ej: ABC-123" id="guiaSearchPlaca">
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-primary btn-sm w-100" type="button" id="btnBuscarGuias">
+                            <i class="fas fa-search"></i> Buscar
+                        </button>
+                    </div>
+                    <div class="col-md-3 text-muted small">
+                        Se usarán también filtros generales (Fechas, Proveedor, Estado).
+                    </div>
+                </div>
+                
+                <!-- Área de Resultados -->
+                <div id="resultados-busqueda-guias" class="mt-3 table-responsive">
+                    <!-- Los resultados de la búsqueda se mostrarán aquí -->
+                    <p class="text-center text-muted">Ingrese un término y presione Buscar Guías.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alertas de Calidad -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="dashboard-card">
+                <h5><i class="fas fa-exclamation-triangle"></i> Alertas de Calidad</h5>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover table-small">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Proveedor</th>
+                                <th>Problema</th>
+                                <th>Valor (%)</th>
+                                <th>Severidad</th>
+                            </tr>
+                        </thead>
+                        <tbody id="alertas-calidad-tbody">
+                            <!-- Filas se cargarán dinámicamente -->
+                            <tr>
+                                <td>PROV-005</td>
+                                <td>Alto % Sobremaduro</td>
+                                <td>3 veces / semana</td>
+                                <td><span class="badge bg-danger">Alta</span></td>
+                            </tr>
+                            <tr>
+                                <td>PROV-003</td>
+                                <td>Daño de Corona</td>
+                                <td>2 veces / semana</td>
+                                <td><span class="badge bg-warning">Media</span></td>
+                            </tr>
+                            <tr>
+                                <td>PROV-008</td>
+                                <td>Pedúnculo Largo</td>
+                                <td>1 vez / semana</td>
+                                <td><span class="badge bg-info">Baja</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mapa de Calor - Calidad por Proveedor -->
+        <div class="col-md-6">
+            <div class="dashboard-card">
+                <h5><i class="fas fa-fire"></i> Mapa de Calidad por Proveedor</h5>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered table-small">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Proveedor</th>
+                                <th>Verde</th>
+                                <th>Sobremaduro</th>
+                                <th>Daño Corona</th>
+                                <th>Pedúnculo</th>
+                                <th>Calidad Global</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>PROV-001</td>
+                                <td style="background-color: rgba(40, 167, 69, 0.2)">6%</td>
+                                <td style="background-color: rgba(40, 167, 69, 0.2)">7%</td>
+                                <td style="background-color: rgba(40, 167, 69, 0.2)">5%</td>
+                                <td style="background-color: rgba(40, 167, 69, 0.2)">4%</td>
+                                <td style="background-color: rgba(40, 167, 69, 0.6)">92%</td>
+                            </tr>
+                            <tr>
+                                <td>PROV-002</td>
+                                <td style="background-color: rgba(40, 167, 69, 0.2)">7%</td>
+                                <td style="background-color: rgba(40, 167, 69, 0.2)">8%</td>
+                                <td style="background-color: rgba(40, 167, 69, 0.2)">4%</td>
+                                <td style="background-color: rgba(40, 167, 69, 0.2)">3%</td>
+                                <td style="background-color: rgba(40, 167, 69, 0.5)">90%</td>
+                            </tr>
+                            <tr>
+                                <td>PROV-003</td>
+                                <td style="background-color: rgba(40, 167, 69, 0.2)">5%</td>
+                                <td style="background-color: rgba(40, 167, 69, 0.2)">7%</td>
+                                <td style="background-color: rgba(255, 193, 7, 0.4)">12%</td>
+                                <td style="background-color: rgba(40, 167, 69, 0.2)">5%</td>
+                                <td style="background-color: rgba(255, 193, 7, 0.2)">83%</td>
+                            </tr>
+                            <tr>
+                                <td>PROV-005</td>
+                                <td style="background-color: rgba(40, 167, 69, 0.2)">8%</td>
+                                <td style="background-color: rgba(220, 53, 69, 0.4)">16%</td>
+                                <td style="background-color: rgba(40, 167, 69, 0.2)">6%</td>
+                                <td style="background-color: rgba(40, 167, 69, 0.2)">4%</td>
+                                <td style="background-color: rgba(255, 193, 7, 0.3)">78%</td>
+                            </tr>
+                            <tr>
+                                <td>PROV-008</td>
+                                <td style="background-color: rgba(40, 167, 69, 0.2)">6%</td>
+                                <td style="background-color: rgba(40, 167, 69, 0.2)">8%</td>
+                                <td style="background-color: rgba(40, 167, 69, 0.2)">5%</td>
+                                <td style="background-color: rgba(255, 193, 7, 0.3)">9%</td>
+                                <td style="background-color: rgba(40, 167, 69, 0.4)">85%</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-2 small text-muted">
+                    <div class="d-flex justify-content-end">
+                        <div class="me-3">
+                            <span class="quality-indicator quality-good"></span> Bueno (≥85%)
+                        </div>
+                        <div class="me-3">
+                            <span class="quality-indicator quality-medium"></span> Regular (75-84%)
+                        </div>
+                        <div>
+                            <span class="quality-indicator quality-bad"></span> Bajo (<75%)
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tercera fila: Nueva Gráfica y Mapa de Calidad -->
+    <div class="row mb-4">
+        <!-- Nueva Gráfica - Racimos y Peso Promedio Diario -->
+        <div class="col-md-6">
+            <div class="dashboard-card">
+                <h5><i class="fas fa-chart-line"></i> Racimos y Peso Promedio Diario</h5>
+                <canvas id="racimosPesoPromedioChart" height="220"></canvas>
+            </div>
+        </div>
+
+        <!-- Mapa de Calor - Calidad por Proveedor -->
+        <div class="col-md-6">
+            <div class="dashboard-card">
+                <h5><i class="fas fa-fire"></i> Mapa de Calidad por Proveedor</h5>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered table-small">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Proveedor</th>
+                                <th>Verde</th>
+                                <th>Sobremaduro</th>
+                                <th>Daño Corona</th>
+                                <th>Pedúnculo</th>
+                                <th>Calidad Global</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>PROV-001</td>
+                                <td style="background-color: rgba(40, 167, 69, 0.2)">6%</td>
+                                <td style="background-color: rgba(40, 167, 69, 0.2)">7%</td>
+                                <td style="background-color: rgba(40, 167, 69, 0.2)">5%</td>
+                                <td style="background-color: rgba(40, 167, 69, 0.2)">4%</td>
+                                <td style="background-color: rgba(40, 167, 69, 0.6)">92%</td>
+                            </tr>
+                            <tr>
+                                <td>PROV-002</td>
+                                <td style="background-color: rgba(40, 167, 69, 0.2)">7%</td>
+                                <td style="background-color: rgba(40, 167, 69, 0.2)">8%</td>
+                                <td style="background-color: rgba(40, 167, 69, 0.2)">4%</td>
+                                <td style="background-color: rgba(40, 167, 69, 0.2)">3%</td>
+                                <td style="background-color: rgba(40, 167, 69, 0.5)">90%</td>
+                            </tr>
+                            <tr>
+                                <td>PROV-003</td>
+                                <td style="background-color: rgba(40, 167, 69, 0.2)">5%</td>
+                                <td style="background-color: rgba(40, 167, 69, 0.2)">7%</td>
+                                <td style="background-color: rgba(255, 193, 7, 0.4)">12%</td>
+                                <td style="background-color: rgba(40, 167, 69, 0.2)">5%</td>
+                                <td style="background-color: rgba(255, 193, 7, 0.2)">83%</td>
+                            </tr>
+                            <tr>
+                                <td>PROV-005</td>
+                                <td style="background-color: rgba(40, 167, 69, 0.2)">8%</td>
+                                <td style="background-color: rgba(220, 53, 69, 0.4)">16%</td>
+                                <td style="background-color: rgba(40, 167, 69, 0.2)">6%</td>
+                                <td style="background-color: rgba(40, 167, 69, 0.2)">4%</td>
+                                <td style="background-color: rgba(255, 193, 7, 0.3)">78%</td>
+                            </tr>
+                            <tr>
+                                <td>PROV-008</td>
+                                <td style="background-color: rgba(40, 167, 69, 0.2)">6%</td>
+                                <td style="background-color: rgba(40, 167, 69, 0.2)">8%</td>
+                                <td style="background-color: rgba(40, 167, 69, 0.2)">5%</td>
+                                <td style="background-color: rgba(255, 193, 7, 0.3)">9%</td>
+                                <td style="background-color: rgba(40, 167, 69, 0.4)">85%</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-2 small text-muted">
+                    <div class="d-flex justify-content-end">
+                        <div class="me-3">
+                            <span class="quality-indicator quality-good"></span> Bueno (≥85%)
+                        </div>
+                        <div class="me-3">
+                            <span class="quality-indicator quality-medium"></span> Regular (75-84%)
+                        </div>
+                        <div>
+                            <span class="quality-indicator quality-bad"></span> Bajo (<75%)
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/luxon@2.3.1/build/global/luxon.min.js"></script>
+<!-- Incluir el plugin datalabels DESPUÉS de Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script> 
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Registrar el plugin datalabels globalmente
+    Chart.register(ChartDataLabels);
+    
+    // Cargar los gráficos
+    cargarGraficos();
+    // Inicializar DateRangePicker
+    inicializarDateRangePicker();
+    // Inicializar Selectores de Proveedor (Nombre y Código)
+    inicializarSelectoresProveedor();
+    
+    // Cargar datos iniciales del dashboard
+    actualizarDashboardData();
+
+    // Configurar evento de actualización manual
+    document.getElementById('refreshBtn').addEventListener('click', function() {
+        actualizarDashboardData(); // Llama a la función que ya usa filtros
+    });
+    
+    // Configurar búsqueda de guías
+    document.getElementById('btnBuscarGuias').addEventListener('click', buscarGuias);
+    
+    // Configurar exportación
+    document.getElementById('exportBtn').addEventListener('click', function() {
+        alert('La exportación a Excel se realizará aquí.');
+    });
+    
+    // Configurar opciones de período
+    document.querySelectorAll('.period-option').forEach(function(option) {
+        option.addEventListener('click', function(e) {
+            e.preventDefault();
+            const period = this.getAttribute('data-period');
+            // TODO: Actualizar el DateRangePicker según el período y luego llamar a actualizarDashboardData
+            alert('Cambio de período a: ' + period + ' (funcionalidad pendiente)');
+            // Ejemplo: Establecer fechas en dateRangePicker y llamar a actualizarDashboardData()
+        });
+    });
+});
+
+function inicializarDateRangePicker() {
+    // Initialize Date Range Picker
+    $('#dateRange').daterangepicker({
+        opens: 'left',
+        locale: {
+            format: 'DD/MM/YYYY',
+            separator: ' - ',
+            applyLabel: 'Aplicar',
+            cancelLabel: 'Cancelar',
+            fromLabel: 'Desde',
+            toLabel: 'Hasta',
+            customRangeLabel: 'Personalizado',
+            weekLabel: 'S',
+            daysOfWeek: ['Do', 'Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa'],
+            monthNames: [
+                'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+                'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+            ],
+            firstDay: 1
+        },
+        ranges: {
+           'Hoy': [moment(), moment()],
+           'Ayer': [moment().subtract(1, 'days'), moment().subtract(1, 'days')],
+           'Últimos 7 días': [moment().subtract(6, 'days'), moment()],
+           'Últimos 30 días': [moment().subtract(29, 'days'), moment()],
+           'Este Mes': [moment().startOf('month'), moment().endOf('month')],
+           'Mes Anterior': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')]
+        }
+    }, function(start, end, label) {
+        console.log("Nuevo rango de fechas seleccionado: " + start.format('YYYY-MM-DD') + ' a ' + end.format('YYYY-MM-DD') + ' (Preset: ' + label + ')');
+        // Aquí puedes añadir la lógica para recargar los datos del dashboard con el nuevo rango
+        // Por ejemplo: fetchData(start.format('YYYY-MM-DD'), end.format('YYYY-MM-DD'));
+    });
+}
+
+// Variable global para almacenar los datos de los proveedores
+let proveedorData = [];
+
+function inicializarSelectoresProveedor() {
+    // Fetch provider list (code and name)
+    fetch('{{ url_for("api.get_dashboard_proveedores") }}')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            proveedorData = data;
+            // Initialize both selects once data is fetched
+            inicializarSelectProveedorNombre();
+            inicializarSelectCodigoProveedor();
+            // Setup synchronization listeners
+            setupProveedorSync();
+        })
+        .catch(error => {
+            console.error('Error fetching providers:', error);
+            // Optionally, display an error message to the user
+            alert('Error al cargar la lista de proveedores.');
+        });
+}
+
+function inicializarSelectProveedorNombre() {
+    const selectElement = $('#proveedorFilter');
+    selectElement.empty(); // Clear existing options
+    selectElement.append(new Option('', '')); // Add placeholder option
+
+    // Obtener nombres únicos y ordenados
+    const nombres = [...new Set(proveedorData.map(p => p.nombre))].sort();
+
+    nombres.forEach(nombre => {
+        const option = new Option(nombre, nombre, false, false);
+        selectElement.append(option);
+    });
+
+    selectElement.select2({
+        theme: "bootstrap-5",
+        placeholder: 'Seleccione Nombre(s)',
+        allowClear: true,
+        width: '100%'
+    });
+}
+
+function inicializarSelectCodigoProveedor() {
+    const selectElement = $('#codigoProveedorFilter');
+    selectElement.empty(); // Clear existing options
+    selectElement.append(new Option('', '')); // Add placeholder option
+
+    // Obtener códigos únicos y ordenados
+    const codigos = [...new Set(proveedorData.map(p => p.codigo))].sort();
+
+    codigos.forEach(codigo => {
+        const option = new Option(codigo, codigo, false, false);
+        selectElement.append(option);
+    });
+
+    selectElement.select2({
+        theme: "bootstrap-5",
+        placeholder: 'Seleccione Código(s)',
+        allowClear: true,
+        width: '100%'
+    });
+}
+
+function setupProveedorSync() {
+    const nombreSelect = $('#proveedorFilter');
+    const codigoSelect = $('#codigoProveedorFilter');
+    const estadoSelect = $('#estadoFilter'); // Referencia al filtro de estado
+    const dateRangeInput = $('#dateRange'); // Referencia al filtro de fecha
+
+    // Listener para Nombre Proveedor
+    nombreSelect.on('change', function() {
+        const selectedNombres = $(this).val() || [];
+        // Filtrar códigos basados en nombres seleccionados
+        const codigosFiltrados = proveedorData
+            .filter(p => selectedNombres.includes(p.nombre))
+            .map(p => p.codigo);
+
+        // Actualizar opciones y selección del select de códigos
+        // Obtener códigos únicos y ordenados
+        const todosCodigos = [...new Set(proveedorData.map(p => p.codigo))].sort();
+        codigoSelect.empty();
+        codigoSelect.append(new Option('', ''));
+        todosCodigos.forEach(codigo => {
+            const isSelected = codigosFiltrados.includes(codigo);
+            const option = new Option(codigo, codigo, isSelected, isSelected);
+            codigoSelect.append(option);
+        });
+        codigoSelect.trigger('change.select2'); // Trigger update sin causar bucle infinito
+
+        actualizarDashboardData(); // Actualizar datos al cambiar filtro
+    });
+
+    // Listener para Código Proveedor
+    codigoSelect.on('change', function() {
+        const selectedCodigos = $(this).val() || [];
+        // Filtrar nombres basados en códigos seleccionados
+        const nombresFiltrados = proveedorData
+            .filter(p => selectedCodigos.includes(p.codigo))
+            .map(p => p.nombre);
+
+        // Actualizar opciones y selección del select de nombres
+        // Obtener nombres únicos y ordenados
+        const todosNombres = [...new Set(proveedorData.map(p => p.nombre))].sort();
+        nombreSelect.empty();
+        nombreSelect.append(new Option('', ''));
+        todosNombres.forEach(nombre => {
+            const isSelected = nombresFiltrados.includes(nombre);
+            const option = new Option(nombre, nombre, isSelected, isSelected);
+            nombreSelect.append(option);
+        });
+        nombreSelect.trigger('change.select2'); // Trigger update sin causar bucle infinito
+
+        actualizarDashboardData(); // Actualizar datos al cambiar filtro
+    });
+
+    // Listener para Estado
+    estadoSelect.on('change', function() {
+        actualizarDashboardData();
+    });
+
+    // Listener para DateRangePicker (cuando se aplica un nuevo rango)
+    dateRangeInput.on('apply.daterangepicker', function(ev, picker) {
+        actualizarDashboardData();
+    });
+}
+
+function mostrarCargando() {
+    document.getElementById('loadingOverlay').style.display = 'flex';
+}
+
+function ocultarCargando() {
+    document.getElementById('loadingOverlay').style.display = 'none';
+}
+
+// Almacenar referencias a los gráficos para actualizarlos
+let registrosDiariosChart = null;
+let pesoNetoDiarioChart = null;
+let tipoFrutaChart = null;
+let calidadClasificacionChart = null;
+let comparativaCalidadChart = null;
+let racimosPesoPromedioChart = null;
+
+function cargarGraficos() {
+    // Gráfico de Registros Diarios
+    const ctxRegistros = document.getElementById('registrosDiariosChart').getContext('2d');
+    // Destruir gráfico existente si existe para evitar duplicados
+    if (window.registrosDiariosChartInstance) {
+        window.registrosDiariosChartInstance.destroy();
+    }
+    window.registrosDiariosChartInstance = new Chart(ctxRegistros, {
+        type: 'bar',
+        data: {
+            labels: [], // Inicialmente vacío, se llena desde la API
+            datasets: [{
+                label: 'Registros',
+                data: [], // Inicialmente vacío, se llena desde la API
+                backgroundColor: 'rgba(13, 110, 253, 0.7)',
+                borderColor: 'rgba(13, 110, 253, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+    
+    // Gráfico de Peso Neto Diario
+    const ctxPesoNeto = document.getElementById('pesoNetoDiarioChart').getContext('2d');
+    // Destruir gráfico existente
+    if (window.pesoNetoDiarioChartInstance) {
+        window.pesoNetoDiarioChartInstance.destroy();
+    }
+    window.pesoNetoDiarioChartInstance = new Chart(ctxPesoNeto, {
+        type: 'line',
+        data: {
+            labels: [], // Inicialmente vacío
+            datasets: [{
+                label: 'Peso Neto (t)',
+                data: [], // Inicialmente vacío
+                backgroundColor: 'rgba(40, 167, 69, 0.2)',
+                borderColor: 'rgba(40, 167, 69, 1)',
+                borderWidth: 2,
+                tension: 0.2,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: false
+                }
+            }
+        }
+    });
+    
+    // Gráfico de Distribución Calidad Manual (antes Tipo Fruta)
+    const ctxTipoFruta = document.getElementById('tipoFrutaChart').getContext('2d');
+    if (window.tipoFrutaChartInstance) {
+        window.tipoFrutaChartInstance.destroy();
+    }
+    window.tipoFrutaChartInstance = new Chart(ctxTipoFruta, {
+        type: 'doughnut',
+        data: {
+            labels: ['Verde', 'Sobremaduro', 'Daño Corona', 'Pendúnculo Largo', 'Podrido'],
+            datasets: [{
+                data: [], // Vacío, se llena desde API
+                backgroundColor: [
+                    'rgba(40, 167, 69, 0.8)',  // Verde
+                    'rgba(255, 193, 7, 0.8)',  // Sobremaduro (Amarillo)
+                    'rgba(255, 99, 132, 0.8)', // Daño Corona (Rojo)
+                    'rgba(54, 162, 235, 0.8)',// Pendúnculo (Azul)
+                    'rgba(153, 102, 255, 0.8)' // Podrido (Morado)
+                ],
+                borderColor: '#fff',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                },
+                // Configuración de datalabels para el gráfico de dona manual
+                datalabels: {
+                    formatter: (value, ctx) => {
+                        let sum = 0;
+                        let dataArr = ctx.chart.data.datasets[0].data;
+                        dataArr.map(data => {
+                            sum += parseFloat(data);
+                        });
+                        let percentage = (value * 100 / sum).toFixed(1) + "%";
+                        // Mostrar solo si es > 0 para evitar clutter
+                        return sum > 0 && value > 0 ? percentage : ''; 
+                    },
+                    color: '#fff', // Color del texto
+                    font: {
+                        weight: 'bold'
+                    }
+                }
+            }
+        }
+    });
+    
+    // Gráfico de Distribución Calidad Automática (antes Barras Calidad)
+    const ctxCalidad = document.getElementById('calidadClasificacionChart').getContext('2d');
+    if (window.calidadClasificacionChartInstance) {
+        window.calidadClasificacionChartInstance.destroy();
+    }
+    window.calidadClasificacionChartInstance = new Chart(ctxCalidad, {
+        type: 'doughnut', // Cambiado a doughnut
+        data: {
+            labels: ['Verde', 'Sobremaduro', 'Daño Corona', 'Pendúnculo Largo', 'Podrido'],
+            datasets: [{
+                label: 'Automático', // Label para el dataset
+                data: [], // Vacío, se llena desde API
+                 backgroundColor: [
+                    'rgba(40, 167, 69, 0.8)',  // Verde
+                    'rgba(255, 193, 7, 0.8)',  // Sobremaduro (Amarillo)
+                    'rgba(255, 99, 132, 0.8)', // Daño Corona (Rojo)
+                    'rgba(54, 162, 235, 0.8)',// Pendúnculo (Azul)
+                    'rgba(153, 102, 255, 0.8)' // Podrido (Morado)
+                ],
+                borderColor: '#fff',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                },
+                // Configuración de datalabels para el gráfico de dona automático
+                datalabels: {
+                    formatter: (value, ctx) => {
+                        let sum = 0;
+                        let dataArr = ctx.chart.data.datasets[0].data;
+                        dataArr.map(data => {
+                            sum += parseFloat(data);
+                        });
+                        let percentage = (value * 100 / sum).toFixed(1) + "%";
+                        return sum > 0 && value > 0 ? percentage : ''; 
+                    },
+                    color: '#fff',
+                    font: {
+                        weight: 'bold'
+                    }
+                }
+            }
+        }
+    });
+    
+    // Gráfico Comparativa Manual vs Automática (antes Radar)
+    const ctxComparativa = document.getElementById('comparativaCalidadChart').getContext('2d');
+    if (window.comparativaCalidadChartInstance) {
+        window.comparativaCalidadChartInstance.destroy();
+    }
+    window.comparativaCalidadChartInstance = new Chart(ctxComparativa, {
+        type: 'bar', // Cambiado a bar
+        data: {
+            labels: ['Verde', 'Sobremaduro', 'Daño Corona', 'Pedúnculo Largo', 'Podrido'],
+            datasets: [
+                {
+                    label: 'Manual',
+                    data: [], // Vacío, se llena desde API
+                    backgroundColor: 'rgba(13, 110, 253, 0.7)', // Azul
+                    borderColor: 'rgba(13, 110, 253, 1)',
+                    borderWidth: 1
+                }, 
+                {
+                    label: 'Automático',
+                    data: [], // Vacío, se llena desde API
+                    backgroundColor: 'rgba(220, 53, 69, 0.7)', // Rojo
+                    borderColor: 'rgba(220, 53, 69, 1)',
+                    borderWidth: 1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                },
+                // Configuración de datalabels para el gráfico de barras comparativo
+                datalabels: {
+                    formatter: (value, ctx) => {
+                         // Mostrar el valor con % solo si es > 0
+                        return value > 0 ? value + '%' : '';
+                    },
+                    color: '#333', // Color oscuro para contraste con barras claras
+                    anchor: 'end', // Posicionar arriba de la barra
+                    align: 'top', // Alinear arriba
+                    font: {
+                        weight: 'bold'
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Porcentaje Promedio (%)'
+                    }
+                }
+            }
+        }
+    });
+
+    // Nueva Gráfica - Racimos y Peso Promedio Diario
+    const ctxRacimosPeso = document.getElementById('racimosPesoPromedioChart').getContext('2d');
+    if (window.racimosPesoPromedioChartInstance) {
+        window.racimosPesoPromedioChartInstance.destroy();
+    }
+    window.racimosPesoPromedioChartInstance = new Chart(ctxRacimosPeso, {
+        type: 'line',
+        data: {
+            labels: [], // Vacío, se llena desde API
+            datasets: [
+                {
+                    label: 'Nº Racimos',
+                    data: [], // Vacío, se llena desde API
+                    borderColor: 'rgba(255, 159, 64, 1)', // Naranja
+                    backgroundColor: 'rgba(255, 159, 64, 0.2)',
+                    yAxisID: 'yRacimos', // Asociar al eje izquierdo
+                    fill: false,
+                    tension: 0.1
+                },
+                {
+                    label: 'Peso Promedio (kg/racimo)',
+                    data: [], // Vacío, se llena desde API
+                    borderColor: 'rgba(75, 192, 192, 1)', // Verde azulado
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    yAxisID: 'yPesoPromedio', // Asociar al eje derecho
+                    fill: false,
+                    tension: 0.1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false
+                },
+                 // Configuración de datalabels (opcional, puede saturar)
+                datalabels: {
+                   display: false // Desactivado por defecto para líneas
+                }
+            },
+            scales: {
+                x: {
+                    display: true,
+                    title: {
+                        display: false
+                    }
+                },
+                yRacimos: { // Eje izquierdo para Racimos
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Nº Racimos'
+                    }
+                },
+                yPesoPromedio: { // Eje derecho para Peso Promedio
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Peso Promedio (kg/racimo)'
+                    },
+                    // Opcional: Ocultar la cuadrícula para este eje para claridad
+                    grid: {
+                        drawOnChartArea: false, 
+                    },
+                }
+            },
+            interaction: {
+                mode: 'nearest',
+                axis: 'x',
+                intersect: false
+            }
+        }
+    });
+}
+
+// Función para obtener filtros y actualizar los datos del dashboard
+function actualizarDashboardData() {
+    mostrarCargando();
+
+    // 1. Leer filtros actuales
+    const dateRangePicker = $('#dateRange').data('daterangepicker');
+    const startDate = dateRangePicker.startDate.format('YYYY-MM-DD');
+    const endDate = dateRangePicker.endDate.format('YYYY-MM-DD');
+    const selectedCodigos = $('#codigoProveedorFilter').val() || [];
+    const estado = $('#estadoFilter').val();
+
+    // Construir URL con parámetros de query
+    const params = new URLSearchParams();
+    params.append('startDate', startDate);
+    params.append('endDate', endDate);
+    if (selectedCodigos.length > 0) {
+        params.append('proveedores', selectedCodigos.join(','));
+    }
+    if (estado) {
+        params.append('estado', estado);
+    }
+
+    const apiUrl = `{{ url_for('misc.dashboard_stats') }}?${params.toString()}`;
+    console.log("Llamando API de stats con URL:", apiUrl); // Para depuración
+
+    // 2. Llamar a la API
+    fetch(apiUrl)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log("Datos recibidos de stats API:", data); // Para depuración
+            // 3. Actualizar KPIs (por ahora solo Registros de Entrada)
+            if (data.registros_entrada_filtrados !== undefined) {
+                const kpiElement = document.querySelector('#kpi-registros-entrada-valor');
+                if (kpiElement) {
+                    kpiElement.textContent = data.registros_entrada_filtrados;
+                } else {
+                    console.warn("No se encontró el elemento para actualizar el KPI de Registros de Entrada.");
+                    const firstKpiValue = document.querySelectorAll('.kpi-value')[0]; // Target first KPI
+                    if (firstKpiValue) {
+                       firstKpiValue.textContent = data.registros_entrada_filtrados;
+                    }
+                }
+            } else {
+                 console.warn("La respuesta de la API no contiene 'registros_entrada_filtrados'.");
+            }
+
+            // Actualizar KPI Total Racimos
+            if (data.total_racimos_filtrados !== undefined) {
+                const kpiRacimosElement = document.querySelector('#kpi-total-racimos-valor');
+                if (kpiRacimosElement) {
+                    kpiRacimosElement.textContent = data.total_racimos_filtrados;
+                } else {
+                     console.warn("No se encontró el elemento para actualizar el KPI de Total Racimos.");
+                     // Fallback: actualizar el segundo kpi-value
+                     const secondKpiValue = document.querySelectorAll('.kpi-value')[1]; // Target second KPI
+                     if (secondKpiValue) {
+                        secondKpiValue.textContent = data.total_racimos_filtrados;
+                     }
+                }
+            } else {
+                console.warn("La respuesta de la API no contiene 'total_racimos_filtrados'.");
+            }
+
+            // Actualizar KPI Peso Neto Total
+            if (data.peso_neto_total_filtrado !== undefined) {
+                const kpiPesoNetoElement = document.querySelector('#kpi-peso-neto-valor');
+                if (kpiPesoNetoElement) {
+                    // Formatear el valor a toneladas con un decimal
+                    const pesoEnToneladas = (data.peso_neto_total_filtrado / 1000).toFixed(1);
+                    kpiPesoNetoElement.textContent = `${pesoEnToneladas} t`;
+                } else {
+                    console.warn("No se encontró el elemento para actualizar el KPI de Peso Neto Total.");
+                    // Fallback: actualizar el tercer kpi-value
+                    const thirdKpiValue = document.querySelectorAll('.kpi-value')[2]; // Target third KPI
+                    if (thirdKpiValue) {
+                        const pesoEnToneladas = (data.peso_neto_total_filtrado / 1000).toFixed(1);
+                        thirdKpiValue.textContent = `${pesoEnToneladas} t`;
+                    }
+                }
+            } else {
+                 console.warn("La respuesta de la API no contiene 'peso_neto_total_filtrado'.");
+            }
+
+            // Actualizar KPIs de Calidad Manual
+            if (data.calidad_promedios_manual) {
+                const promedios = data.calidad_promedios_manual;
+                const categorias = {
+                    'Verde': 'verde',
+                    'Sobremaduro': 'sobremaduro',
+                    'Daño Corona': 'danocorona',       // Mapeo a ID sin espacio
+                    'Pendunculo Largo': 'pendunculo',  // Mapeo a ID sin espacio
+                    'Podrido': 'podrido'
+                };
+
+                for (const [key, idSuffix] of Object.entries(categorias)) {
+                    const element = document.querySelector(`#calidad-${idSuffix}-avg`);
+                    if (element) {
+                        const valor = promedios[key]; // Obtener valor del objeto respuesta
+                        if (valor !== undefined && valor !== null) {
+                            element.textContent = `${valor.toFixed(1)}%`;
+                        } else {
+                            element.textContent = 'N/A'; // Mostrar N/A si falta el dato
+                            console.warn(`Dato faltante para calidad manual: ${key}`);
+                        }
+                    } else {
+                        console.warn(`Elemento no encontrado para calidad manual: #calidad-${idSuffix}-avg`);
+                    }
+                }
+            } else {
+                console.warn("La respuesta de la API no contiene 'calidad_promedios_manual'.");
+                // Opcional: resetear los valores a 0 o N/A si no vienen datos
+                document.querySelectorAll('[id^="calidad-"][id$="-avg"]').forEach(el => el.textContent = 'N/A');
+            }
+
+            // Actualizar KPIs de Calidad Automática
+            if (data.calidad_promedios_automatica) {
+                console.log("[DEBUG] Datos de calidad automática recibidos por JS:", data.calidad_promedios_automatica);
+                const promediosAuto = data.calidad_promedios_automatica;
+                // Mapeo clave interna JS a sufijo ID HTML
+                const categoriasAuto = {
+                    'Verde': 'verde-auto',
+                    'Sobremaduro': 'sobremaduro-auto',
+                    'Daño Corona': 'danocorona-auto',
+                    'Pendunculo Largo': 'pendunculo-auto',
+                    'Podrido': 'podrido-auto'
+                };
+
+                for (const [key, idSuffix] of Object.entries(categoriasAuto)) {
+                    const element = document.querySelector(`#calidad-${idSuffix}-avg`);
+                    if (element) {
+                        const valor = promediosAuto[key]; // Obtener valor de la respuesta
+                        if (valor !== undefined && valor !== null) {
+                            element.textContent = `${valor.toFixed(1)}%`;
+                        } else {
+                            element.textContent = 'N/A';
+                            console.warn(`Dato AUTO faltante para: ${key}`);
+                        }
+                    } else {
+                        console.warn(`Elemento AUTO no encontrado: #calidad-${idSuffix}-avg`);
+                    }
+                }
+            } else {
+                console.warn("La respuesta API no contiene 'calidad_promedios_automatica'.");
+                // Opcional: resetear valores auto
+                document.querySelectorAll('[id^="calidad-"][id$="-auto-avg"]').forEach(el => el.textContent = 'N/A');
+            }
+
+            // Actualizar KPIs de Tiempos Promedio por Etapa
+            if (data.tiempos_promedio_proceso) {
+                console.log("[DEBUG] Tiempos promedio recibidos por JS:", data.tiempos_promedio_proceso);
+                const tiempos = data.tiempos_promedio_proceso;
+                const mapeoTiempos = {
+                    'entrada_a_bruto': 'entrada-bruto',
+                    'bruto_a_clasif': 'bruto-clasif',
+                    'clasif_a_neto': 'clasif-neto',
+                    'neto_a_salida': 'neto-salida',
+                    'total': 'total'
+                };
+
+                for (const [key, idSuffix] of Object.entries(mapeoTiempos)) {
+                    const element = document.querySelector(`#tiempo-${idSuffix}-avg`);
+                    if (element) {
+                        const valorMinutos = tiempos[key]; // Asumimos que el backend ya envía minutos
+                        if (valorMinutos !== undefined && valorMinutos !== null) {
+                            element.textContent = `${valorMinutos.toFixed(1)} min`; // Mostrar con 'min'
+                        } else {
+                            element.textContent = 'N/A';
+                            console.warn(`Dato de tiempo faltante para: ${key}`);
+                        }
+                    } else {
+                        console.warn(`Elemento de tiempo no encontrado: #tiempo-${idSuffix}-avg`);
+                    }
+                }
+            } else {
+                console.warn("La respuesta API no contiene 'tiempos_promedio_proceso'.");
+                // Resetear tiempos a N/A o 0.0 min
+                document.querySelectorAll('[id^="tiempo-"][id$="-avg"]').forEach(el => el.textContent = '0.0 min');
+            }
+
+            // Actualizar KPI Peso Neto Pepa
+            if (data.peso_neto_pepa !== undefined) {
+                const kpiPesoPepaElement = document.querySelector('#kpi-peso-pepa-valor');
+                if (kpiPesoPepaElement) {
+                    // Convertir de kg a toneladas y formatear
+                    const pesoPepaEnToneladas = (data.peso_neto_pepa / 1000).toFixed(1);
+                    kpiPesoPepaElement.textContent = `${pesoPepaEnToneladas} t`;
+                } else {
+                    console.warn("Elemento no encontrado para KPI Peso Neto Pepa.");
+                    // Fallback (opcional, si quieres actualizar el penúltimo KPI)
+                    // const kpiValueElements = document.querySelectorAll('.kpi-value');
+                    // if (kpiValueElements.length >= 7) { // Ajustar índice si cambia el layout
+                    //     const pesoPepaEnToneladas = (data.peso_neto_pepa / 1000).toFixed(1);
+                    //     kpiValueElements[6].textContent = `${pesoPepaEnToneladas} t`;
+                    // }
+                }
+            } else {
+                console.warn("La respuesta API no contiene 'peso_neto_pepa'.");
+                // Resetear a 0.0 t si falta el dato
+                const kpiPesoPepaElement = document.querySelector('#kpi-peso-pepa-valor');
+                if (kpiPesoPepaElement) kpiPesoPepaElement.textContent = '0.0 t';
+            }
+
+            // Actualizar Gráfico Registros Diarios (Re-añadido)
+            if (data.registros_diarios_chart_data) {
+                // Usar la instancia global almacenada en window
+                if (window.registrosDiariosChartInstance) {
+                    window.registrosDiariosChartInstance.data.labels = data.registros_diarios_chart_data.labels;
+                    window.registrosDiariosChartInstance.data.datasets[0].data = data.registros_diarios_chart_data.data;
+                    window.registrosDiariosChartInstance.update();
+                } else {
+                    console.error("La instancia del gráfico de registros diarios no está lista.");
+                }
+            }
+
+            // Actualizar Gráfico Peso Neto Diario
+            if (data.peso_neto_diario_chart_data) {
+                if (window.pesoNetoDiarioChartInstance) {
+                    window.pesoNetoDiarioChartInstance.data.labels = data.peso_neto_diario_chart_data.labels;
+                    window.pesoNetoDiarioChartInstance.data.datasets[0].data = data.peso_neto_diario_chart_data.data;
+                    window.pesoNetoDiarioChartInstance.update();
+                } else {
+                    console.error("La instancia del gráfico de peso neto diario no está lista.");
+                }
+            }
+
+            // Actualizar Gráfico Distribución Calidad Manual (Dona)
+            if (data.calidad_promedios_manual && window.tipoFrutaChartInstance) {
+                const categoriasOrdenadas = ['Verde', 'Sobremaduro', 'Daño Corona', 'Pendunculo Largo', 'Podrido'];
+                const datosManual = categoriasOrdenadas.map(cat => data.calidad_promedios_manual[cat] !== undefined ? parseFloat(data.calidad_promedios_manual[cat].toFixed(1)) : 0);
+                window.tipoFrutaChartInstance.data.datasets[0].data = datosManual;
+                window.tipoFrutaChartInstance.update();
+            }
+
+            // Actualizar Gráfico Distribución Calidad Automática (Dona)
+            if (data.calidad_promedios_automatica && window.calidadClasificacionChartInstance) {
+                const categoriasOrdenadas = ['Verde', 'Sobremaduro', 'Daño Corona', 'Pendunculo Largo', 'Podrido'];
+                 // Asegurarse de que las claves coinciden con las devueltas por la API ('Verde', 'Sobremaduro', etc.)
+                const datosAuto = categoriasOrdenadas.map(cat => data.calidad_promedios_automatica[cat] !== undefined ? parseFloat(data.calidad_promedios_automatica[cat].toFixed(1)) : 0);
+                window.calidadClasificacionChartInstance.data.datasets[0].data = datosAuto;
+                window.calidadClasificacionChartInstance.update();
+            }
+
+            // Actualizar Gráfico Comparativa Manual vs Automática (Barras)
+            if (data.calidad_promedios_manual && data.calidad_promedios_automatica && window.comparativaCalidadChartInstance) {
+                const categoriasOrdenadas = ['Verde', 'Sobremaduro', 'Daño Corona', 'Pendunculo Largo', 'Podrido'];
+                const datosManualComp = categoriasOrdenadas.map(cat => data.calidad_promedios_manual[cat] !== undefined ? parseFloat(data.calidad_promedios_manual[cat].toFixed(1)) : 0);
+                const datosAutoComp = categoriasOrdenadas.map(cat => data.calidad_promedios_automatica[cat] !== undefined ? parseFloat(data.calidad_promedios_automatica[cat].toFixed(1)) : 0);
+                
+                window.comparativaCalidadChartInstance.data.datasets[0].data = datosManualComp; // Dataset Manual
+                window.comparativaCalidadChartInstance.data.datasets[1].data = datosAutoComp; // Dataset Automático
+                window.comparativaCalidadChartInstance.update();
+            }
+            
+            // Actualizar Gráfico Racimos y Peso Promedio
+             if (data.racimos_peso_promedio_chart_data && window.racimosPesoPromedioChartInstance) {
+                const chartData = data.racimos_peso_promedio_chart_data;
+                window.racimosPesoPromedioChartInstance.data.labels = chartData.labels;
+                window.racimosPesoPromedioChartInstance.data.datasets[0].data = chartData.data_racimos; // Dataset Racimos
+                window.racimosPesoPromedioChartInstance.data.datasets[1].data = chartData.data_peso_promedio; // Dataset Peso Promedio
+                window.racimosPesoPromedioChartInstance.update();
+            }
+            
+            // Actualizar Tabla Últimos Registros
+            const tablaBody = document.getElementById('ultimos-registros-tbody');
+            if (data.ultimos_registros_tabla && tablaBody) {
+                tablaBody.innerHTML = ''; // Limpiar contenido anterior
+                if (data.ultimos_registros_tabla.length === 0) {
+                    tablaBody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No hay registros recientes para mostrar.</td></tr>';
+                } else {
+                    data.ultimos_registros_tabla.forEach(registro => {
+                        const row = `
+                            <tr>
+                                <td>${registro.codigo_guia}</td>
+                                <td>${registro.proveedor}</td>
+                                <td>${registro.fecha_hora}</td>
+                                <td>${registro.tipo_fruta}</td>
+                                <td><span class="badge ${registro.badge_class}">${registro.estado}</span></td>
+                            </tr>
+                        `;
+                        tablaBody.innerHTML += row;
+                    });
+                }
+            } else if (tablaBody) {
+                // Manejar caso donde la API no devuelve la data o falta el body
+                tablaBody.innerHTML = '<tr><td colspan="5" class="text-center text-danger">Error al cargar datos.</td></tr>';
+                if (!data.ultimos_registros_tabla) console.warn("La respuesta API no contiene 'ultimos_registros_tabla'.");
+            }
+            
+            // Actualizar Tabla Top 5 Peso Neto
+            const top5TableBody = document.getElementById('top-5-peso-neto-tbody');
+            if (data.top_5_peso_neto_tabla && top5TableBody) {
+                top5TableBody.innerHTML = ''; // Limpiar contenido anterior
+                if (data.top_5_peso_neto_tabla.length === 0) {
+                    top5TableBody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No hay datos de peso neto para mostrar.</td></tr>';
+                } else {
+                    data.top_5_peso_neto_tabla.forEach(guia => {
+                        // Determinar color barra de progreso basado en calidad
+                        let progressBarClass = 'bg-success'; // Verde por defecto
+                        if (guia.calidad < 75) {
+                            progressBarClass = 'bg-danger'; // Rojo si baja
+                        } else if (guia.calidad < 85) {
+                            progressBarClass = 'bg-warning'; // Amarillo si media
+                        }
+                        
+                        const row = `
+                            <tr>
+                                <td>${guia.rank}</td>
+                                <td>${guia.codigo_guia}</td>
+                                <td>${guia.proveedor}</td>
+                                <td>${guia.tipo_fruta}</td>
+                                <td>${guia.peso_neto}</td>
+                                <td>
+                                    <div class="progress" style="height: 8px;" title="${guia.calidad}%">
+                                        <div class="progress-bar ${progressBarClass}" 
+                                             role="progressbar" 
+                                             style="width: ${guia.calidad}%;" 
+                                             aria-valuenow="${guia.calidad}" 
+                                             aria-valuemin="0" 
+                                             aria-valuemax="100"></div>
+                                    </div>
+                                </td>
+                            </tr>
+                        `;
+                        top5TableBody.innerHTML += row;
+                    });
+                }
+            } else if (top5TableBody) {
+                top5TableBody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">Error al cargar datos del Top 5.</td></tr>';
+                if (!data.top_5_peso_neto_tabla) console.warn("La respuesta API no contiene 'top_5_peso_neto_tabla'.");
+            }
+            
+            // Actualizar Tabla Alertas de Calidad
+            const alertasTableBody = document.getElementById('alertas-calidad-tbody');
+            if (data.alertas_calidad_tabla && alertasTableBody) {
+                alertasTableBody.innerHTML = ''; // Limpiar contenido anterior
+                if (data.alertas_calidad_tabla.length === 0) {
+                    alertasTableBody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No hay alertas de calidad (Media o Alta) para mostrar.</td></tr>';
+                } else {
+                    data.alertas_calidad_tabla.forEach(alerta => {
+                        const row = `
+                            <tr>
+                                <td>${alerta.proveedor}</td>
+                                <td>${alerta.problema}</td>
+                                <td>${alerta.valor_problema}</td>
+                                <td><span class="badge ${alerta.severidad_badge}">${alerta.severidad_texto}</span></td>
+                            </tr>
+                        `;
+                        alertasTableBody.innerHTML += row;
+                    });
+                }
+            } else if (alertasTableBody) {
+                alertasTableBody.innerHTML = '<tr><td colspan="4" class="text-center text-danger">Error al cargar datos de alertas.</td></tr>';
+                if (!data.alertas_calidad_tabla) console.warn("La respuesta API no contiene 'alertas_calidad_tabla'.");
+            }
+            
+            ocultarCargando();
+        })
+        .catch(error => {
+            console.error('Error fetching dashboard stats:', error);
+            alert('Error al actualizar los datos del dashboard.');
+            ocultarCargando();
+        });
+}
+
+// --- Nueva Función para Buscar Guías ---
+function buscarGuias() {
+    mostrarCargando();
+    // Leer campos específicos de búsqueda
+    const codigoGuiaTerm = document.getElementById('guiaSearchCodigoGuia').value.trim();
+    const placaTerm = document.getElementById('guiaSearchPlaca').value.trim();
+    
+    const resultadosDiv = document.getElementById('resultados-busqueda-guias');
+    resultadosDiv.innerHTML = '<p class="text-center"><i class="fas fa-spinner fa-spin"></i> Buscando...</p>'; // Mostrar indicador
+    
+    // Obtener filtros generales
+    const dateRangePicker = $('#dateRange').data('daterangepicker');
+    const startDate = dateRangePicker.startDate.format('YYYY-MM-DD');
+    const endDate = dateRangePicker.endDate.format('YYYY-MM-DD');
+    const selectedCodigos = $('#codigoProveedorFilter').val() || []; // Usar códigos de proveedor del filtro general
+    const estado = $('#estadoFilter').val(); // Filtro general de estado
+    
+    // Construir URL para la API de búsqueda
+    const params = new URLSearchParams();
+    // Añadir parámetros específicos si tienen valor
+    if (codigoGuiaTerm) {
+        params.append('codigo_guia', codigoGuiaTerm);
+    }
+    if (placaTerm) {
+        params.append('placa', placaTerm);
+    }
+    // Añadir filtros generales
+    params.append('startDate', startDate);
+    params.append('endDate', endDate);
+    if (selectedCodigos.length > 0) {
+        params.append('proveedores', selectedCodigos.join(',')); // Enviar códigos de proveedor
+    }
+    if (estado) {
+        params.append('estado_filtro', estado); // Pasar el filtro de estado general
+    }
+
+    const searchApiUrl = `{{ url_for('misc.buscar_guias') }}?${params.toString()}`;
+    console.log("Llamando API de búsqueda con URL:", searchApiUrl);
+    
+    fetch(searchApiUrl)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log("Resultados de búsqueda recibidos:", data);
+            resultadosDiv.innerHTML = ''; // Limpiar área de resultados
+            
+            if (data.length === 0) {
+                resultadosDiv.innerHTML = '<p class="text-center text-muted">No se encontraron guías que coincidan con los criterios.</p>';
+            } else {
+                // Crear tabla para mostrar resultados
+                let tableHTML = `
+                    <table class="table table-sm table-hover table-small">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Código Guía</th>
+                                <th>Proveedor</th>
+                                <th>Fecha/Hora</th>
+                                <th>Tipo Fruta</th>
+                                <th>Estado</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                
+                data.forEach(guia => {
+                    tableHTML += `
+                        <tr>
+                            <td>${guia.codigo_guia}</td>
+                            <td>${guia.proveedor}</td>
+                            <td>${guia.fecha_hora}</td>
+                            <td>${guia.tipo_fruta}</td>
+                            <td>
+                                <span class="badge ${guia.estado === 'Completado' ? 'bg-success' : 'bg-warning'}">
+                                    ${guia.estado}
+                                </span>
+                            </td>
+                            <td>
+                                <a href="${guia.url_detalle}" class="btn btn-xs btn-outline-primary" title="Ver Detalle">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+                    `;
+                });
+                
+                tableHTML += '</tbody></table>';
+                resultadosDiv.innerHTML = tableHTML;
+            }
+            ocultarCargando();
+        })
+        .catch(error => {
+            console.error('Error buscando guías:', error);
+            resultadosDiv.innerHTML = '<p class="text-center text-danger">Error al realizar la búsqueda.</p>';
+            ocultarCargando();
+        });
+}
+
+// Añadir listener al botón de búsqueda
+document.getElementById('btnBuscarGuias').addEventListener('click', buscarGuias);
+
+// Opcional: buscar al presionar Enter en el input
+document.getElementById('guiaSearchCodigoGuia').addEventListener('keypress', function(event) {
+    if (event.key === 'Enter') {
+        buscarGuias();
+    }
+});
+document.getElementById('guiaSearchPlaca').addEventListener('keypress', function(event) {
+    if (event.key === 'Enter') {
+        buscarGuias();
+    }
+});
+</script>
+{% endblock %} 

@@ -1,0 +1,94 @@
+{% macro tabla_filtrable(titulo, columnas, datos, url_filtros, filtros_actuales=None, sin_resultados_mensaje="No se encontraron registros con los filtros seleccionados.") %}
+<div class="list-section">
+    <h4 class="mb-4">{{ titulo }} ({{ datos|length }} encontrados)</h4>
+    
+    {% if datos %}
+    <div class="table-responsive">
+        <table class="table table-hover">
+            <thead class="table-light">
+                <tr>
+                    {% for columna in columnas %}
+                    <th{% if columna.class %} class="{{ columna.class }}"{% endif %}>{{ columna.titulo }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in datos %}
+                <tr>
+                    {% for columna in columnas %}
+                    <td>
+                        {% if columna.render %}
+                            {{ columna.render(item) | safe }}
+                        {% else %}
+                            {{ item[columna.campo] }}
+                        {% endif %}
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="alert alert-info">
+        <i class="fas fa-info-circle me-2"></i>{{ sin_resultados_mensaje }}
+    </div>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{% macro filtros_form(filtros, url_form, limpiar_url, titulo="Filtros") %}
+<div class="filters-section">
+    <h4 class="mb-3">{{ titulo }}</h4>
+    <form action="{{ url_form }}" method="GET">
+        <div class="row g-3">
+            {% for filtro in filtros %}
+            <div class="col-md-{{ filtro.tamano|default(3) }}">
+                <label for="{{ filtro.id }}" class="form-label">{{ filtro.etiqueta }}</label>
+                
+                {% if filtro.tipo == 'text' %}
+                <input type="text" class="form-control" id="{{ filtro.id }}" name="{{ filtro.id }}" 
+                       placeholder="{{ filtro.placeholder|default('') }}" value="{{ filtro.valor|default('') }}">
+                
+                {% elif filtro.tipo == 'date' %}
+                <input type="date" class="form-control" id="{{ filtro.id }}" name="{{ filtro.id }}" 
+                       value="{{ filtro.valor|default('') }}">
+                
+                {% elif filtro.tipo == 'select' %}
+                <select class="form-select" id="{{ filtro.id }}" name="{{ filtro.id }}">
+                    <option value="" {% if not filtro.valor %}selected{% endif %}>{{ filtro.placeholder|default('Todos') }}</option>
+                    {% for opcion in filtro.opciones %}
+                    <option value="{{ opcion.valor }}" {% if filtro.valor == opcion.valor %}selected{% endif %}>{{ opcion.texto }}</option>
+                    {% endfor %}
+                </select>
+                {% endif %}
+            </div>
+            {% endfor %}
+            
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="fas fa-filter me-2"></i>Aplicar Filtros
+                </button>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <a href="{{ limpiar_url }}" class="btn btn-outline-secondary w-100">
+                    <i class="fas fa-times me-2"></i>Limpiar Filtros
+                </a>
+            </div>
+        </div>
+    </form>
+</div>
+{% endmacro %}
+
+{% macro acciones_botones(acciones) %}
+<div class="d-flex flex-wrap">
+    {% for accion in acciones %}
+    <a href="{{ accion.url }}" 
+        class="btn btn-sm btn-{{ accion.tipo|default('primary') }} btn-action"
+        {% if accion.target %}target="{{ accion.target }}"{% endif %}
+        {% if accion.onclick %}onclick="{{ accion.onclick }}"{% endif %}>
+        {% if accion.icono %}<i class="fas fa-{{ accion.icono }} me-1"></i>{% endif %}{{ accion.texto }}
+    </a>
+    {% endfor %}
+</div>
+{% endmacro %} 

@@ -1,0 +1,79 @@
+{
+    "id": "Clasificacion_0150076A_20250304_161632",
+    "fecha_registro": "04/03/2025",
+    "hora_registro": "18:18:20",
+    "codigo_proveedor": "0150076A",
+    "nombre_proveedor": "IND - INVERSIONES SALAS Y ARAUJO",
+    "fotos": [
+        "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/static/fotos_racimos_temp/foto1_0150076A_20250304_161632.jpg",
+        "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/static/fotos_racimos_temp/foto2_0150076A_20250304_161632.jpg",
+        "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/static/fotos_racimos_temp/foto3_0150076A_20250304_161632.jpg"
+    ],
+    "estado": "completado",
+    "clasificacion_manual": {},
+    "clasificacion_automatica": {
+        "verdes": {
+            "cantidad": 0,
+            "porcentaje": 0
+        },
+        "maduros": {
+            "cantidad": 0,
+            "porcentaje": 0
+        },
+        "sobremaduros": {
+            "cantidad": 0,
+            "porcentaje": 0
+        },
+        "podridos": {
+            "cantidad": 0,
+            "porcentaje": 0
+        },
+        "danio_corona": {
+            "cantidad": 0,
+            "porcentaje": 0
+        },
+        "pendunculo_largo": {
+            "cantidad": 0,
+            "porcentaje": 0
+        }
+    },
+    "resultados_por_foto": {
+        "1": {
+            "potholes_detected": 0,
+            "detecciones": {
+                "verdes": 0,
+                "maduros": 0,
+                "sobremaduros": 0,
+                "podridos": 0,
+                "danio_corona": 0,
+                "pendunculo_largo": 0
+            }
+        },
+        "2": {
+            "potholes_detected": 0,
+            "detecciones": {
+                "verdes": 0,
+                "maduros": 0,
+                "sobremaduros": 0,
+                "podridos": 0,
+                "danio_corona": 0,
+                "pendunculo_largo": 0
+            }
+        },
+        "3": {
+            "potholes_detected": 0,
+            "detecciones": {
+                "verdes": 0,
+                "maduros": 0,
+                "sobremaduros": 0,
+                "podridos": 0,
+                "danio_corona": 0,
+                "pendunculo_largo": 0
+            }
+        }
+    },
+    "workflow_completado": true,
+    "tiempo_procesamiento": "11.06 segundos",
+    "modelo_utilizado": "enrique-p-workspace/clasificacion-racimos-3",
+    "total_racimos_detectados": 0
+}

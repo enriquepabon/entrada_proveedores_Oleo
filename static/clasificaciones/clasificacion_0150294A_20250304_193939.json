@@ -1,0 +1,51 @@
+{
+  "id": "Clasificacion_0150294A_20250304_193939",
+  "fecha_registro": "04/03/2025",
+  "hora_registro": "19:41:04",
+  "codigo_proveedor": "0150294A",
+  "nombre_proveedor": "IND - MUCACAL COMERCIALIZADORA DE F",
+  "fotos": [
+    "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/static/fotos_racimos_temp/foto1_0150294A_20250304_193939.jpg",
+    "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/static/fotos_racimos_temp/foto2_0150294A_20250304_193939.jpg",
+    "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/static/fotos_racimos_temp/foto3_0150294A_20250304_193939.jpg"
+  ],
+  "estado": "en_proceso",
+  "clasificacion_manual": {
+    "verdes": 2,
+    "sobremaduros": 2,
+    "danio_corona": 2,
+    "pendunculo_largo": 2,
+    "podridos": 2
+  },
+  "clasificacion_automatica": {
+    "verdes": {
+      "cantidad": 0,
+      "porcentaje": 0
+    },
+    "maduros": {
+      "cantidad": 0,
+      "porcentaje": 0
+    },
+    "sobremaduros": {
+      "cantidad": 0,
+      "porcentaje": 0
+    },
+    "podridos": {
+      "cantidad": 0,
+      "porcentaje": 0
+    },
+    "danio_corona": {
+      "cantidad": 0,
+      "porcentaje": 0
+    },
+    "pendunculo_largo": {
+      "cantidad": 0,
+      "porcentaje": 0
+    }
+  },
+  "resultados_por_foto": {},
+  "workflow_completado": true,
+  "tiempo_procesamiento": "2.9 segundos",
+  "modelo_utilizado": "enrique-p-workspace/clasificacion-racimos-3",
+  "total_racimos_detectados": 0
+}

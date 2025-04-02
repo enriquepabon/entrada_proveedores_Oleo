@@ -1,0 +1,32 @@
+INFO:app:Aplicada configuración externa: {'CONFIG_HOST': 'localhost', 'CONFIG_PORT': '8082', 'SERVER_NAME': 'localhost:8082', 'PREFERRED_URL_SCHEME': 'http'}
+INFO:app:SERVER_NAME configurado: localhost:8082
+INFO:app:Clave secreta configurada para la aplicación: 8f9cd2d3...
+INFO:app:Feature flags para nuevos templates configurados
+INFO:app:Directorio UPLOAD_FOLDER asegurado: /Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatización registro MLB/TiquetesApp/app/../static/uploads
+INFO:app:Directorio PDF_FOLDER asegurado: /Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatización registro MLB/TiquetesApp/app/../static/pdfs
+INFO:app:Directorio GUIAS_FOLDER asegurado: /Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatización registro MLB/TiquetesApp/app/../static/guias
+INFO:app:Directorio QR_FOLDER asegurado: /Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatización registro MLB/TiquetesApp/app/../static/qr
+INFO:app:Directorio IMAGES_FOLDER asegurado: /Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatización registro MLB/TiquetesApp/app/../static/images
+INFO:db_schema:Tablas creadas correctamente en la base de datos.
+INFO:app:Tablas de la base de datos verificadas/creadas correctamente.
+INFO:app:Todos los blueprints registrados correctamente.
+ * Serving Flask app 'app'
+ * Debug mode: on
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://localhost:8082
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:werkzeug: * Restarting with stat
+INFO:app:Aplicada configuración externa: {'CONFIG_HOST': 'localhost', 'CONFIG_PORT': '8082', 'SERVER_NAME': 'localhost:8082', 'PREFERRED_URL_SCHEME': 'http'}
+INFO:app:SERVER_NAME configurado: localhost:8082
+INFO:app:Clave secreta configurada para la aplicación: ee5a0e37...
+INFO:app:Feature flags para nuevos templates configurados
+INFO:app:Directorio UPLOAD_FOLDER asegurado: /Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatización registro MLB/TiquetesApp/app/../static/uploads
+INFO:app:Directorio PDF_FOLDER asegurado: /Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatización registro MLB/TiquetesApp/app/../static/pdfs
+INFO:app:Directorio GUIAS_FOLDER asegurado: /Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatización registro MLB/TiquetesApp/app/../static/guias
+INFO:app:Directorio QR_FOLDER asegurado: /Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatización registro MLB/TiquetesApp/app/../static/qr
+INFO:app:Directorio IMAGES_FOLDER asegurado: /Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatización registro MLB/TiquetesApp/app/../static/images
+INFO:db_schema:Tablas creadas correctamente en la base de datos.
+INFO:app:Tablas de la base de datos verificadas/creadas correctamente.
+INFO:app:Todos los blueprints registrados correctamente.
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 940-884-556

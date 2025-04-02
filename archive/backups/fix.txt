@@ -1,0 +1,15 @@
+        # Redirigir a la guía centralizada usando el mismo código de guía que recibimos
+        # Esto es crítico para mantener la URL consistente
+        flash("Clasificación guardada correctamente", "success")
+        
+        # Log exactamente qué URL estamos generando para la redirección
+        redirect_url = url_for('misc.ver_guia_centralizada', codigo_guia=codigo_guia)
+        logger.info(f"Redirigiendo a guía centralizada con URL: {redirect_url}")
+        
+        return redirect(redirect_url)
+    
+    except Exception as e:
+        logger.error(f"Error en guardar_clasificacion_final: {str(e)}")
+        logger.error(traceback.format_exc())
+        flash(f"Error al guardar la clasificación: {str(e)}", "danger")
+        return redirect(url_for('clasificacion.ver_resultados_clasificacion', url_guia=codigo_guia))

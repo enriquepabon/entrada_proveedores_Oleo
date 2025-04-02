@@ -52,12 +52,35 @@
             font-size: 0.85rem;
             padding: 0.35rem 0.65rem;
         }
+        /* Estilo para las celdas en la tabla */
+        .table td {
+            vertical-align: middle;
+        }
+        /* Tamaño específico para columnas */
+        .col-guia {
+            min-width: 140px;
+        }
+        .col-proveedor {
+            min-width: 200px;
+        }
+        .col-fecha {
+            min-width: 110px;
+        }
+        .col-hora {
+            min-width: 100px;
+        }
+        .col-transportista {
+            min-width: 180px;
+        }
+        .col-peso {
+            min-width: 120px;
+        }
     </style>
 </head>
 <body>
     <div class="main-container">
         <div class="header-section">
-            <a href="{{ url_for('upload_file') }}" class="back-link">
+            <a href="{{ url_for('misc.upload_file') }}" class="back-link">
                 <i class="fas fa-arrow-left me-2"></i>Volver al inicio
             </a>
             <h2>Lista de Pesajes</h2>
@@ -66,7 +89,7 @@
 
         <div class="filters-section">
             <h4 class="mb-3">Filtros</h4>
-            <form action="{{ url_for('lista_pesajes') }}" method="GET">
+            <form action="{{ url_for('pesaje.lista_pesajes') }}" method="GET">
                 <div class="row g-3">
                     <div class="col-md-3">
                         <label for="fecha_desde" class="form-label">Fecha Desde</label>
@@ -92,8 +115,9 @@
                         <label for="tipo_pesaje" class="form-label">Tipo de Pesaje</label>
                         <select class="form-select" id="tipo_pesaje" name="tipo_pesaje">
                             <option value="" {% if not filtros.tipo_pesaje %}selected{% endif %}>Todos</option>
-                            <option value="directo" {% if filtros.tipo_pesaje == 'directo' %}selected{% endif %}>Directo</option>
-                            <option value="virtual" {% if filtros.tipo_pesaje == 'virtual' %}selected{% endif %}>Virtual</option>
+                            <option value="directo" {% if filtros.tipo_pesaje == 'directo' %}selected{% endif %}>Pesaje Soporte Foto</option>
+                            <option value="virtual" {% if filtros.tipo_pesaje == 'virtual' %}selected{% endif %}>Pesaje Manual</option>
+                            <option value="bascula" {% if filtros.tipo_pesaje == 'bascula' %}selected{% endif %}>Pesaje Directo</option>
                         </select>
                     </div>
                     <div class="col-md-3 d-flex align-items-end">
@@ -102,7 +126,7 @@
                         </button>
                     </div>
                     <div class="col-md-3 d-flex align-items-end">
-                        <a href="{{ url_for('lista_pesajes') }}" class="btn btn-outline-secondary w-100">
+                        <a href="{{ url_for('pesaje.lista_pesajes') }}" class="btn btn-outline-secondary w-100">
                             <i class="fas fa-times me-2"></i>Limpiar Filtros
                         </a>
                     </div>
@@ -118,12 +142,18 @@
                 <table class="table table-hover">
                     <thead class="table-light">
                         <tr>
-                            <th>Guía</th>
-                            <th>Proveedor</th>
-                            <th>Fecha Pesaje</th>
-                            <th>Hora Pesaje</th>
+                            <th class="col-guia">Guía</th>
+                            <th class="col-proveedor">Proveedor</th>
+                            <th class="col-fecha">Fecha Entrada</th>
+                            <th class="col-hora">Hora Registro</th>
+                            <th class="col-transportista">Transportista</th>
+                            <th class="col-fecha">Fecha Pesaje</th>
+                            <th class="col-hora">Hora Pesaje</th>
+                            <th>Se Cargó</th>
+                            <th>Se Acarreó</th>
                             <th>Tipo Pesaje</th>
-                            <th>Peso Bruto (kg)</th>
+                            <th class="col-peso">Peso Bruto (kg)</th>
+                            <th>Guía Transporte SAP</th>
                             <th>Acciones</th>
                         </tr>
                     </thead>
@@ -133,26 +163,52 @@
                             <td>{{ pesaje.codigo_guia }}</td>
                             <td>
                                 <strong>{{ pesaje.codigo_proveedor }}</strong><br>
-                                <span class="text-muted">{{ pesaje.nombre_proveedor }}</span>
+                                <span class="text-muted">{{ pesaje.nombre_proveedor if pesaje.nombre_proveedor and pesaje.nombre_proveedor != 'None' and pesaje.nombre_proveedor != 'No disponible' else "No disponible" }}</span>
+                            </td>
+                            <td>{{ pesaje.fecha_registro }}</td>
+                            <td>{{ pesaje.hora_registro }}</td>
+                            <td>
+                                {% if pesaje.transportador and pesaje.transportador != 'None' and pesaje.transportador != 'No disponible' %}
+                                    {{ pesaje.transportador }}
+                                {% else %}
+                                    <span class="text-muted">No disponible</span>
+                                {% endif %}
                             </td>
                             <td>{{ pesaje.fecha_pesaje }}</td>
                             <td>{{ pesaje.hora_pesaje }}</td>
+                            <td>{{ pesaje.cargo }}</td>
+                            <td>{{ pesaje.acarreo }}</td>
                             <td>
-                                <span class="badge bg-{{ 'success' if pesaje.tipo_pesaje == 'directo' else 'info' }}">
-                                    {{ pesaje.tipo_pesaje|title }}
+                                <span class="badge bg-{{ 'success' if pesaje.tipo_pesaje == 'directo' else ('primary' if pesaje.tipo_pesaje == 'bascula' else 'info') }}">
+                                    {% if pesaje.tipo_pesaje == 'directo' %}
+                                        Soporte Foto
+                                    {% elif pesaje.tipo_pesaje == 'virtual' %}
+                                        Manual
+                                    {% elif pesaje.tipo_pesaje == 'bascula' %}
+                                        Directo
+                                    {% else %}
+                                        {{ pesaje.tipo_pesaje|title }}
+                                    {% endif %}
                                 </span>
                             </td>
-                            <td>{{ pesaje.peso_bruto }}</td>
+                            <td><strong>{{ pesaje.peso_bruto }}</strong></td>
+                            <td>{{ pesaje.codigo_guia_transporte_sap if pesaje.codigo_guia_transporte_sap and pesaje.codigo_guia_transporte_sap != 'None' and pesaje.codigo_guia_transporte_sap != 'No disponible' else "No disponible" }}</td>
                             <td>
                                 <div class="d-flex flex-wrap">
-                                    <a href="{{ url_for('ver_resultados_pesaje', codigo_guia=pesaje.codigo_guia) }}" 
+                                    <a href="{{ url_for('misc.ver_resultados_pesaje', codigo_guia=pesaje.codigo_guia) }}" 
                                        class="btn btn-sm btn-primary btn-action">
                                         <i class="fas fa-eye me-1"></i>Ver
                                     </a>
-                                    <a href="{{ url_for('generar_pdf_pesaje', codigo_guia=pesaje.codigo_guia) }}" 
+                                    <a href="{{ url_for('misc.generar_pdf_pesaje', codigo_guia=pesaje.codigo_guia) }}" 
                                        class="btn btn-sm btn-success btn-action">
                                         <i class="fas fa-file-pdf me-1"></i>PDF
                                     </a>
+                                    {% if pesaje.estado_actual == 'pesaje_completado' %}
+                                    <a href="{{ url_for('clasificacion.clasificacion', codigo=pesaje.codigo_guia) }}" 
+                                       class="btn btn-sm btn-info btn-action">
+                                        <i class="fas fa-list-check me-1"></i>Clasificar
+                                    </a>
+                                    {% endif %}
                                 </div>
                             </td>
                         </tr>

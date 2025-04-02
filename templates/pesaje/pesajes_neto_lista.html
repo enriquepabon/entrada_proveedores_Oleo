@@ -1,0 +1,67 @@
+{% extends "layouts/list_layout.html" %}
+{% import "components/tables/tabla_datos.html" as tablas %}
+
+{% block lista_titulo %}Lista de Pesajes Neto{% endblock %}
+{% block lista_descripcion %}Registros de pesajes neto realizados{% endblock %}
+
+{% block filtros %}
+{% set filtros_pesaje_neto = [
+    {
+        'id': 'fecha_inicio',
+        'etiqueta': 'Fecha Inicio',
+        'tipo': 'date',
+        'valor': filtros.get('fecha_inicio', '')
+    },
+    {
+        'id': 'fecha_fin',
+        'etiqueta': 'Fecha Fin',
+        'tipo': 'date',
+        'valor': filtros.get('fecha_fin', '')
+    },
+    {
+        'id': 'codigo_guia',
+        'etiqueta': 'Código de Guía',
+        'tipo': 'text',
+        'placeholder': 'Ingrese el código de guía',
+        'valor': filtros.get('codigo_guia', '')
+    }
+] %}
+
+{{ tablas.filtros_form(
+    filtros_pesaje_neto, 
+    url_for('pesaje.lista_pesajes_neto'), 
+    url_for('pesaje.lista_pesajes_neto')
+) }}
+{% endblock %}
+
+{% block lista %}
+{% set columnas_pesaje_neto = [
+    {'titulo': 'Código Guía', 'campo': 'codigo_guia'},
+    {'titulo': 'Código Proveedor', 'campo': 'codigo_proveedor'},
+    {'titulo': 'Nombre Proveedor', 'campo': 'nombre_proveedor'},
+    {'titulo': 'Fecha Pesaje', 'campo': 'fecha_pesaje_neto'},
+    {'titulo': 'Peso Bruto (kg)', 'render': lambda item: '<strong>' + item.peso_bruto|string + '</strong>'},
+    {'titulo': 'Peso Neto (kg)', 'render': lambda item: '<strong>' + item.peso_neto|string + '</strong>'},
+    {'titulo': 'Peso Producto (kg)', 'render': lambda item: '<strong>' + item.peso_producto|string + '</strong>'},
+    {
+        'titulo': 'Tipo Pesaje',
+        'render': lambda item: '<span class="badge bg-' + ('success' if item.tipo_pesaje_neto == 'directo' else 'warning') + '">' + item.tipo_pesaje_neto + '</span>'
+    },
+    {
+        'titulo': 'Acciones',
+        'render': lambda item: tablas.acciones_botones([
+            {'url': url_for('pesaje_neto.ver_resultados_pesaje_neto', codigo_guia=item.codigo_guia), 'texto': 'Ver', 'tipo': 'primary', 'icono': 'eye'},
+            {'url': url_for('pesaje.generar_pdf_pesaje_neto', codigo_guia=item.codigo_guia), 'texto': 'PDF', 'tipo': 'success', 'icono': 'file-pdf', 'target': '_blank'},
+            {'url': url_for('misc.ver_guia_centralizada', codigo_guia=item.codigo_guia), 'texto': 'Guía', 'tipo': 'info', 'icono': 'clipboard-list'}
+        ])
+    }
+] %}
+
+{{ tablas.tabla_filtrable(
+    'Resultados',
+    columnas_pesaje_neto,
+    pesajes,
+    url_for('pesaje.lista_pesajes_neto'),
+    sin_resultados_mensaje="No se encontraron registros de pesaje neto con los filtros seleccionados."
+) }}
+{% endblock %} 

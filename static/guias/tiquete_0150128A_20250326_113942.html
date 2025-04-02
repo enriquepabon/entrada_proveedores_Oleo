@@ -1,0 +1,257 @@
+<!-- templates/pdf_template.html -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Registro Completado</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f8f9fa;
+            margin: 0;
+            padding: 0;
+            color: #333;
+        }
+        .main-container {
+            max-width: 1000px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        .card {
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            background-color: white;
+            border: 1px solid #dee2e6;
+        }
+        .card-header {
+            background-color: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+            padding: 15px 20px;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        .card-body {
+            padding: 20px;
+        }
+        .info-row {
+            margin-bottom: 15px;
+            display: flex;
+            flex-wrap: wrap;
+        }
+        .info-item {
+            width: 48%;
+            margin-bottom: 10px;
+            padding-right: 10px;
+        }
+        .badge-custom {
+            display: inline-block;
+            font-size: 85%;
+            font-weight: normal;
+            padding: 3px 8px;
+            border-radius: 4px;
+            margin-left: 5px;
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        .badge-success {
+            background-color: #28a745;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 4px;
+        }
+        .tiquete-image {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .qr-container {
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .qr-image {
+            max-width: 150px;
+            margin: 10px auto;
+        }
+        .row {
+            display: flex;
+            flex-wrap: wrap;
+            margin: 0 -10px;
+        }
+        .col-7 {
+            width: 58%;
+            padding: 0 10px;
+        }
+        .col-5 {
+            width: 42%;
+            padding: 0 10px;
+        }
+        .header-title {
+            text-align: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #2c3e50;
+            padding-bottom: 15px;
+        }
+        .logo {
+            max-width: 180px;
+            margin-bottom: 10px;
+        }
+        .alert-success {
+            color: #155724;
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .text-center {
+            text-align: center;
+        }
+        .icon-inline {
+            margin-right: 5px;
+        }
+        .page-break {
+            page-break-after: always;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 15px;
+            border-top: 1px solid #dee2e6;
+            font-size: 12px;
+            color: #666;
+        }
+        .column-2 {
+            column-count: 2;
+            column-gap: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <div class="header-title">
+            <img src="http://localhost:8082/static/images/logo.png" 
+                 alt="Oleoflores Logo" class="logo">
+            <h1>Registro de Entrada - Extractora María La Baja</h1>
+            <h3>Código de Guía: 0150128A</h3>
+        </div>
+
+        <div class="alert-success">
+            <strong>El registro del proveedor ha sido procesado correctamente</strong>
+            <p>Se ha generado un PDF con la información completa del registro.</p>
+        </div>
+
+        <div class="row">
+            <!-- Columna izquierda: Información del proveedor -->
+            <div class="col-7">
+                <div class="card">
+                    <div class="card-header">
+                        Información del Proveedor
+                    </div>
+                    <div class="card-body">
+                        <div class="column-2">
+                            <div class="info-item">
+                                <strong>Código:</strong> 0150128A
+                                
+                            </div>
+                            <div class="info-item">
+                                <strong>Nombre:</strong> IND - DAVALMAN E HIJOS S.A.S
+                                
+                            </div>
+                            <div class="info-item">
+                                <strong>Cantidad de Racimos:</strong> 
+                                
+                            </div>
+                            <div class="info-item">
+                                <strong>Placa:</strong> PAL023
+                                
+                            </div>
+                            <div class="info-item">
+                                <strong>Se Acarreó:</strong> SI
+                                
+                            </div>
+                            <div class="info-item">
+                                <strong>Se Cargó:</strong> SI
+                                
+                            </div>
+                            <div class="info-item">
+                                <strong>Transportador:</strong> Rafael Ruiz
+                                
+                            </div>
+                            <div class="info-item">
+                                <strong>Fecha:</strong> 2025-01-08
+                                
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        Información del Registro
+                    </div>
+                    <div class="card-body">
+                        <div class="column-2">
+                            <div class="info-item">
+                                <strong>Fecha de Registro:</strong> 2025-01-08
+                            </div>
+                            <div class="info-item">
+                                <strong>Hora de Registro:</strong> 11:39:42
+                            </div>
+                            <div class="info-item">
+                                <strong>Estado:</strong> 
+                                <span class="badge-success">Registrado</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                
+                <div class="card">
+                    <div class="card-header">
+                        Nota y Observaciones
+                    </div>
+                    <div class="card-body">
+                        <p>Luego de la validación encontramos coincidencia exacta con el código de la empresa IND - DAVALMAN E HIJOS S.A.S, que se destaca en el sector agrícola.</p>
+                    </div>
+                </div>
+                
+            </div>
+            
+            <!-- Columna derecha: Imágenes -->
+            <div class="col-5">
+                <!-- Tiquete Image -->
+                
+                
+                <!-- QR Code Section -->
+                <div class="qr-container">
+                    <h4>Código QR de Seguimiento</h4>
+                    
+                    <div class="text-center">
+                        <p>Código QR no disponible</p>
+                    </div>
+                    
+                </div>
+                
+                <!-- Fotos de evidencia de pesaje -->
+                
+            </div>
+        </div>
+        
+        <!-- Sección de Pesaje (si existe) -->
+        
+
+        <div class="footer">
+            <p>Documento generado el 2025-01-08 a las 11:39:42</p>
+            <p>© 08 Extractora María La Baja - Todos los derechos reservados</p>
+        </div>
+    </div>
+</body>
+</html>

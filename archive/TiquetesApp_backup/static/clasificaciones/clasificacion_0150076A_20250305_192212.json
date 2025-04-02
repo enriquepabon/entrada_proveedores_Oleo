@@ -1,0 +1,85 @@
+{
+    "id": "Clasificacion_0150076A_20250305_192212",
+    "fecha_registro": "05/03/2025",
+    "hora_registro": "19:29:46",
+    "codigo_proveedor": "0150076A",
+    "nombre_proveedor": "IND - INVERSIONES SALAS Y ARAUJO",
+    "fotos": [
+        "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/static/fotos_racimos_temp/foto1_0150076A_20250305_192212.jpg",
+        "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/static/fotos_racimos_temp/foto2_0150076A_20250305_192212.jpg",
+        "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/static/fotos_racimos_temp/foto3_0150076A_20250305_192212.jpg"
+    ],
+    "estado": "completado",
+    "clasificacion_manual": {
+        "verdes": 1,
+        "sobremaduros": 0,
+        "danio_corona": 2,
+        "pendunculo_largo": 4,
+        "podridos": 5
+    },
+    "clasificacion_automatica": {
+        "verdes": {
+            "cantidad": 4,
+            "porcentaje": 100.0
+        },
+        "maduros": {
+            "cantidad": 0,
+            "porcentaje": 0.0
+        },
+        "sobremaduros": {
+            "cantidad": 0,
+            "porcentaje": 0.0
+        },
+        "podridos": {
+            "cantidad": 0,
+            "porcentaje": 0.0
+        },
+        "danio_corona": {
+            "cantidad": 0,
+            "porcentaje": 0.0
+        },
+        "pendunculo_largo": {
+            "cantidad": 0,
+            "porcentaje": 0.0
+        }
+    },
+    "resultados_por_foto": {
+        "1": {
+            "potholes_detected": 2,
+            "detecciones": {
+                "verdes": 2,
+                "maduros": 0,
+                "sobremaduros": 0,
+                "podridos": 0,
+                "danio_corona": 0,
+                "pendunculo_largo": 0
+            }
+        },
+        "2": {
+            "potholes_detected": 0,
+            "detecciones": {
+                "verdes": 0,
+                "maduros": 0,
+                "sobremaduros": 0,
+                "podridos": 0,
+                "danio_corona": 0,
+                "pendunculo_largo": 0
+            }
+        },
+        "3": {
+            "potholes_detected": 2,
+            "detecciones": {
+                "verdes": 2,
+                "maduros": 0,
+                "sobremaduros": 0,
+                "podridos": 0,
+                "danio_corona": 0,
+                "pendunculo_largo": 0
+            }
+        }
+    },
+    "workflow_completado": true,
+    "tiempo_procesamiento": "30.09 segundos",
+    "modelo_utilizado": "enrique-p-workspace/clasificacion-racimos-3",
+    "total_racimos_detectados": 4
+}

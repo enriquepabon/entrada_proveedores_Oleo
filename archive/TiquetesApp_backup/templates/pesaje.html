@@ -1,0 +1,851 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container py-4">
+    <h2 class="text-center mb-4">Registro de Peso</h2>
+
+    <!-- Información General -->
+    <div class="info-section">
+        <div class="row">
+            <div class="col-md-6">
+                <p><strong>Código Proveedor:</strong> {{ datos.codigo }}</p>
+                <p><strong>Nombre Proveedor:</strong> {{ datos.nombre }}</p>
+                <p><strong>Código Guía:</strong> {{ datos.codigo_guia }}</p>
+                <p><strong>Fecha de Entrada:</strong> {{ datos.fecha_registro }}</p>
+                <p><strong>Hora de Registro:</strong> {{ datos.hora_registro }}</p>
+            </div>
+            <div class="col-md-6">
+                <p><strong>Fecha Pesaje:</strong> {{ datos.fecha_pesaje or 'Pendiente' }}</p>
+                <p><strong>Hora Pesaje:</strong> {{ datos.hora_pesaje or 'Pendiente' }}</p>
+                <p><strong>Racimos:</strong> {{ datos.cantidad_racimos }}</p>
+                <p><strong>Se Cargó:</strong> {{ datos.cargo }}</p>
+                <p><strong>Se Acarreó:</strong> {{ datos.acarreo }}</p>
+                <p><strong>Transportista:</strong> {{ datos.transportador }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sección de Pesaje -->
+    <div class="classification-section">
+        <h4 class="mb-3">Tipo de Pesaje</h4>
+        <div class="mb-3">
+            <div class="btn-group" role="group">
+                <input type="radio" class="btn-check" name="tipo_pesaje" id="pesaje_foto" value="foto" checked>
+                <label class="btn btn-outline-primary" for="pesaje_foto">Pesaje Soporte Foto</label>
+                
+                <input type="radio" class="btn-check" name="tipo_pesaje" id="pesaje_manual" value="manual">
+                <label class="btn btn-outline-primary" for="pesaje_manual">Pesaje Manual</label>
+                
+                <input type="radio" class="btn-check" name="tipo_pesaje" id="pesaje_directo" value="directo">
+                <label class="btn btn-outline-primary" for="pesaje_directo">Pesaje Directo</label>
+            </div>
+        </div>
+        
+        <!-- Sección de Pesaje Soporte Foto (antes Directo) -->
+        <div id="seccion_pesaje_foto" class="mt-4">
+            <div class="mb-3">
+                <label class="form-label">Capturar o Subir Peso</label>
+                <div class="d-flex gap-2 mb-2">
+                    <button class="btn btn-primary" id="btn_capturar">
+                        <i class="fas fa-camera"></i> Capturar con Cámara
+                    </button>
+                    <div class="btn btn-primary position-relative">
+                        <i class="fas fa-upload"></i> Subir Foto
+                        <input type="file" id="input_foto" class="position-absolute top-0 start-0 opacity-0 w-100 h-100" 
+                               accept="image/*" style="cursor: pointer;">
+                    </div>
+                    <button class="btn btn-secondary" id="btn_recapturar" style="display: none;">
+                        <i class="fas fa-redo"></i> Reintentar
+                    </button>
+                </div>
+            </div>
+            
+            <div id="preview_container" class="mb-3" style="display: none;">
+                <img id="preview_image" class="img-fluid rounded" style="max-width: 400px;">
+                <div class="mt-2">
+                    <button class="btn btn-primary" id="btn_validar_foto">
+                        <i class="fas fa-check"></i> Validar Foto
+                    </button>
+                </div>
+            </div>
+            
+            <div id="peso_detectado_container" class="mb-3 alert alert-success" style="display: none;">
+                <h5 class="mb-0">Peso Detectado: <span id="peso_detectado"></span> kg</h5>
+            </div>
+        </div>
+        
+        <!-- Sección de Pesaje Manual (antes Virtual) -->
+        <div id="seccion_pesaje_manual" class="mt-4" style="display: none;">
+            <!-- Paso 1: Solicitud de Autorización -->
+            <div id="paso_solicitud" class="mb-3">
+                <label class="form-label">Justificación para Pesaje Manual</label>
+                <textarea class="form-control mb-2" id="justificacion" rows="3" placeholder="Explique por qué se requiere pesaje manual"></textarea>
+                <button class="btn btn-primary" id="btn_solicitar_autorizacion">
+                    <i class="fas fa-paper-plane"></i> Solicitar Autorización
+                </button>
+            </div>
+            
+            <!-- Paso 2: Validación de Código -->
+            <div id="paso_validacion" class="mb-3" style="display: none;">
+                <label class="form-label">Código de Autorización</label>
+                <div class="input-group mb-2">
+                    <input type="text" class="form-control" id="codigo_autorizacion" placeholder="Ingrese el código">
+                    <button class="btn btn-primary" id="btn_validar_codigo">
+                        <i class="fas fa-check"></i> Validar
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Paso 3: Ingreso de Peso -->
+            <div id="paso_peso_virtual" class="mb-3" style="display: none;">
+                <label class="form-label">Peso Bruto (kg)</label>
+                <input type="number" class="form-control" id="peso_virtual" step="0.001" placeholder="Ingrese el peso">
+            </div>
+        </div>
+        
+        <!-- Sección de Pesaje Directo (nuevo) -->
+        <div id="seccion_pesaje_directo" class="mt-4" style="display: none;">
+            <div class="alert alert-info mb-3">
+                <i class="fas fa-info-circle me-2"></i>
+                Este pesaje se conectará directamente con la báscula digital.
+            </div>
+            
+            <div class="mb-3">
+                <button class="btn btn-primary btn-lg" id="btn_obtener_peso_directo" disabled>
+                    <i class="fas fa-balance-scale me-2"></i> Obtener Peso Directo
+                </button>
+                <div class="form-text mt-2">
+                    <i class="fas fa-exclamation-circle me-1"></i> 
+                    Esta funcionalidad estará disponible próximamente.
+                </div>
+            </div>
+            
+            <div id="peso_directo_container" class="mb-3 alert alert-success" style="display: none;">
+                <h5 class="mb-0">Peso Recibido: <span id="peso_directo_valor"></span> kg</h5>
+            </div>
+        </div>
+        
+        <!-- Sección de Fotos de Soporte -->
+        <div class="mt-4 mb-4">
+            <h4 class="mb-3">Fotos de Soporte (Opcional)</h4>
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i>
+                Adjunte fotos del camión en la báscula como evidencia del pesaje (máximo 4 fotos).
+            </div>
+            
+            <div class="row">
+                <!-- Foto 1 -->
+                <div class="col-md-3 mb-3">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Foto 1</h5>
+                            <div class="mb-2">
+                                <div class="btn btn-primary position-relative w-100">
+                                    <i class="fas fa-upload me-2"></i> Subir Foto
+                                    <input type="file" id="foto_soporte_1" class="position-absolute top-0 start-0 opacity-0 w-100 h-100" 
+                                       accept="image/*" style="cursor: pointer;">
+                                </div>
+                            </div>
+                            <div id="preview_foto_1" class="text-center" style="display: none;">
+                                <img class="img-fluid rounded mb-2 preview-image" alt="Vista previa foto 1">
+                                <button type="button" class="btn btn-danger btn-sm w-100 btn-remove-foto" data-foto="1">
+                                    <i class="fas fa-trash-alt me-1"></i> Eliminar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Foto 2 -->
+                <div class="col-md-3 mb-3">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Foto 2</h5>
+                            <div class="mb-2">
+                                <div class="btn btn-primary position-relative w-100">
+                                    <i class="fas fa-upload me-2"></i> Subir Foto
+                                    <input type="file" id="foto_soporte_2" class="position-absolute top-0 start-0 opacity-0 w-100 h-100" 
+                                       accept="image/*" style="cursor: pointer;">
+                                </div>
+                            </div>
+                            <div id="preview_foto_2" class="text-center" style="display: none;">
+                                <img class="img-fluid rounded mb-2 preview-image" alt="Vista previa foto 2">
+                                <button type="button" class="btn btn-danger btn-sm w-100 btn-remove-foto" data-foto="2">
+                                    <i class="fas fa-trash-alt me-1"></i> Eliminar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Foto 3 -->
+                <div class="col-md-3 mb-3">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Foto 3</h5>
+                            <div class="mb-2">
+                                <div class="btn btn-primary position-relative w-100">
+                                    <i class="fas fa-upload me-2"></i> Subir Foto
+                                    <input type="file" id="foto_soporte_3" class="position-absolute top-0 start-0 opacity-0 w-100 h-100" 
+                                       accept="image/*" style="cursor: pointer;">
+                                </div>
+                            </div>
+                            <div id="preview_foto_3" class="text-center" style="display: none;">
+                                <img class="img-fluid rounded mb-2 preview-image" alt="Vista previa foto 3">
+                                <button type="button" class="btn btn-danger btn-sm w-100 btn-remove-foto" data-foto="3">
+                                    <i class="fas fa-trash-alt me-1"></i> Eliminar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Foto 4 -->
+                <div class="col-md-3 mb-3">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Foto 4</h5>
+                            <div class="mb-2">
+                                <div class="btn btn-primary position-relative w-100">
+                                    <i class="fas fa-upload me-2"></i> Subir Foto
+                                    <input type="file" id="foto_soporte_4" class="position-absolute top-0 start-0 opacity-0 w-100 h-100" 
+                                       accept="image/*" style="cursor: pointer;">
+                                </div>
+                            </div>
+                            <div id="preview_foto_4" class="text-center" style="display: none;">
+                                <img class="img-fluid rounded mb-2 preview-image" alt="Vista previa foto 4">
+                                <button type="button" class="btn btn-danger btn-sm w-100 btn-remove-foto" data-foto="4">
+                                    <i class="fas fa-trash-alt me-1"></i> Eliminar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Sección de Verificación de Placa -->
+        <div class="mt-4 mb-4">
+            <h4 class="mb-3">Verificación de Placa</h4>
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i>
+                Tome una foto de la placa del vehículo para verificar que coincida con la placa registrada inicialmente.
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Foto de la Placa</h5>
+                            <p class="card-text">Placa registrada: <strong>{{ datos.placa }}</strong></p>
+                            <div class="mb-3">
+                                <div class="btn btn-primary position-relative">
+                                    <i class="fas fa-camera me-2"></i> Capturar Placa
+                                    <input type="file" id="placa_foto" class="position-absolute top-0 start-0 opacity-0 w-100 h-100" 
+                                           accept="image/*" style="cursor: pointer;">
+                                </div>
+                                <button class="btn btn-success ms-2" id="btn_verificar_placa" disabled>
+                                    <i class="fas fa-check me-2"></i> Verificar Placa
+                                </button>
+                            </div>
+                            <div id="preview_placa" class="text-center" style="display: none;">
+                                <img class="img-fluid rounded mb-2" alt="Vista previa placa">
+                                <button type="button" class="btn btn-danger btn-sm" id="btn_eliminar_placa">
+                                    <i class="fas fa-trash-alt me-1"></i> Eliminar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div id="resultado_placa" style="display: none;">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title">Resultado de la Verificación</h5>
+                                <div id="placa_detectada" class="mb-2">
+                                    <span class="fw-bold">Placa detectada:</span> <span id="texto_placa_detectada"></span>
+                                </div>
+                                <div id="placa_coincide" class="alert alert-success" style="display: none;">
+                                    <i class="fas fa-check-circle me-2"></i> La placa coincide con la registrada inicialmente.
+                                </div>
+                                <div id="placa_no_coincide" class="alert alert-danger" style="display: none;">
+                                    <i class="fas fa-exclamation-triangle me-2"></i> La placa NO coincide con la registrada inicialmente.
+                                </div>
+                                <div id="placa_error" class="alert alert-warning" style="display: none;">
+                                    <i class="fas fa-exclamation-circle me-2"></i> <span id="texto_error_placa"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Botón de Procesar -->
+        <div class="text-center mt-4">
+            <button class="btn btn-success" id="btn_procesar" style="display: none;">
+                <i class="fas fa-save"></i> Procesar Peso
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Overlay de carga -->
+<div id="loadingOverlay" class="loading-overlay">
+    <div class="loading-content">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Procesando...</span>
+        </div>
+        <h2 class="mt-3">Procesando validación...</h2>
+        <p>Por favor espere mientras validamos la foto.</p>
+    </div>
+</div>
+
+<style>
+    .info-section {
+        background-color: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+    }
+    .classification-section {
+        background-color: #ffffff;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(255, 255, 255, 0.9);
+        display: none;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+    }
+    .loading-content {
+        text-align: center;
+        background-color: white;
+        padding: 2rem;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    .loading-content h2 {
+        margin-top: 1rem;
+        font-size: 1.5rem;
+        color: #0d6efd;
+    }
+    .loading-content p {
+        color: #6c757d;
+        margin-top: 0.5rem;
+    }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const tipoPesajeRadios = document.querySelectorAll('input[name="tipo_pesaje"]');
+    const seccionFoto = document.getElementById('seccion_pesaje_foto');
+    const seccionManual = document.getElementById('seccion_pesaje_manual');
+    const seccionDirecto = document.getElementById('seccion_pesaje_directo');
+    const btnProcesar = document.getElementById('btn_procesar');
+    let pesoCapturado = null;
+    let imagenActual = null;
+    
+    // Función para capturar imagen con la cámara
+    async function capturarImagen() {
+        // ... existing code ...
+    }
+    
+    tipoPesajeRadios.forEach(radio => {
+        radio.addEventListener('change', function() {
+            if (this.value === 'foto') {
+                seccionFoto.style.display = 'block';
+                seccionManual.style.display = 'none';
+                seccionDirecto.style.display = 'none';
+            } else if (this.value === 'manual') {
+                seccionFoto.style.display = 'none';
+                seccionManual.style.display = 'block';
+                seccionDirecto.style.display = 'none';
+            } else {
+                seccionFoto.style.display = 'none';
+                seccionManual.style.display = 'none';
+                seccionDirecto.style.display = 'block';
+            }
+            btnProcesar.style.display = 'none';
+            pesoCapturado = null;
+        });
+    });
+    
+    // Pesaje Soporte Foto
+    const btnCapturar = document.getElementById('btn_capturar');
+    const inputFoto = document.getElementById('input_foto');
+    const btnRecapturar = document.getElementById('btn_recapturar');
+    const previewContainer = document.getElementById('preview_container');
+    const previewImage = document.getElementById('preview_image');
+    const pesoDetectadoContainer = document.getElementById('peso_detectado_container');
+    const pesoDetectadoSpan = document.getElementById('peso_detectado');
+    const btnValidarFoto = document.getElementById('btn_validar_foto');
+    
+    // Función para mostrar la imagen
+    function mostrarImagen(blob) {
+        previewImage.src = URL.createObjectURL(blob);
+        previewContainer.style.display = 'block';
+        btnCapturar.style.display = 'none';
+        inputFoto.parentElement.style.display = 'none';
+        btnRecapturar.style.display = 'block';
+        pesoDetectadoContainer.style.display = 'none';
+        btnProcesar.style.display = 'none';
+        imagenActual = blob;
+    }
+
+    function mostrarCarga(mostrar) {
+        const overlay = document.getElementById('loadingOverlay');
+        overlay.style.display = mostrar ? 'flex' : 'none';
+    }
+    
+    // Función para procesar la imagen
+    async function procesarImagen(blob) {
+        try {
+            // Mostrar el overlay de carga
+            mostrarCarga(true);
+
+            const formData = new FormData();
+            formData.append('imagen', blob, 'peso.jpg');
+            formData.append('codigo_guia', '{{ datos.codigo_guia }}');
+            
+            const response = await fetch('/procesar_pesaje_directo', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const data = await response.json();
+            if (data.success) {
+                pesoDetectadoSpan.textContent = data.peso;
+                pesoDetectadoContainer.style.display = 'block';
+                btnProcesar.style.display = 'block';
+                pesoCapturado = data.peso;
+                alert('Validación exitosa. Peso detectado correctamente.');
+            } else {
+                pesoDetectadoContainer.style.display = 'none';
+                btnProcesar.style.display = 'none';
+                alert(data.message);
+            }
+        } catch (error) {
+            console.error(error);
+            alert('Error al procesar la imagen');
+        } finally {
+            // Ocultar el overlay de carga
+            mostrarCarga(false);
+        }
+    }
+    
+    // Evento para captura con cámara
+    btnCapturar.addEventListener('click', async function() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            const video = document.createElement('video');
+            video.srcObject = stream;
+            await video.play();
+            
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            
+            const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg'));
+            stream.getTracks().forEach(track => track.stop());
+            
+            mostrarImagen(blob);
+        } catch (error) {
+            console.error(error);
+            alert('Error al capturar la imagen');
+        }
+    });
+    
+    // Evento para subir foto
+    inputFoto.addEventListener('change', async function(e) {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            mostrarImagen(file);
+        }
+    });
+    
+    // Evento para validar foto
+    btnValidarFoto.addEventListener('click', async function() {
+        if (imagenActual) {
+            await procesarImagen(imagenActual);
+        } else {
+            alert('Por favor, capture o suba una foto primero');
+        }
+    });
+    
+    // Evento para recapturar/reintentar
+    btnRecapturar.addEventListener('click', function() {
+        previewContainer.style.display = 'none';
+        pesoDetectadoContainer.style.display = 'none';
+        btnCapturar.style.display = 'block';
+        inputFoto.parentElement.style.display = 'block';
+        btnRecapturar.style.display = 'none';
+        btnProcesar.style.display = 'none';
+        pesoCapturado = null;
+        imagenActual = null;
+        inputFoto.value = ''; // Limpiar el input de archivo
+    });
+    
+    // Pesaje Virtual
+    const btnSolicitarAutorizacion = document.getElementById('btn_solicitar_autorizacion');
+    const pasoValidacion = document.getElementById('paso_validacion');
+    const btnValidarCodigo = document.getElementById('btn_validar_codigo');
+    const pasoPesoVirtual = document.getElementById('paso_peso_virtual');
+    
+    btnSolicitarAutorizacion.addEventListener('click', async function() {
+        const justificacion = document.getElementById('justificacion').value;
+        if (!justificacion) {
+            alert('Por favor, ingrese una justificación');
+            return;
+        }
+        
+        try {
+            const response = await fetch('/solicitar_autorizacion_pesaje', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    codigo_guia: '{{ datos.codigo_guia }}',
+                    comentarios: justificacion
+                })
+            });
+            
+            const data = await response.json();
+            if (data.success) {
+                alert('Solicitud enviada. Por favor, espere el código de autorización.');
+                pasoValidacion.style.display = 'block';
+            } else {
+                alert(data.message);
+            }
+        } catch (error) {
+            console.error(error);
+            alert('Error al enviar la solicitud');
+        }
+    });
+    
+    btnValidarCodigo.addEventListener('click', async function() {
+        const codigo = document.getElementById('codigo_autorizacion').value;
+        if (!codigo) {
+            alert('Por favor, ingrese el código de autorización');
+            return;
+        }
+        
+        try {
+            const response = await fetch('/validar_codigo_autorizacion', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    codigo_guia: '{{ datos.codigo_guia }}',
+                    codigoAutorizacion: codigo
+                })
+            });
+            
+            const data = await response.json();
+            if (data.success) {
+                pasoPesoVirtual.style.display = 'block';
+                btnProcesar.style.display = 'block';
+            } else {
+                alert(data.message);
+            }
+        } catch (error) {
+            console.error(error);
+            alert('Error al validar el código');
+        }
+    });
+    
+    // Manejo de fotos de soporte
+    let fotosSoporte = {
+        foto1: null,
+        foto2: null,
+        foto3: null,
+        foto4: null
+    };
+    
+    // Inicializar los inputs de fotos
+    for (let i = 1; i <= 4; i++) {
+        const fotoInput = document.getElementById(`foto_soporte_${i}`);
+        const previewDiv = document.getElementById(`preview_foto_${i}`);
+        const previewImg = previewDiv.querySelector('img');
+        
+        fotoInput.addEventListener('change', function(e) {
+            if (this.files && this.files[0]) {
+                const file = this.files[0];
+                const reader = new FileReader();
+                
+                reader.onload = function(e) {
+                    previewImg.src = e.target.result;
+                    previewDiv.style.display = 'block';
+                    fotosSoporte[`foto${i}`] = file;
+                };
+                
+                reader.readAsDataURL(file);
+            }
+        });
+    }
+    
+    // Manejar eliminación de fotos
+    document.querySelectorAll('.btn-remove-foto').forEach(button => {
+        button.addEventListener('click', function() {
+            const fotoNum = this.getAttribute('data-foto');
+            const previewDiv = document.getElementById(`preview_foto_${fotoNum}`);
+            const fotoInput = document.getElementById(`foto_soporte_${fotoNum}`);
+            
+            previewDiv.style.display = 'none';
+            fotoInput.value = '';
+            fotosSoporte[`foto${fotoNum}`] = null;
+        });
+    });
+    
+    // Modificar el manejador del botón procesar para incluir las fotos
+    btnProcesar.addEventListener('click', async function() {
+        // Mantener el código existente
+        const tipoPesaje = document.querySelector('input[name="tipo_pesaje"]:checked').value;
+        let peso;
+        
+        if (tipoPesaje === 'foto') {
+            peso = pesoCapturado;
+        } else if (tipoPesaje === 'manual') {
+            peso = document.getElementById('peso_virtual').value;
+        } else {
+            // Para el caso de pesaje directo, todavía no implementado
+            alert('Esta funcionalidad aún no está disponible.');
+            return;
+        }
+        
+        if (!peso) {
+            alert('Por favor, capture o ingrese el peso');
+            return;
+        }
+        
+        try {
+            // Mostrar el overlay de carga con mensaje personalizado
+            const loadingContent = document.querySelector('.loading-content');
+            const loadingTitle = loadingContent.querySelector('h2');
+            const loadingText = loadingContent.querySelector('p');
+            loadingTitle.textContent = 'Procesando peso...';
+            loadingText.textContent = 'Por favor espere mientras registramos el peso.';
+            mostrarCarga(true);
+
+            // Mapeo de los nuevos valores a los valores antiguos para compatibilidad con el backend
+            const mapTipoPesaje = {
+                'foto': 'directo',
+                'manual': 'virtual',
+                'directo': 'bascula' // Cuando esté implementado, podría necesitar su propio valor
+            };
+
+            // Comprobar si hay fotos para decidir cómo enviar los datos
+            let hayFotos = false;
+            for (let i = 1; i <= 4; i++) {
+                if (fotosSoporte[`foto${i}`]) {
+                    hayFotos = true;
+                    break;
+                }
+            }
+            
+            let response;
+            const tipo = mapTipoPesaje[tipoPesaje];
+            
+            if (hayFotos) {
+                // Usar FormData si hay fotos
+                const formData = new FormData();
+                formData.append('codigo_guia', '{{ datos.codigo_guia }}');
+                formData.append('peso_bruto', peso);
+                
+                // Agregar las fotos
+                for (let i = 1; i <= 4; i++) {
+                    if (fotosSoporte[`foto${i}`]) {
+                        formData.append(`foto_soporte_${i}`, fotosSoporte[`foto${i}`]);
+                    }
+                }
+                
+                // Usar el endpoint correcto para cada tipo de pesaje - modificamos para usar los endpoints que existen
+                if (tipo === 'directo') {
+                    response = await fetch('/registrar_peso_directo', {
+                        method: 'POST',
+                        body: formData
+                    });
+                } else if (tipo === 'virtual') {
+                    response = await fetch('/registrar_peso_virtual', {
+                        method: 'POST',
+                        body: formData
+                    });
+                } else {
+                    // Para 'bascula' u otros tipos futuros
+                    response = await fetch(`/registrar_peso_${tipo}`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                }
+            } else {
+                // Si estamos usando el endpoint 'directo' (tipoPesaje 'foto'), usamos JSON
+                if (tipo === 'directo') {
+                    response = await fetch(`/registrar_peso_${tipo}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            codigo_guia: '{{ datos.codigo_guia }}',
+                            peso_bruto: peso
+                        })
+                    });
+                } 
+                // Para otros tipos, usamos FormData
+                else {
+                    const formData = new FormData();
+                    formData.append('codigo_guia', '{{ datos.codigo_guia }}');
+                    formData.append('peso_bruto', peso);
+                    
+                    response = await fetch(`/registrar_peso_${tipo}`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                }
+            }
+            
+            const data = await response.json();
+            if (data.success) {
+                // Redireccionar a la URL proporcionada por el servidor
+                if (data.redirect_url) {
+                    window.location.href = data.redirect_url;
+                } else if (data.redirect) {
+                    window.location.href = data.redirect;
+                }
+            } else {
+                alert(data.message);
+            }
+        } catch (error) {
+            console.error(error);
+            alert('Error al procesar el peso: ' + error.message);
+        } finally {
+            // Ocultar el overlay de carga
+            mostrarCarga(false);
+            // Restaurar el mensaje original del overlay
+            const loadingContent = document.querySelector('.loading-content');
+            const loadingTitle = loadingContent.querySelector('h2');
+            const loadingText = loadingContent.querySelector('p');
+            loadingTitle.textContent = 'Procesando validación...';
+            loadingText.textContent = 'Por favor espere mientras validamos la foto.';
+        }
+    });
+
+    // ----- CÓDIGO PARA VERIFICACIÓN DE PLACA -----
+    const placaFotoInput = document.getElementById('placa_foto');
+    const previewPlaca = document.getElementById('preview_placa');
+    const previewPlacaImg = previewPlaca.querySelector('img');
+    const btnVerificarPlaca = document.getElementById('btn_verificar_placa');
+    const btnEliminarPlaca = document.getElementById('btn_eliminar_placa');
+    const resultadoPlaca = document.getElementById('resultado_placa');
+    const textoPlacaDetectada = document.getElementById('texto_placa_detectada');
+    const placaCoincide = document.getElementById('placa_coincide');
+    const placaNoCoincide = document.getElementById('placa_no_coincide');
+    const placaError = document.getElementById('placa_error');
+    const textoErrorPlaca = document.getElementById('texto_error_placa');
+    
+    let placaFotoActual = null;
+    let placaRegistrada = '{{ datos.placa }}';
+    
+    // Manejar carga de foto de placa
+    placaFotoInput.addEventListener('change', function(e) {
+        if (this.files && this.files[0]) {
+            const file = this.files[0];
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                previewPlacaImg.src = e.target.result;
+                previewPlaca.style.display = 'block';
+                placaFotoActual = file;
+                btnVerificarPlaca.disabled = false;
+                
+                // Ocultar resultados anteriores
+                resultadoPlaca.style.display = 'none';
+                placaCoincide.style.display = 'none';
+                placaNoCoincide.style.display = 'none';
+                placaError.style.display = 'none';
+            };
+            
+            reader.readAsDataURL(file);
+        }
+    });
+    
+    // Manejar eliminación de foto de placa
+    btnEliminarPlaca.addEventListener('click', function() {
+        previewPlaca.style.display = 'none';
+        placaFotoInput.value = '';
+        placaFotoActual = null;
+        btnVerificarPlaca.disabled = true;
+        resultadoPlaca.style.display = 'none';
+    });
+    
+    // Manejar verificación de placa
+    btnVerificarPlaca.addEventListener('click', async function() {
+        if (!placaFotoActual) {
+            alert('Por favor, capture o suba una foto de la placa primero');
+            return;
+        }
+        
+        try {
+            // Mostrar el overlay de carga
+            mostrarCarga(true);
+            
+            const formData = new FormData();
+            formData.append('placa_foto', placaFotoActual);
+            formData.append('codigo_guia', '{{ datos.codigo_guia }}');
+            formData.append('placa_registrada', placaRegistrada);
+            
+            const response = await fetch('/verificar_placa_pesaje', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const data = await response.json();
+            
+            // Mostrar el resultado
+            resultadoPlaca.style.display = 'block';
+            
+            if (data.success) {
+                textoPlacaDetectada.textContent = data.placa_detectada;
+                
+                if (data.coincide) {
+                    placaCoincide.style.display = 'block';
+                    placaNoCoincide.style.display = 'none';
+                    placaError.style.display = 'none';
+                } else {
+                    placaCoincide.style.display = 'none';
+                    placaNoCoincide.style.display = 'block';
+                    placaError.style.display = 'none';
+                }
+            } else {
+                textoErrorPlaca.textContent = data.message;
+                placaCoincide.style.display = 'none';
+                placaNoCoincide.style.display = 'none';
+                placaError.style.display = 'block';
+            }
+        } catch (error) {
+            console.error(error);
+            textoErrorPlaca.textContent = 'Error al procesar la verificación de placa';
+            resultadoPlaca.style.display = 'block';
+            placaCoincide.style.display = 'none';
+            placaNoCoincide.style.display = 'none';
+            placaError.style.display = 'block';
+        } finally {
+            // Ocultar el overlay de carga
+            mostrarCarga(false);
+        }
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,35 @@
+{
+    "id": "Clasificacion_0105007A_20250329_115147",
+    "codigo_guia": "0105007A_20250329_115147",
+    "codigo_proveedor": "0105007A",
+    "nombre_proveedor": "RICAEL FLORES",
+    "fecha_registro": "29/03/2025",
+    "hora_registro": "12:08:44",
+    "fecha_clasificacion": "29/03/2025",
+    "hora_clasificacion": "12:08:44",
+    "clasificacion_manual": {
+        "verdes": 1.0,
+        "maduros": 0.0,
+        "sobremaduros": 2.0,
+        "danio_corona": 3.0,
+        "pendunculo_largo": 4.0,
+        "podridos": 5.0
+    },
+    "clasificaciones": {
+        "verdes": 1.0,
+        "maduros": 0.0,
+        "sobremaduros": 2.0,
+        "danio_corona": 3.0,
+        "pendunculo_largo": 4.0,
+        "podridos": 5.0
+    },
+    "observaciones": "",
+    "estado": "completado",
+    "total_racimos_detectados": 15.0,
+    "fotos": [
+        "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/app/../static/uploads/temp_clasificacion/temp_clasificacion_0105007A_20250329_115147_1_1743268124.jpg",
+        "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/app/../static/uploads/temp_clasificacion/temp_clasificacion_0105007A_20250329_115147_2_1743268124.jpg",
+        "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/app/../static/uploads/temp_clasificacion/temp_clasificacion_0105007A_20250329_115147_3_1743268124.jpg"
+    ],
+    "clasificacion_automatica": {}
+}

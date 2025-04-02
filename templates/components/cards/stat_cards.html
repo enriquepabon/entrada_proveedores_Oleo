@@ -1,0 +1,123 @@
+{% macro simple_stat_card(titulo, valor, icono, color="primary", footer_texto=None, footer_link=None) %}
+<div class="card h-100 shadow-sm">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <h6 class="text-muted mb-1 text-uppercase">{{ titulo }}</h6>
+                <h2 class="mb-0 fw-bold">{{ valor }}</h2>
+            </div>
+            <div class="bg-{{ color }} bg-opacity-10 rounded-circle p-3">
+                <i class="fas fa-{{ icono }} text-{{ color }} fa-lg"></i>
+            </div>
+        </div>
+        {% if footer_texto %}
+        <div class="mt-3 pt-2 border-top">
+            {% if footer_link %}
+            <a href="{{ footer_link }}" class="text-decoration-none">
+                <small class="text-muted">{{ footer_texto }} <i class="fas fa-arrow-right ms-1"></i></small>
+            </a>
+            {% else %}
+            <small class="text-muted">{{ footer_texto }}</small>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endmacro %}
+
+{% macro progress_stat_card(titulo, valor, maximo, porcentaje, icono, color="primary", footer_texto=None, footer_link=None) %}
+<div class="card h-100 shadow-sm">
+    <div class="card-body">
+        <div class="d-flex justify-content-between mb-3">
+            <div>
+                <h6 class="text-muted mb-1 text-uppercase">{{ titulo }}</h6>
+                <h2 class="mb-0 fw-bold">{{ valor }}</h2>
+            </div>
+            <div class="bg-{{ color }} bg-opacity-10 rounded-circle p-3">
+                <i class="fas fa-{{ icono }} text-{{ color }} fa-lg"></i>
+            </div>
+        </div>
+        <div class="progress" style="height: 8px;">
+            <div class="progress-bar bg-{{ color }}" role="progressbar" style="width: {{ porcentaje }}%;" 
+                 aria-valuenow="{{ valor }}" aria-valuemin="0" aria-valuemax="{{ maximo }}"></div>
+        </div>
+        <div class="d-flex justify-content-between mt-2">
+            <small class="text-muted">0</small>
+            <small class="text-muted">{{ maximo }}</small>
+        </div>
+        {% if footer_texto %}
+        <div class="mt-3 pt-2 border-top">
+            {% if footer_link %}
+            <a href="{{ footer_link }}" class="text-decoration-none">
+                <small class="text-muted">{{ footer_texto }} <i class="fas fa-arrow-right ms-1"></i></small>
+            </a>
+            {% else %}
+            <small class="text-muted">{{ footer_texto }}</small>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endmacro %}
+
+{% macro detail_stat_card(titulo, valor_principal, subtitulo=None, valor_secundario=None, porcentaje=None, icono=None, color="primary", tendencia=None) %}
+<div class="card h-100 shadow-sm">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start mb-3">
+            <div>
+                <h6 class="text-muted mb-1 text-uppercase">{{ titulo }}</h6>
+                <h2 class="mb-0 fw-bold">{{ valor_principal }}</h2>
+                {% if tendencia %}
+                <div class="mt-2">
+                    <span class="badge bg-{{ 'success' if tendencia > 0 else 'danger' }}">
+                        <i class="fas fa-{{ 'arrow-up' if tendencia > 0 else 'arrow-down' }} me-1"></i>
+                        {{ tendencia|abs }}%
+                    </span>
+                    <small class="text-muted ms-1">vs. mes anterior</small>
+                </div>
+                {% endif %}
+            </div>
+            {% if icono %}
+            <div class="bg-{{ color }} bg-opacity-10 rounded-circle p-3">
+                <i class="fas fa-{{ icono }} text-{{ color }} fa-lg"></i>
+            </div>
+            {% endif %}
+        </div>
+        
+        {% if subtitulo and valor_secundario %}
+        <div class="mt-4">
+            <div class="d-flex justify-content-between align-items-center">
+                <h6 class="text-muted mb-0">{{ subtitulo }}</h6>
+                <h5 class="mb-0">{{ valor_secundario }}</h5>
+            </div>
+            {% if porcentaje is not none %}
+            <div class="progress mt-2" style="height: 5px;">
+                <div class="progress-bar bg-{{ color }}" role="progressbar" style="width: {{ porcentaje }}%;" 
+                     aria-valuenow="{{ porcentaje }}" aria-valuemin="0" aria-valuemax="100"></div>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endmacro %}
+
+{% macro image_card(imagen_url, titulo, descripcion=None, footer=None, link=None, clase_extra='') %}
+<div class="card h-100 shadow-sm {{ clase_extra }}">
+    <img src="{{ imagen_url }}" class="card-img-top" alt="{{ titulo }}">
+    <div class="card-body">
+        <h5 class="card-title">{{ titulo }}</h5>
+        {% if descripcion %}
+        <p class="card-text">{{ descripcion }}</p>
+        {% endif %}
+        {% if link %}
+        <a href="{{ link }}" class="btn btn-primary mt-2">Ver detalles</a>
+        {% endif %}
+    </div>
+    {% if footer %}
+    <div class="card-footer text-muted">
+        {{ footer }}
+    </div>
+    {% endif %}
+</div>
+{% endmacro %}

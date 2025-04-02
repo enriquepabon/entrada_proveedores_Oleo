@@ -1,0 +1,76 @@
+{
+    "id": "Clasificacion_0105007A_20250303_141423",
+    "fecha_registro": "03/03/2025",
+    "hora_registro": "14:14:23",
+    "fotos": [
+        "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/static/fotos_racimos_temp/foto1_0105007A_20250303_141423.jpg",
+        "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/static/fotos_racimos_temp/foto2_0105007A_20250303_141423.jpg",
+        "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/static/fotos_racimos_temp/foto3_0105007A_20250303_141423.jpg"
+    ],
+    "estado": "completado",
+    "clasificacion_manual": {},
+    "clasificacion_automatica": {
+        "verdes": {
+            "cantidad": 0,
+            "porcentaje": 0
+        },
+        "maduros": {
+            "cantidad": 0,
+            "porcentaje": 0
+        },
+        "sobremaduros": {
+            "cantidad": 0,
+            "porcentaje": 0
+        },
+        "podridos": {
+            "cantidad": 0,
+            "porcentaje": 0
+        },
+        "danio_corona": {
+            "cantidad": 0,
+            "porcentaje": 0
+        },
+        "pendunculo_largo": {
+            "cantidad": 0,
+            "porcentaje": 0
+        }
+    },
+    "resultados_por_foto": {
+        "1": {
+            "potholes_detected": 0,
+            "detecciones": {
+                "racimos_verdes": 0,
+                "racimos_maduros": 0,
+                "racimos_sobremaduros": 0,
+                "racimos_podridos": 0
+            }
+        },
+        "2": {
+            "potholes_detected": 0,
+            "detecciones": {
+                "racimos_verdes": 0,
+                "racimos_maduros": 0,
+                "racimos_sobremaduros": 0,
+                "racimos_podridos": 0
+            }
+        },
+        "3": {
+            "potholes_detected": 0,
+            "detecciones": {
+                "racimos_verdes": 0,
+                "racimos_maduros": 0,
+                "racimos_sobremaduros": 0,
+                "racimos_podridos": 0
+            }
+        }
+    },
+    "clasificacion_automatica_raw": {
+        "racimos_verdes": 0,
+        "racimos_maduros": 0,
+        "racimos_sobremaduros": 0,
+        "racimos_podridos": 0
+    },
+    "workflow_completado": true,
+    "tiempo_procesamiento": "10.53 segundos",
+    "modelo_utilizado": "enrique-p-workspace/clasificacion-racimos-3"
+}

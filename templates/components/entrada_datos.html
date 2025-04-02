@@ -1,0 +1,96 @@
+{% macro datos_guia(codigo_guia, fecha_registro, hora_registro, estado) %}
+<div class="info-section">
+    <div class="section-title">Información de la Guía</div>
+    <div class="info-grid">
+        <div class="info-item">
+            <div class="info-label">Código de Guía</div>
+            <div class="info-value">{{ codigo_guia }}</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Fecha de Registro</div>
+            <div class="info-value">{{ fecha_registro }}</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Hora de Registro</div>
+            <div class="info-value">{{ hora_registro }}</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Estado</div>
+            <div class="info-value">
+                {% if estado == 'pendiente' %}
+                    <span class="badge bg-warning">Pendiente</span>
+                {% elif estado == 'procesado' %}
+                    <span class="badge bg-success">Procesado</span>
+                {% elif estado == 'error' %}
+                    <span class="badge bg-danger">Error</span>
+                {% else %}
+                    <span class="badge bg-secondary">{{ estado|title }}</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+{% macro imagen_tiquete(imagen_url, for_pdf=false) %}
+<div class="info-section">
+    <div class="section-title">Imagen del Tiquete</div>
+    <div class="text-center">
+        <img src="{{ imagen_url }}" alt="Imagen del tiquete" class="tiquete-image">
+    </div>
+</div>
+{% endmacro %}
+
+{% macro datos_extraccion(datos_extraidos) %}
+<div class="info-section">
+    <div class="section-title">Datos Extraídos</div>
+    {% if datos_extraidos %}
+        <div class="info-grid">
+            {% for clave, valor in datos_extraidos.items() %}
+            <div class="info-item">
+                <div class="info-label">{{ clave|title }}</div>
+                <div class="info-value">{{ valor }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="text-muted">No se han extraído datos del tiquete.</p>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{% macro estado_procesamiento(estado, mensaje=None, progreso=None) %}
+<div class="processing-status {% if estado == 'error' %}error{% elif estado == 'success' %}success{% else %}processing{% endif %}">
+    <div class="status-icon">
+        {% if estado == 'error' %}
+            <i class="fas fa-times-circle"></i>
+        {% elif estado == 'success' %}
+            <i class="fas fa-check-circle"></i>
+        {% else %}
+            <i class="fas fa-spinner fa-spin"></i>
+        {% endif %}
+    </div>
+    <div class="status-content">
+        <h4 class="status-title">
+            {% if estado == 'error' %}
+                Error en el Procesamiento
+            {% elif estado == 'success' %}
+                Procesamiento Exitoso
+            {% else %}
+                Procesando Imagen
+            {% endif %}
+        </h4>
+        {% if mensaje %}
+            <p class="status-message">{{ mensaje }}</p>
+        {% endif %}
+        {% if progreso and estado == 'processing' %}
+            <div class="progress">
+                <div class="progress-bar" role="progressbar" style="width: {{ progreso }}%;" 
+                     aria-valuenow="{{ progreso }}" aria-valuemin="0" aria-valuemax="100">
+                    {{ progreso }}%
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endmacro %} 

@@ -1,0 +1,74 @@
+{
+    "id": "Clasificacion_0105007A_20250309_203509",
+    "fecha_registro": "09/03/2025",
+    "hora_registro": "20:44:35",
+    "codigo_proveedor": "0105007A",
+    "nombre_proveedor": "A5- RICAEL FLORES - LOTE A",
+    "fotos": [
+        "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/static/fotos_racimos_temp/foto1_0105007A_20250309_203509.jpg",
+        "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/static/fotos_racimos_temp/foto2_0105007A_20250309_203509.jpg",
+        "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/static/fotos_racimos_temp/foto3_0105007A_20250309_203509.jpg"
+    ],
+    "estado": "completado",
+    "clasificacion_manual": {
+        "verdes": 2,
+        "sobremaduros": 3,
+        "danio_corona": 4,
+        "pendunculo_largo": 5,
+        "podridos": 7
+    },
+    "clasificacion_automatica": {
+        "verdes": {
+            "cantidad": 6,
+            "porcentaje": 100.0
+        },
+        "maduros": {
+            "cantidad": 0,
+            "porcentaje": 0.0
+        },
+        "sobremaduros": {
+            "cantidad": 0,
+            "porcentaje": 0.0
+        },
+        "podridos": {
+            "cantidad": 0,
+            "porcentaje": 0.0
+        },
+        "danio_corona": {
+            "cantidad": 0,
+            "porcentaje": 0.0
+        },
+        "pendunculo_largo": {
+            "cantidad": 0,
+            "porcentaje": 0.0
+        }
+    },
+    "resultados_por_foto": {
+        "2": {
+            "potholes_detected": 4,
+            "detecciones": {
+                "verdes": 4,
+                "maduros": 0,
+                "sobremaduros": 0,
+                "podridos": 0,
+                "danio_corona": 0,
+                "pendunculo_largo": 0
+            }
+        },
+        "3": {
+            "potholes_detected": 2,
+            "detecciones": {
+                "verdes": 2,
+                "maduros": 0,
+                "sobremaduros": 0,
+                "podridos": 0,
+                "danio_corona": 0,
+                "pendunculo_largo": 0
+            }
+        }
+    },
+    "workflow_completado": true,
+    "tiempo_procesamiento": "30.61 segundos",
+    "modelo_utilizado": "enrique-p-workspace/clasificacion-racimos-3",
+    "total_racimos_detectados": 6
+}

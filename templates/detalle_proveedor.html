@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detalle de Guía - {{ datos_guia.codigo_guia }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+            .page {
+                margin: 0;
+                padding: 20px;
+            }
+        }
+        body {
+            background-color: #f8f9fa;
+            padding: 20px;
+        }
+        .page {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            position: relative;
+        }
+        .logo {
+            max-height: 80px;
+            margin-bottom: 20px;
+        }
+        .qr-code {
+            position: absolute;
+            top: 0;
+            right: 0;
+            max-width: 100px;
+            max-height: 100px;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+        }
+        .section-title {
+            color: #0d6efd;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #dee2e6;
+        }
+        .info-row {
+            margin-bottom: 15px;
+        }
+        .info-label {
+            font-weight: bold;
+            color: #495057;
+        }
+        .info-value {
+            color: #212529;
+        }
+        .timestamp {
+            font-size: 0.9em;
+            color: #6c757d;
+            margin-top: 10px;
+            text-align: right;
+        }
+        .footer {
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 1px solid #dee2e6;
+            text-align: center;
+            color: #6c757d;
+            font-size: 0.9em;
+        }
+        .print-button {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+        .classification-table {
+            width: 100%;
+            margin-bottom: 1rem;
+        }
+        .classification-table th {
+            background-color: #e9ecef;
+            padding: 10px;
+        }
+        .classification-table td {
+            padding: 10px;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .exit-note {
+            background-color: #e9ecef;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <button onclick="window.print()" class="btn btn-primary print-button no-print">
+        <i class="fas fa-print me-2"></i>Imprimir
+    </button>
+
+    <div class="page">
+        <!-- Header -->
+        <div class="header">
+            <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Oleoflores Logo" class="logo">
+            <img src="{{ qr_code }}" alt="QR Code" class="qr-code">
+            <h2 class="text-center mt-3">Detalle de Guía: {{ datos_guia.codigo_guia }}</h2>
+        </div>
+
+        <!-- Registro de Entrada -->
+        <div class="section">
+            <h4 class="section-title">
+                <i class="fas fa-clipboard-check me-2"></i>Registro de Entrada
+            </h4>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="info-row">
+                        <span class="info-label">Código Proveedor:</span>
+                        <span class="info-value">{{ datos_guia.codigo_proveedor }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Nombre Proveedor:</span>
+                        <span class="info-value">{{ datos_guia.nombre_proveedor }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Cantidad Racimos:</span>
+                        <span class="info-value">
+                            {% if datos_guia.racimos == 0 or datos_guia.cantidad_racimos == 0 %}
+                                0
+                            {% elif datos_guia.racimos and datos_guia.racimos != 'None' and datos_guia.racimos != 'N/A' %}
+                                {{ datos_guia.racimos }}
+                            {% elif datos_guia.cantidad_racimos and datos_guia.cantidad_racimos != 'None' and datos_guia.cantidad_racimos != 'N/A' %}
+                                {{ datos_guia.cantidad_racimos }}
+                            {% else %}
+                                No disponible
+                            {% endif %}
+                        </span>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="info-row">
+                        <span class="info-label">Placa:</span>
+                        <span class="info-value">{{ datos_guia.placa }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Transportador:</span>
+                        <span class="info-value">{{ datos_guia.transportador }}</span>
+                    </div>
+                </div>
+                <div class="timestamp">
+                    Fecha: {{ datos_guia.fecha_registro }} - Hora: {{ datos_guia.hora_registro }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Pesaje -->
+        <div class="section">
+            <h4 class="section-title">
+                <i class="fas fa-weight me-2"></i>Datos de Pesaje
+            </h4>
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="info-row">
+                        <span class="info-label">Peso Bruto:</span>
+                        <span class="info-value">{{ datos_guia.peso_bruto|default('No disponible') }} kg</span>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="info-row">
+                        <span class="info-label">Peso Tara:</span>
+                        <span class="info-value">{{ datos_guia.peso_tara|default('No disponible') }} kg</span>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="info-row">
+                        <span class="info-label">Peso Neto:</span>
+                        <span class="info-value">{{ datos_guia.peso_neto|default('No disponible') }} kg</span>
+                    </div>
+                </div>
+                <!-- Código SAP - verificando múltiples nombres posibles -->
+                {% if datos_guia.codigo_guia_transporte_sap and datos_guia.codigo_guia_transporte_sap != 'None' and datos_guia.codigo_guia_transporte_sap != 'N/A' and datos_guia.codigo_guia_transporte_sap != '' %}
+                <div class="col-md-12 mt-3">
+                    <div class="info-row">
+                        <span class="info-label">Código SAP:</span>
+                        <span class="info-value">{{ datos_guia.codigo_guia_transporte_sap }}</span>
+                    </div>
+                </div>
+                {% elif datos_guia.guia_sap and datos_guia.guia_sap != 'None' and datos_guia.guia_sap != 'N/A' and datos_guia.guia_sap != '' %}
+                <div class="col-md-12 mt-3">
+                    <div class="info-row">
+                        <span class="info-label">Código SAP:</span>
+                        <span class="info-value">{{ datos_guia.guia_sap }}</span>
+                    </div>
+                </div>
+                {% elif datos_guia.codigo_sap and datos_guia.codigo_sap != 'None' and datos_guia.codigo_sap != 'N/A' and datos_guia.codigo_sap != '' %}
+                <div class="col-md-12 mt-3">
+                    <div class="info-row">
+                        <span class="info-label">Código SAP:</span>
+                        <span class="info-value">{{ datos_guia.codigo_sap }}</span>
+                    </div>
+                </div>
+                {% elif datos_guia.guia_transporte_sap and datos_guia.guia_transporte_sap != 'None' and datos_guia.guia_transporte_sap != 'N/A' and datos_guia.guia_transporte_sap != '' %}
+                <div class="col-md-12 mt-3">
+                    <div class="info-row">
+                        <span class="info-label">Código SAP:</span>
+                        <span class="info-value">{{ datos_guia.guia_transporte_sap }}</span>
+                    </div>
+                </div>
+                {% endif %}
+                <div class="timestamp">
+                    Fecha Pesaje Bruto: {{ datos_guia.fecha_pesaje|default('--/--/----') }} - Hora: {{ datos_guia.hora_pesaje|default('--:--') }}<br>
+                    Fecha Pesaje Neto: {{ datos_guia.fecha_pesaje_neto|default('--/--/----') }} - Hora: {{ datos_guia.hora_pesaje_neto|default('--:--') }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Clasificación -->
+        <div class="section">
+            <h4 class="section-title">
+                <i class="fas fa-tasks me-2"></i>Resultados de Clasificación
+            </h4>
+            <div class="row">
+                <div class="col-md-6">
+                    <h5>Clasificación Manual</h5>
+                    <table class="classification-table">
+                        <tr>
+                            <th>Tipo</th>
+                            <th>Porcentaje</th>
+                        </tr>
+                        <tr>
+                            <td>Verdes</td>
+                            <td>{% if datos_guia.clasificacion_manual and datos_guia.clasificacion_manual.verde != None and datos_guia.clasificacion_manual.verde != 'None' and datos_guia.clasificacion_manual.verde != '' %}{{ datos_guia.clasificacion_manual.verde }}%{% else %}No disponible{% endif %}</td>
+                        </tr>
+                        <tr>
+                            <td>Sobremaduros</td>
+                            <td>{% if datos_guia.clasificacion_manual and datos_guia.clasificacion_manual.sobremaduro != None and datos_guia.clasificacion_manual.sobremaduro != 'None' and datos_guia.clasificacion_manual.sobremaduro != '' %}{{ datos_guia.clasificacion_manual.sobremaduro }}%{% else %}No disponible{% endif %}</td>
+                        </tr>
+                        <tr>
+                            <td>Daño Corona</td>
+                            <td>{% if datos_guia.clasificacion_manual and datos_guia.clasificacion_manual.danio_corona != None and datos_guia.clasificacion_manual.danio_corona != 'None' and datos_guia.clasificacion_manual.danio_corona != '' %}{{ datos_guia.clasificacion_manual.danio_corona }}%{% else %}No disponible{% endif %}</td>
+                        </tr>
+                        <tr>
+                            <td>Pedúnculo Largo</td>
+                            <td>{% if datos_guia.clasificacion_manual and datos_guia.clasificacion_manual.pendunculo_largo != None and datos_guia.clasificacion_manual.pendunculo_largo != 'None' and datos_guia.clasificacion_manual.pendunculo_largo != '' %}{{ datos_guia.clasificacion_manual.pendunculo_largo }}%{% else %}No disponible{% endif %}</td>
+                        </tr>
+                        <tr>
+                            <td>Podridos</td>
+                            <td>{% if datos_guia.clasificacion_manual and datos_guia.clasificacion_manual.podrido != None and datos_guia.clasificacion_manual.podrido != 'None' and datos_guia.clasificacion_manual.podrido != '' %}{{ datos_guia.clasificacion_manual.podrido }}%{% else %}No disponible{% endif %}</td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="col-md-6">
+                    <h5>Clasificación Automática</h5>
+                    <table class="classification-table">
+                        <thead>
+                            <tr>
+                                <th>Tipo</th>
+                                <th>Porcentaje</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if datos_guia.clasificacion_consolidada %}
+                                {% for tipo, datos in datos_guia.clasificacion_consolidada.items() %}
+                                    {% if tipo|lower != 'maduro' %} {# Skip 'Maduro' #}
+                                    <tr>
+                                        <td>{{ tipo|replace('_', ' ')|capitalize }}</td>
+                                        <td>{{ datos.porcentaje }}%</td>
+                                    </tr>
+                                    {% endif %}
+                                {% endfor %}
+                            {% elif datos_guia.clasificacion_automatica and datos_guia.clasificacion_automatica is mapping %}
+                                {% for tipo, datos in datos_guia.clasificacion_automatica.items() %}
+                                    {% if tipo != 'total_racimos' and tipo|lower != 'maduro' and datos is mapping %} {# Skip 'Maduro' and 'total_racimos' #}
+                                    <tr>
+                                        <td>{{ tipo|replace('_', ' ')|capitalize }}</td>
+                                        <td>{{ datos.porcentaje|default(0) }}%</td>
+                                    </tr>
+                                    {% endif %}
+                                {% endfor %}
+                            {% elif datos_guia.clasificacion_automatica_items %}
+                                {% for tipo, valor in datos_guia.clasificacion_automatica_items %}
+                                    {% if tipo|lower != 'maduro' %} {# Skip 'Maduro' #}
+                                    <tr>
+                                        <td>{{ tipo|capitalize }}</td>
+                                        <td>{% if valor is not none and valor|string != 'None' and valor|string != '' %}{{ valor }}%{% else %}No disponible{% endif %}</td>
+                                    </tr>
+                                    {% endif %}
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="2" class="text-center">No hay datos de clasificación automática disponibles.</td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                    <p><small>Esta clasifiación es informativa no tiene impacto en la liquidación de fruta.</small></p>
+                </div>
+                <div class="timestamp">
+                    Fecha Clasificación: {{ datos_guia.fecha_clasificacion|default('--/--/----') }} - Hora: {{ datos_guia.hora_clasificacion|default('--:--') }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Datos de Salida -->
+        <div class="section">
+            <h4 class="section-title">
+                <i class="fas fa-truck me-2"></i>Datos de Salida
+            </h4>
+            <div class="timestamp">
+                Fecha Salida: {{ datos_guia.fecha_salida }} - Hora: {{ datos_guia.hora_salida }}
+            </div>
+            {% if datos_guia.nota_salida %}
+            <div class="exit-note">
+                <strong>Nota de Salida:</strong><br>
+                {{ datos_guia.nota_salida }}
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p>Este documento fue generado automáticamente por el sistema de registro de MLB.</p>
+            <p>Fecha de generación: {{ now_timestamp }}</p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> 

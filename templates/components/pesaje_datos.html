@@ -1,0 +1,137 @@
+{% macro datos_proveedor(codigo_proveedor, nombre_proveedor, transportador, placa, racimos, codigo_guia_transporte_sap) %}
+<div class="info-section">
+    <div class="section-title">Datos del Proveedor</div>
+    <div class="info-grid">
+        <div class="info-item">
+            <div class="info-label">Código</div>
+            <div class="info-value">{{ codigo_proveedor }}</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Nombre</div>
+            <div class="info-value">{{ nombre_proveedor }}</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Transportador</div>
+            <div class="info-value">{{ transportador }}</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Placa</div>
+            <div class="info-value">{{ placa }}</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Racimos</div>
+            <div class="info-value">{{ racimos }}</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Código Guía Transporte SAP</div>
+            <div class="info-value">{{ codigo_guia_transporte_sap }}</div>
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+{% macro datos_pesaje(peso_bruto, tipo_pesaje, fecha_pesaje, hora_pesaje) %}
+<div class="info-section">
+    <div class="section-title">Información del Pesaje</div>
+    <div class="info-grid">
+        <div class="info-item">
+            <div class="info-label">Peso Bruto</div>
+            <div class="weight-value">{{ peso_bruto }} kg</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Tipo de Pesaje</div>
+            <div class="info-value">
+                {% if tipo_pesaje == 'directo' %}
+                    Soporte Foto
+                {% elif tipo_pesaje == 'virtual' %}
+                    Manual
+                {% elif tipo_pesaje == 'bascula' %}
+                    Directo
+                {% else %}
+                    {{ tipo_pesaje|title }}
+                {% endif %}
+            </div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Fecha</div>
+            <div class="info-value">{{ fecha_pesaje }}</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">Hora</div>
+            <div class="info-value">{{ hora_pesaje }}</div>
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+{% macro detalles_verificacion_placa(placa, placa_detectada, placa_coincide) %}
+{% if placa_detectada %}
+<div style="margin-top: 15px; border-top: 1px solid #ddd; padding-top: 10px;">
+    <h4 style="margin: 0 0 10px 0;">Verificación de Placa:</h4>
+    <table style="width: 100%; border-collapse: collapse; border: 1px solid {{ 'green' if placa_coincide else 'red' }}; background-color: {{ '#f0fff0' if placa_coincide else '#fff0f0' }};">
+        <tr>
+            <td style="width: 33%; padding: 5px;"><strong>Placa Registrada:</strong> {{ placa }}</td>
+            <td style="width: 33%; padding: 5px;"><strong>Placa Detectada:</strong> {{ placa_detectada }}</td>
+            <td style="width: 33%; padding: 5px; text-align: center;">
+                <strong>Estado:</strong> 
+                {% if placa_coincide %}
+                    <span style="background-color: #28a745; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.9em;">
+                        VERIFICADO ✓
+                    </span>
+                {% else %}
+                    <span style="background-color: #dc3545; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.9em;">
+                        NO COINCIDE ✗
+                    </span>
+                {% endif %}
+            </td>
+        </tr>
+    </table>
+</div>
+{% endif %}
+{% endmacro %}
+
+{% macro fotos_evidencia(fotos_pesaje, url_for_static=true) %}
+{% if fotos_pesaje and fotos_pesaje|length > 0 %}
+<div style="margin-top: 15px; border-top: 1px solid #ddd; padding-top: 10px;">
+    <h4 style="margin: 0 0 10px 0;">Evidencia Fotográfica del Pesaje:</h4>
+    <table style="width: 100%; border-collapse: collapse;">
+        <tr>
+            {% for foto in fotos_pesaje %}
+            {% if loop.index0 < 2 %}
+            <td style="width: 50%; padding: 5px; text-align: center;">
+                {% if url_for_static %}
+                <img src="{{ url_for('static', filename=foto.replace('static/', ''), _external=True) }}" 
+                     style="max-width: 100%; max-height: 200px; border: 1px solid #ddd;" 
+                     alt="Evidencia de pesaje {{ loop.index }}">
+                {% else %}
+                <img src="{{ foto }}" 
+                     style="max-width: 100%; max-height: 200px; border: 1px solid #ddd;" 
+                     alt="Evidencia de pesaje {{ loop.index }}">
+                {% endif %}
+            </td>
+            {% endif %}
+            {% endfor %}
+        </tr>
+        {% if fotos_pesaje|length > 2 %}
+        <tr>
+            {% for foto in fotos_pesaje %}
+            {% if loop.index0 >= 2 and loop.index0 < 4 %}
+            <td style="width: 50%; padding: 5px; text-align: center;">
+                {% if url_for_static %}
+                <img src="{{ url_for('static', filename=foto.replace('static/', ''), _external=True) }}" 
+                     style="max-width: 100%; max-height: 200px; border: 1px solid #ddd;" 
+                     alt="Evidencia de pesaje {{ loop.index }}">
+                {% else %}
+                <img src="{{ foto }}" 
+                     style="max-width: 100%; max-height: 200px; border: 1px solid #ddd;" 
+                     alt="Evidencia de pesaje {{ loop.index }}">
+                {% endif %}
+            </td>
+            {% endif %}
+            {% endfor %}
+        </tr>
+        {% endif %}
+    </table>
+</div>
+{% endif %}
+{% endmacro %} 

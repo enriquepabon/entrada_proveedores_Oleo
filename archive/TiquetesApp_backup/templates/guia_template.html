@@ -1,0 +1,444 @@
+<!-- templates/guia_template.html -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guía de Proceso</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #0d6efd;
+            --success-color: #28a745;
+            --warning-color: #ffc107;
+            --light-gray: #f8f9fa;
+            --border-color: #dee2e6;
+        }
+        
+        body {
+            background-color: #f5f6fa;
+            color: #2c3e50;
+        }
+
+        .main-container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+
+        .header-section {
+            background: white;
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+
+        .ticket-image {
+            width: 100%;
+            max-width: 600px;
+            height: auto;
+            border-radius: 10px;
+            margin: 1rem auto;
+            display: block;
+        }
+
+        .info-card {
+            background: white;
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+
+        .info-card .card-title {
+            color: #2c3e50;
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--light-gray);
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .info-item {
+            margin-bottom: 1rem;
+        }
+
+        .info-label {
+            font-size: 0.9rem;
+            color: #6c757d;
+            margin-bottom: 0.25rem;
+        }
+
+        .info-value {
+            font-size: 1rem;
+            color: #2c3e50;
+            font-weight: 500;
+        }
+
+        .process-timeline {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1rem;
+        }
+
+        .timeline-item {
+            background: white;
+            border-radius: 10px;
+            padding: 1.25rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: all 0.3s ease;
+        }
+
+        .timeline-item.completed {
+            background-color: #e8f5e9;
+            border-left: 4px solid var(--success-color);
+        }
+
+        .timeline-item.current {
+            background-color: #e3f2fd;
+            border-left: 4px solid var(--primary-color);
+        }
+
+        .timeline-item.pending {
+            background-color: #fff3e0;
+            border-left: 4px solid var(--warning-color);
+        }
+
+        .timeline-content {
+            flex: 1;
+        }
+
+        .timeline-title {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .timeline-info {
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+
+        .btn-action {
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+
+        .btn-download {
+            background-color: white;
+            color: var(--primary-color);
+            border: 1px solid var(--primary-color);
+        }
+
+        .btn-download:hover {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .btn-register {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .btn-register:hover {
+            background-color: #0056b3;
+        }
+
+        .status-icon {
+            font-size: 1.25rem;
+            margin-right: 0.5rem;
+        }
+
+        .completed .status-icon {
+            color: var(--success-color);
+        }
+
+        .current .status-icon {
+            color: var(--primary-color);
+        }
+
+        .pending .status-icon {
+            color: var(--warning-color);
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <!-- Encabezado -->
+        <div class="header-section text-center">
+            <h2 class="mb-3">Guía de Proceso</h2>
+            <h4 class="text-primary mb-2">{{ codigo_guia }}</h4>
+            <h5 class="text-secondary">{{ nombre }}</h5>
+            
+            <!-- Imagen del tiquete -->
+            {% if image_filename %}
+            <img src="{{ url_for('static', filename='uploads/' + image_filename) }}" 
+                 alt="Tiquete escaneado" 
+                 class="ticket-image">
+            {% endif %}
+        </div>
+
+        <!-- Información del Tiquete -->
+        <div class="info-card">
+            <h3 class="card-title">Información del Proceso</h3>
+            <div class="info-grid">
+                <!-- Registro de Portería -->
+                <div class="info-item">
+                    <div class="info-label">Código</div>
+                    <div class="info-value">{{ codigo }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Nombre del Agricultor</div>
+                    <div class="info-value">{{ nombre }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Cantidad de Racimos</div>
+                    <div class="info-value">{{ cantidad_racimos }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Placa</div>
+                    <div class="info-value">{{ placa }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Se Acarreó</div>
+                    <div class="info-value">{{ acarreo }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Se Cargó</div>
+                    <div class="info-value">{{ cargo }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Transportador</div>
+                    <div class="info-value">{{ transportador }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Fecha de Registro</div>
+                    <div class="info-value">{{ fecha_registro }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Hora de Registro</div>
+                    <div class="info-value">{{ hora_registro }}</div>
+                </div>
+
+                <!-- Información de Pesaje -->
+                {% if peso_bruto %}
+                <div class="info-item">
+                    <div class="info-label">Fecha de Pesaje</div>
+                    <div class="info-value">{{ fecha_pesaje }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Hora de Pesaje</div>
+                    <div class="info-value">{{ hora_pesaje }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Tipo de Pesaje</div>
+                    <div class="info-value">{{ tipo_pesaje|title }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Peso Bruto</div>
+                    <div class="info-value">{{ peso_bruto }} kg</div>
+                </div>
+                {% endif %}
+
+                <!-- Información de Clasificación -->
+                {% if clasificacion_completa %}
+                <div class="info-item">
+                    <div class="info-label">Fecha de Clasificación</div>
+                    <div class="info-value">{{ fecha_clasificacion }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Hora de Clasificación</div>
+                    <div class="info-value">{{ hora_clasificacion }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Tipo de Clasificación</div>
+                    <div class="info-value">{{ tipo_clasificacion|title }}</div>
+                </div>
+                {% endif %}
+
+                <!-- Información de Peso Tara -->
+                {% if peso_tara %}
+                <div class="info-item">
+                    <div class="info-label">Fecha de Peso Tara</div>
+                    <div class="info-value">{{ fecha_peso_tara }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Hora de Peso Tara</div>
+                    <div class="info-value">{{ hora_peso_tara }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Tipo de Peso Tara</div>
+                    <div class="info-value">{{ tipo_peso_tara|title }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Peso Tara</div>
+                    <div class="info-value">{{ peso_tara }} kg</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Peso Neto</div>
+                    <div class="info-value">{{ peso_neto }} kg</div>
+                </div>
+                {% endif %}
+
+                <!-- Información de Salida -->
+                {% if salida_completa %}
+                <div class="info-item">
+                    <div class="info-label">Fecha de Salida</div>
+                    <div class="info-value">{{ fecha_salida }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Hora de Salida</div>
+                    <div class="info-value">{{ hora_salida }}</div>
+                </div>
+                {% endif %}
+
+                {% if nota %}
+                <div class="info-item">
+                    <div class="info-label">Nota</div>
+                    <div class="info-value">{{ nota }}</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Estado del Proceso -->
+        <div class="info-card">
+            <h3 class="card-title">Estado del Proceso</h3>
+            <div class="process-timeline">
+                <!-- Registro Inicial -->
+                <div class="timeline-item completed">
+                    <div class="timeline-content">
+                        <div class="timeline-title">
+                            <i class="fas fa-check-circle status-icon"></i>
+                            Registro de Portería
+                        </div>
+                        <div class="timeline-info">
+                            <span class="me-3">Fecha: {{ fecha_registro }}</span>
+                            <span>Hora: {{ hora_registro }}</span>
+                        </div>
+                    </div>
+                    {% if pdf_filename %}
+                    <a href="{{ url_for('static', filename='pdfs/' + pdf_filename) }}" 
+                       class="btn-action btn-download" 
+                       download>
+                        <i class="fas fa-file-pdf"></i> Descargar PDF
+                    </a>
+                    {% endif %}
+                </div>
+
+                <!-- Pesaje -->
+                <div class="timeline-item {% if peso_bruto %}completed{% else %}current{% endif %}">
+                    <div class="timeline-content">
+                        <div class="timeline-title">
+                            <i class="fas {% if peso_bruto %}fa-check-circle{% else %}fa-clock{% endif %} status-icon"></i>
+                            Pesaje Bruto
+                        </div>
+                        {% if peso_bruto %}
+                        <div class="timeline-info">
+                            <span class="me-3">Peso: {{ peso_bruto }} kg</span>
+                            <span class="me-3">Hora: {{ hora_pesaje }}</span>
+                            <span>Tipo: {{ tipo_pesaje|title }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% if peso_bruto and pesaje_pdf %}
+                    <a href="{{ url_for('static', filename='pdfs/' + pesaje_pdf) }}" 
+                       class="btn-action btn-download" 
+                       download>
+                        <i class="fas fa-file-pdf"></i> Descargar PDF
+                    </a>
+                    {% elif not peso_bruto %}
+                    <a href="/pesaje/{{ codigo }}" class="btn btn-primary btn-register">
+                        <i class="fas fa-weight"></i> Registrar Peso
+                    </a>
+                    {% endif %}
+                </div>
+
+                <!-- Clasificación -->
+                <div class="timeline-item {% if clasificacion_completa %}completed{% elif peso_bruto %}current{% else %}pending{% endif %}">
+                    <div class="timeline-content">
+                        <div class="timeline-title">
+                            <i class="fas {% if clasificacion_completa %}fa-check-circle{% elif peso_bruto %}fa-clock{% else %}fa-hourglass{% endif %} status-icon"></i>
+                            Clasificación de Fruta
+                        </div>
+                        {% if clasificacion_completa %}
+                        <div class="timeline-info">
+                            <span class="me-3">Fecha: {{ fecha_clasificacion }}</span>
+                            <span class="me-3">Hora: {{ hora_clasificacion }}</span>
+                            <span>Tipo: {{ tipo_clasificacion|title }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% if peso_bruto and not clasificacion_completa %}
+                    <a href="{{ url_for('clasificacion', codigo=codigo) }}" 
+                       class="btn-action btn-register">
+                        Iniciar Clasificación
+                    </a>
+                    {% endif %}
+                </div>
+
+                <!-- Peso Tara -->
+                <div class="timeline-item {% if peso_tara %}completed{% elif clasificacion_completa %}current{% else %}pending{% endif %}">
+                    <div class="timeline-content">
+                        <div class="timeline-title">
+                            <i class="fas {% if peso_tara %}fa-check-circle{% elif clasificacion_completa %}fa-clock{% else %}fa-hourglass{% endif %} status-icon"></i>
+                            Peso Tara
+                        </div>
+                        {% if peso_tara %}
+                        <div class="timeline-info">
+                            <span class="me-3">Peso Tara: {{ peso_tara }} kg</span>
+                            <span class="me-3">Peso Neto: {{ peso_neto }} kg</span>
+                            <span>Tipo: {{ tipo_peso_tara|title }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% if clasificacion_completa and not peso_tara %}
+                    <a href="{{ url_for('pesaje_tara', codigo=codigo) }}" 
+                       class="btn-action btn-register">
+                        Registrar Tara
+                    </a>
+                    {% endif %}
+                </div>
+
+                <!-- Registro de Salida -->
+                <div class="timeline-item {% if salida_completa %}completed{% elif peso_tara %}current{% else %}pending{% endif %}">
+                    <div class="timeline-content">
+                        <div class="timeline-title">
+                            <i class="fas {% if salida_completa %}fa-check-circle{% elif peso_tara %}fa-clock{% else %}fa-hourglass{% endif %} status-icon"></i>
+                            Registro de Salida
+                        </div>
+                        {% if salida_completa %}
+                        <div class="timeline-info">
+                            <span class="me-3">Fecha: {{ fecha_salida }}</span>
+                            <span>Hora: {{ hora_salida }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% if peso_tara and not salida_completa %}
+                    <a href="{{ url_for('registro_salida', codigo=codigo) }}" 
+                       class="btn-action btn-register">
+                        Registrar Salida
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

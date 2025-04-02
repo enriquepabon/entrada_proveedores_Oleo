@@ -3,54 +3,11 @@ import os
 import logging
 from datetime import datetime
 import traceback
+from flask import current_app
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-DB_PATH = 'tiquetes.db'
-
-def init_db():
-    """Initialize the database and create tables if they don't exist."""
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
-        # Create entries table
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS entry_records (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            codigo_guia TEXT UNIQUE,
-            codigo_proveedor TEXT,
-            nombre_proveedor TEXT,
-            cantidad_racimos TEXT,
-            placa TEXT,
-            acarreo TEXT,
-            cargo TEXT,
-            transportador TEXT,
-            fecha_tiquete TEXT,
-            fecha_registro TEXT,
-            hora_registro TEXT,
-            image_filename TEXT,
-            plate_image_filename TEXT,
-            plate_text TEXT,
-            nota TEXT,
-            pdf_filename TEXT,
-            qr_filename TEXT,
-            modified_fields TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        ''')
-        
-        conn.commit()
-        logger.info("Database initialized successfully")
-        return True
-    except sqlite3.Error as e:
-        logger.error(f"Database initialization error: {e}")
-        return False
-    finally:
-        if conn:
-            conn.close()
 
 def store_entry_record(record_data):
     """
@@ -62,8 +19,11 @@ def store_entry_record(record_data):
     Returns:
         bool: True if successful, False otherwise
     """
+    conn = None
     try:
-        conn = sqlite3.connect(DB_PATH)
+        # Get DB path from app config
+        db_path = current_app.config['TIQUETES_DB_PATH']
+        conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         
         codigo_guia = record_data.get('codigo_guia')
@@ -75,8 +35,8 @@ def store_entry_record(record_data):
             
         # Verificar posibles duplicados en registros recientes (últimos 10 minutos)
         cursor.execute(
-            "SELECT codigo_guia, nombre_proveedor, created_at FROM entry_records " + 
-            "WHERE codigo_proveedor = ? AND created_at > datetime('now', '-10 minutes')",
+            "SELECT codigo_guia, nombre_proveedor, fecha_creacion FROM entry_records " + 
+            "WHERE codigo_proveedor = ? AND fecha_creacion > datetime('now', '-10 minutes')",
             (codigo_proveedor,)
         )
         existing_records = cursor.fetchall()
@@ -126,6 +86,9 @@ def store_entry_record(record_data):
         
         conn.commit()
         return True
+    except KeyError:
+        logger.error("Error: 'TIQUETES_DB_PATH' no está configurada en la aplicación Flask.")
+        return False
     except sqlite3.Error as e:
         logger.error(f"Error storing entry record: {e}")
         return False
@@ -143,8 +106,11 @@ def get_entry_records(filters=None):
     Returns:
         list: List of entry records as dictionaries
     """
+    conn = None
     try:
-        conn = sqlite3.connect(DB_PATH)
+        # Get DB path from app config
+        db_path = current_app.config['TIQUETES_DB_PATH']
+        conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row  # This enables column access by name
         cursor = conn.cursor()
         
@@ -277,6 +243,9 @@ def get_entry_records(filters=None):
         records.sort(key=parse_datetime_str, reverse=True)
         
         return records
+    except KeyError:
+        logger.error("Error: 'TIQUETES_DB_PATH' no está configurada en la aplicación Flask.")
+        return []
     except sqlite3.Error as e:
         logger.error(f"Error retrieving entry records: {e}")
         return []
@@ -294,8 +263,11 @@ def get_entry_record_by_guide_code(codigo_guia):
     Returns:
         dict: The entry record as a dictionary, or None if not found
     """
+    conn = None
     try:
-        conn = sqlite3.connect(DB_PATH)
+        # Get DB path from app config
+        db_path = current_app.config['TIQUETES_DB_PATH']
+        conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         
@@ -367,6 +339,9 @@ def get_entry_record_by_guide_code(codigo_guia):
             logger.info(f"Obtenido registro para guía {codigo_guia}: proveedor={record['nombre_proveedor']}, racimos={record['cantidad_racimos']}")
             return record
         return None
+    except KeyError:
+        logger.error("Error: 'TIQUETES_DB_PATH' no está configurada en la aplicación Flask.")
+        return None
     except sqlite3.Error as e:
         logger.error(f"Error retrieving entry record by guide code: {e}")
         return None
@@ -384,14 +359,17 @@ def get_latest_entry_by_provider_code(codigo_proveedor):
     Returns:
         dict: Datos del registro más reciente o None si no se encuentra
     """
+    conn = None
     try:
-        conn = sqlite3.connect(DB_PATH)
+        # Get DB path from app config
+        db_path = current_app.config['TIQUETES_DB_PATH']
+        conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         
         # Buscar el registro más reciente por código de proveedor
         cursor.execute(
-            "SELECT * FROM entry_records WHERE codigo_proveedor = ? ORDER BY created_at DESC LIMIT 1",
+            "SELECT * FROM entry_records WHERE codigo_proveedor = ? ORDER BY fecha_creacion DESC LIMIT 1",
             (codigo_proveedor,)
         )
         row = cursor.fetchone()
@@ -404,6 +382,9 @@ def get_latest_entry_by_provider_code(codigo_proveedor):
         else:
             logger.warning(f"No se encontraron registros para el proveedor {codigo_proveedor}")
             return None
+    except KeyError:
+        logger.error("Error: 'TIQUETES_DB_PATH' no está configurada en la aplicación Flask.")
+        return None
     except sqlite3.Error as e:
         logger.error(f"Error al buscar registro por código de proveedor: {e}")
         return None
@@ -502,8 +483,11 @@ def get_entry_records_by_provider_code(codigo_proveedor):
     Returns:
         list: Lista de diccionarios con los registros de entrada encontrados
     """
+    conn = None
     try:
-        conn = sqlite3.connect(DB_PATH)
+        # Get DB path from app config
+        db_path = current_app.config['TIQUETES_DB_PATH']
+        conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
         c = conn.cursor()
         
@@ -530,10 +514,13 @@ def get_entry_records_by_provider_code(codigo_proveedor):
         conn.close()
         logger.info(f"Encontrados {len(records)} registros para el proveedor {codigo_proveedor}")
         return records
+    except KeyError:
+        logger.error("Error: 'TIQUETES_DB_PATH' no está configurada en la aplicación Flask.")
+        return []
     except Exception as e:
         logger.error(f"Error al obtener registros para el proveedor {codigo_proveedor}: {str(e)}")
         logger.error(traceback.format_exc())
         return []
-
-# Initialize the database when this module is imported
-init_db() 
+    finally:
+        if conn:
+            conn.close() 

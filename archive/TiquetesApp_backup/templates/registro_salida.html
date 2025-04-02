@@ -1,0 +1,472 @@
+{% extends "base.html" %}
+
+{% block title %}Registro de Salida{% endblock %}
+
+{% block extra_css %}
+<style>
+    .info-section {
+        background-color: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+    }
+    .process-section {
+        background-color: #ffffff;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .preview-image {
+        max-width: 100%;
+        height: auto;
+        margin-top: 15px;
+        border-radius: 4px;
+    }
+    .timeline {
+        position: relative;
+        margin: 20px 0;
+        padding-left: 30px;
+    }
+    .timeline::before {
+        content: '';
+        position: absolute;
+        left: 15px;
+        top: 0;
+        height: 100%;
+        width: 2px;
+        background-color: #0d6efd;
+    }
+    .timeline-item {
+        position: relative;
+        margin-bottom: 25px;
+        padding-bottom: 10px;
+    }
+    .timeline-item.completed .status-icon {
+        color: #28a745;
+    }
+    .timeline-item.current .status-icon {
+        color: #0d6efd;
+    }
+    .timeline-item.pending .status-icon {
+        color: #6c757d;
+    }
+    .status-icon {
+        position: absolute;
+        left: -30px;
+        font-size: 20px;
+        background-color: white;
+        border-radius: 50%;
+    }
+    .timeline-content {
+        background-color: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        border-left: 3px solid #0d6efd;
+    }
+    .timeline-item.completed .timeline-content {
+        border-left-color: #28a745;
+    }
+    .timeline-item.current .timeline-content {
+        border-left-color: #0d6efd;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .timeline-item.pending .timeline-content {
+        border-left-color: #6c757d;
+    }
+    .verification-box {
+        margin-top: 15px;
+        border-radius: 8px;
+        padding: 15px;
+    }
+    .verification-success {
+        background-color: #d1e7dd;
+        border-left: 4px solid #198754;
+    }
+    .verification-warning {
+        background-color: #fff3cd;
+        border-left: 4px solid #ffc107;
+    }
+    .verification-danger {
+        background-color: #f8d7da;
+        border-left: 4px solid #dc3545;
+    }
+    .weight-comparison {
+        margin-top: 20px;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .weight-table {
+        width: 100%;
+        margin-bottom: 0;
+    }
+    .weight-table th {
+        background-color: #f8f9fa;
+        font-weight: 600;
+    }
+    .process-completed {
+        padding: 15px;
+        margin-top: 20px;
+        background-color: #d1e7dd;
+        border-radius: 8px;
+        border-left: 4px solid #198754;
+    }
+    .summary-card {
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    .summary-title {
+        border-bottom: 1px solid #dee2e6;
+        padding-bottom: 10px;
+        margin-bottom: 15px;
+        font-weight: 600;
+    }
+    .photo-evidence {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 10px;
+        margin-top: 15px;
+    }
+    .photo-item {
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    .photo-item img {
+        width: 100%;
+        height: 150px;
+        object-fit: cover;
+    }
+    .btn-signature {
+        background-color: #0d6efd;
+        color: white;
+        border: none;
+        padding: 10px 15px;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.3s;
+    }
+    .btn-signature:hover {
+        background-color: #0a58ca;
+    }
+    #signatureCanvas {
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        background-color: white;
+    }
+    .signature-container {
+        margin-top: 20px;
+        padding: 15px;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        background-color: #f8f9fa;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <h2 class="text-center mb-2">Registro de Salida</h2>
+    <h4 class="text-center mb-4">Guía: {{ datos.codigo_guia }}</h4>
+    
+    <!-- Información General -->
+    <div class="info-section">
+        <div class="row">
+            <div class="col-md-6">
+                <p><strong>Código Proveedor:</strong> {{ datos.codigo_proveedor }}</p>
+                <p><strong>Nombre Proveedor:</strong> {{ datos.nombre_proveedor }}</p>
+                <p><strong>Transportador:</strong> {{ datos.transportador }}</p>
+                <p><strong>Placa:</strong> {{ datos.placa }}</p>
+            </div>
+            <div class="col-md-6">
+                <p><strong>Racimos:</strong> {{ datos.cantidad_racimos }}</p>
+                <p><strong>Fecha de Entrada:</strong> {{ datos.fecha_registro }}</p>
+                <p><strong>Hora de Entrada:</strong> {{ datos.hora_registro }}</p>
+                <p><strong>Estado actual:</strong> <span class="badge bg-success">Completado</span></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Resumen del Proceso -->
+    <div class="process-section">
+        <h4 class="mb-3">Resumen del Proceso</h4>
+        
+        <div class="timeline">
+            <!-- Registro de Entrada -->
+            <div class="timeline-item completed">
+                <i class="fas fa-check-circle status-icon"></i>
+                <div class="timeline-content">
+                    <h5>Registro de Entrada</h5>
+                    <p class="mb-1"><strong>Fecha:</strong> {{ datos.fecha_registro }}</p>
+                    <p class="mb-1"><strong>Hora:</strong> {{ datos.hora_registro }}</p>
+                </div>
+            </div>
+            
+            <!-- Pesaje Bruto -->
+            <div class="timeline-item completed">
+                <i class="fas fa-check-circle status-icon"></i>
+                <div class="timeline-content">
+                    <h5>Pesaje Bruto</h5>
+                    <p class="mb-1"><strong>Peso:</strong> {{ datos.peso_bruto }} kg</p>
+                    <p class="mb-1"><strong>Fecha:</strong> {{ datos.fecha_pesaje }}</p>
+                    <p class="mb-1"><strong>Hora:</strong> {{ datos.hora_pesaje }}</p>
+                    <p class="mb-1"><strong>Tipo:</strong> {{ datos.tipo_pesaje }}</p>
+                </div>
+            </div>
+            
+            <!-- Clasificación -->
+            <div class="timeline-item completed">
+                <i class="fas fa-check-circle status-icon"></i>
+                <div class="timeline-content">
+                    <h5>Clasificación</h5>
+                    <p class="mb-1"><strong>Fecha:</strong> {{ datos.fecha_clasificacion }}</p>
+                    <p class="mb-1"><strong>Hora:</strong> {{ datos.hora_clasificacion }}</p>
+                    <p class="mb-1"><strong>Tipo:</strong> {{ datos.tipo_clasificacion }}</p>
+                </div>
+            </div>
+            
+            <!-- Pesaje Neto -->
+            <div class="timeline-item completed">
+                <i class="fas fa-check-circle status-icon"></i>
+                <div class="timeline-content">
+                    <h5>Pesaje Neto</h5>
+                    <p class="mb-1"><strong>Peso Neto:</strong> {{ datos.peso_neto }} kg</p>
+                    <p class="mb-1"><strong>Peso Producto:</strong> {{ datos.peso_producto }} kg</p>
+                    <p class="mb-1"><strong>Fecha:</strong> {{ datos.fecha_pesaje_neto }}</p>
+                    <p class="mb-1"><strong>Hora:</strong> {{ datos.hora_pesaje_neto }}</p>
+                    <p class="mb-1"><strong>Tipo:</strong> {{ datos.tipo_pesaje_neto }}</p>
+                </div>
+            </div>
+            
+            <!-- Registro de Salida (Actual) -->
+            <div class="timeline-item current">
+                <i class="fas fa-clock status-icon"></i>
+                <div class="timeline-content">
+                    <h5>Registro de Salida</h5>
+                    <p class="text-primary">En proceso</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Resumen Pesos -->
+        <div class="weight-comparison">
+            <table class="table weight-table">
+                <thead>
+                    <tr>
+                        <th>Tipo</th>
+                        <th>Valor (kg)</th>
+                        <th>Descripción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Peso Bruto</strong></td>
+                        <td class="text-primary fw-bold">{{ datos.peso_bruto }}</td>
+                        <td>Camión + Racimos</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Peso Neto (Tara)</strong></td>
+                        <td class="text-danger fw-bold">{{ datos.peso_neto }}</td>
+                        <td>Camión Vacío</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Peso Producto</strong></td>
+                        <td class="text-success fw-bold">{{ datos.peso_producto }}</td>
+                        <td>Racimos (Bruto - Neto)</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <!-- Clasificación Resumen -->
+    <div class="process-section">
+        <h4 class="mb-3">Resumen de Clasificación</h4>
+        
+        <div class="row">
+            <div class="col-md-6">
+                <div class="summary-card">
+                    <h5 class="summary-title">Calidad de Racimos</h5>
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>Categoría</th>
+                                    <th>Cantidad</th>
+                                    <th>Porcentaje</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if datos.clasificacion_manual %}
+                                    {% set total = namespace(value=0) %}
+                                    {% for categoria, cantidad in datos.clasificacion_manual.items() %}
+                                        {% set total.value = total.value + cantidad %}
+                                    {% endfor %}
+                                    
+                                    {% for categoria, cantidad in datos.clasificacion_manual.items() %}
+                                    <tr>
+                                        <td>{{ categoria|title }}</td>
+                                        <td>{{ cantidad }}</td>
+                                        <td>{{ "%.2f"|format(cantidad / total.value * 100) }}%</td>
+                                    </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr>
+                                        <td colspan="3" class="text-center">No hay datos de clasificación disponibles</td>
+                                    </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <!-- Verificación de Placa -->
+                {% if datos.verificacion_placa %}
+                    <div class="verification-box {% if datos.placa_coincide %}verification-success{% else %}verification-danger{% endif %}">
+                        <h5>Verificación de Placa</h5>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p><strong>Placa Registrada:</strong> {{ datos.placa }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <p><strong>Placa Detectada:</strong> {{ datos.placa_detectada }}</p>
+                            </div>
+                        </div>
+                        <div class="text-center mt-2">
+                            {% if datos.placa_coincide %}
+                                <span class="badge bg-success">VERIFICADO ✓</span>
+                            {% else %}
+                                <span class="badge bg-danger">NO COINCIDE ✗</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endif %}
+                
+                <!-- QR Code Section -->
+                <div class="text-center mt-3">
+                    <h5>Código QR de Seguimiento</h5>
+                    <img src="{{ url_for('static', filename='qr/qr_guia_' + datos.codigo_guia + '.png') }}" 
+                         style="max-width: 150px; margin: 10px auto;" 
+                         alt="Código QR">
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Registro de Salida -->
+    <div class="process-section">
+        <h4 class="mb-3">Completar Registro de Salida</h4>
+        
+        <form id="registroSalidaForm">
+            <div class="mb-3">
+                <label for="fechaSalida" class="form-label">Fecha de Salida:</label>
+                <input type="text" class="form-control" id="fechaSalida" value="{{ now_date }}" readonly>
+            </div>
+            
+            <div class="mb-3">
+                <label for="horaSalida" class="form-label">Hora de Salida:</label>
+                <input type="text" class="form-control" id="horaSalida" value="{{ now_time }}" readonly>
+            </div>
+            
+            <div class="mb-3">
+                <label for="comentariosSalida" class="form-label">Comentarios (Opcional):</label>
+                <textarea class="form-control" id="comentariosSalida" rows="3" placeholder="Ingrese comentarios sobre la salida"></textarea>
+            </div>
+            
+            <!-- Firma Digital -->
+            <div class="signature-container">
+                <label class="form-label">Firma del Conductor:</label>
+                <div class="text-center">
+                    <canvas id="signatureCanvas" width="400" height="200"></canvas>
+                </div>
+                <div class="d-flex justify-content-center mt-2">
+                    <button type="button" id="clearSignature" class="btn btn-outline-secondary me-2">Limpiar</button>
+                </div>
+            </div>
+            
+            <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+                <button type="button" class="btn btn-secondary" onclick="history.back()">Cancelar</button>
+                <button type="submit" class="btn btn-success">
+                    <i class="fas fa-check-circle me-2"></i>Completar Proceso
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/signature_pad/1.5.3/signature_pad.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Inicializar el pad de firma
+        var canvas = document.getElementById('signatureCanvas');
+        var signaturePad = new SignaturePad(canvas, {
+            backgroundColor: 'white',
+            penColor: 'black'
+        });
+        
+        // Limpiar la firma
+        document.getElementById('clearSignature').addEventListener('click', function() {
+            signaturePad.clear();
+        });
+        
+        // Manejar el envío del formulario
+        document.getElementById('registroSalidaForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            // Validar que se haya firmado
+            if (signaturePad.isEmpty()) {
+                alert('Por favor, firme antes de completar el proceso.');
+                return;
+            }
+            
+            // Mostrar el overlay de carga
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            if (loadingOverlay) loadingOverlay.style.display = 'flex';
+            
+            try {
+                // Obtener la firma como imagen base64
+                const firmaBase64 = signaturePad.toDataURL();
+                
+                // Preparar los datos para enviar
+                const datos = {
+                    codigo_guia: '{{ datos.codigo_guia }}',
+                    fecha_salida: document.getElementById('fechaSalida').value,
+                    hora_salida: document.getElementById('horaSalida').value,
+                    comentarios: document.getElementById('comentariosSalida').value,
+                    firma: firmaBase64
+                };
+                
+                // Enviar los datos al servidor
+                const response = await fetch('/completar_registro_salida', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(datos)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Redireccionar a la página de completado
+                    window.location.href = result.redirect_url;
+                } else {
+                    alert('Error: ' + result.message);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Ha ocurrido un error al procesar la salida.');
+            } finally {
+                // Ocultar el overlay de carga
+                if (loadingOverlay) loadingOverlay.style.display = 'none';
+            }
+        });
+    });
+</script>
+{% endblock %} 

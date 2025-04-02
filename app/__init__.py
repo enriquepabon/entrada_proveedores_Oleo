@@ -99,6 +99,22 @@ def create_app(test_config=None):
         # No incluir x_port=1 para evitar problemas con el puerto
     )
     
+    # --- Define Database Paths --- 
+    # Define path relative to the app root, not instance path
+    # Assuming tiquetes.db is in the project root directory (TiquetesApp)
+    project_root = os.path.abspath(os.path.join(app.root_path, os.pardir))
+    app.config['TIQUETES_DB_PATH'] = os.path.join(project_root, 'tiquetes.db')
+    # Remove the potentially confusing DATABASE_DB_PATH
+    # app.config['DATABASE_DB_PATH'] = os.path.join(instance_path, 'database.db') 
+    logger.info(f"Using Tiquetes DB Path: {app.config['TIQUETES_DB_PATH']}")
+    # logger.info(f"Database DB Path: {app.config['DATABASE_DB_PATH']}")
+    
+    # Ensure the DB file exists, if not, log a warning (schema creation will handle actual creation)
+    if not os.path.exists(app.config['TIQUETES_DB_PATH']):
+        logger.warning(f"Database file not found at configured path: {app.config['TIQUETES_DB_PATH']}")
+        # Consider if you need to copy a default DB or stop the app here
+    # --- End Define Database Paths ---
+    
     # Definir rutas de carpetas críticas y asegurar que existan
     app.config['UPLOAD_FOLDER'] = os.path.join(app.static_folder, 'uploads')
     app.config['PDF_FOLDER'] = os.path.join(app.static_folder, 'pdfs')
@@ -113,18 +129,6 @@ def create_app(test_config=None):
         if folder_path:
             os.makedirs(folder_path, exist_ok=True)
             logger.info(f"Directorio {folder_key} asegurado: {folder_path}")
-    
-    # Crear tablas de la base de datos si no existen
-    db_schema.create_tables()
-    logger.info("Tablas de la base de datos verificadas/creadas correctamente.")
-    
-    # Asegurar que la tabla clasificaciones tenga la estructura correcta
-    try:
-        from app.blueprints.misc.routes import ensure_clasificaciones_schema
-        ensure_clasificaciones_schema()
-        logger.info("Estructura de tabla clasificaciones verificada/actualizada correctamente.")
-    except Exception as e:
-        logger.error(f"Error verificando tabla clasificaciones: {str(e)}")
     
     # Registrar blueprints
     register_blueprints(app)
@@ -148,6 +152,23 @@ def create_app(test_config=None):
     # Guardar la instancia de utils en la configuración de la aplicación
     from config import init_utils_in_app
     init_utils_in_app(app, utils_instance)
+
+    # Crear tablas y verificar esquema DENTRO del contexto de la aplicación
+    with app.app_context():
+        try:
+            db_schema.create_tables()
+            logger.info("Tablas de la base de datos verificadas/creadas correctamente.")
+        except Exception as e:
+            logger.error(f"Error creando/verificando tablas DB: {e}")
+            # Podrías decidir si la app puede continuar sin DB o lanzar un error más grave
+
+        # Asegurar que la tabla clasificaciones tenga la estructura correcta
+        try:
+            from app.blueprints.misc.routes import ensure_clasificaciones_schema
+            ensure_clasificaciones_schema()
+            logger.info("Estructura de tabla clasificaciones verificada/actualizada correctamente.")
+        except Exception as e:
+            logger.error(f"Error verificando tabla clasificaciones: {str(e)}")
     
     return app
 

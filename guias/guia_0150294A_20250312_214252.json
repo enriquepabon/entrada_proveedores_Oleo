@@ -1,0 +1,21 @@
+{
+    "codigo_guia": "0150294A_20250312_214252",
+    "codigo_proveedor": "0150294A",
+    "nombre_proveedor": "IND - MUCACAL COMERCIALIZADORA DE F",
+    "fecha_registro": "12/03/2025",
+    "hora_registro": "21:42:53",
+    "fecha_pesaje": "12/03/2025",
+    "hora_pesaje": "21:43:23",
+    "peso_bruto": "23.340",
+    "tipo_pesaje": "Pendiente",
+    "acarreo": "NO",
+    "cargo": "NO",
+    "transportador": "Eucy Luis GAIAN",
+    "racimos": "200",
+    "estado": "registro_completado",
+    "codigo_guia_transporte_sap": "1000000014",
+    "estado_actual": "pesaje_completado",
+    "codigo": "0150294A",
+    "nombre": "IND - MUCACAL COMERCIALIZADORA DE F",
+    "cantidad_racimos": "200"
+}

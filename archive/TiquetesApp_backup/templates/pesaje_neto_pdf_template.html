@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comprobante de Pesaje Neto - {{ codigo_guia }}</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            color: #333;
+            font-size: 12px;
+        }
+        .main-container {
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 10px;
+        }
+        .header-section {
+            text-align: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #333;
+            padding-bottom: 15px;
+        }
+        .header-logo {
+            max-width: 150px;
+            margin-bottom: 10px;
+        }
+        .content-row {
+            display: flex;
+            justify-content: space-between;
+        }
+        .info-column {
+            width: 48%;
+        }
+        .info-section {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        .section-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #dee2e6;
+            padding-bottom: 5px;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .info-item {
+            margin-bottom: 5px;
+        }
+        .info-label {
+            font-weight: bold;
+            color: #6c757d;
+            font-size: 11px;
+        }
+        .info-value {
+            font-size: 13px;
+        }
+        .weight-value {
+            font-size: 16px;
+            font-weight: bold;
+            color: #198754;
+        }
+        .weight-image {
+            max-width: 100%;
+            max-height: 200px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .qr-section {
+            text-align: center;
+            margin-top: 15px;
+        }
+        .qr-code {
+            max-width: 100px;
+            margin: 0 auto;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 10px;
+            color: #6c757d;
+            border-top: 1px solid #dee2e6;
+            padding-top: 10px;
+        }
+        .verification-box {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .verification-success {
+            background-color: #f0fff0;
+            border: 1px solid green;
+        }
+        .verification-fail {
+            background-color: #fff0f0;
+            border: 1px solid red;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.9em;
+            color: white;
+        }
+        .badge-success {
+            background-color: #28a745;
+        }
+        .badge-danger {
+            background-color: #dc3545;
+        }
+        .weight-comparison {
+            margin-top: 15px;
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .weight-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .weight-table th {
+            background-color: #f8f9fa;
+            padding: 8px;
+            text-align: center;
+            border: 1px solid #ddd;
+        }
+        .weight-table td {
+            padding: 15px;
+            text-align: center;
+            border: 1px solid #ddd;
+        }
+        .weight-bruto {
+            color: #0275d8;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        .weight-neto {
+            color: #d9534f;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        .weight-producto {
+            color: #5cb85c;
+            font-weight: bold;
+            font-size: 16px;
+        }
+        .weight-description {
+            font-size: 11px;
+            color: #666;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <div class="header-section">
+            <img src="{{ url_for('static', filename='images/logo.png', _external=True) }}" 
+                 alt="Logo" class="header-logo">
+            <h1>Comprobante de Pesaje Neto</h1>
+            <h3>Guía: {{ codigo_guia }}</h3>
+        </div>
+
+        <div class="content-row">
+            <div class="info-column">
+                <div class="info-section">
+                    <div class="section-title">Datos del Proveedor</div>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <div class="info-label">Código</div>
+                            <div class="info-value">{{ codigo_proveedor }}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Nombre</div>
+                            <div class="info-value">{{ nombre_proveedor }}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Transportador</div>
+                            <div class="info-value">{{ transportador }}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Placa</div>
+                            <div class="info-value">{{ placa }}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Racimos</div>
+                            <div class="info-value">{{ racimos }}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Código Guía Transporte SAP</div>
+                            <div class="info-value">{{ codigo_guia_transporte_sap }}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="info-section">
+                    <div class="section-title">Información del Pesaje Neto</div>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <div class="info-label">Peso Bruto</div>
+                            <div class="weight-value">{{ peso_bruto }} kg</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Peso Neto (Tara)</div>
+                            <div class="weight-value">{{ peso_neto }} kg</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Peso Producto</div>
+                            <div class="weight-value">{{ peso_producto }} kg</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Tipo de Pesaje</div>
+                            <div class="info-value">
+                                {% if tipo_pesaje_neto == 'directo' %}
+                                    Soporte Foto
+                                {% elif tipo_pesaje_neto == 'virtual' %}
+                                    Manual
+                                {% elif tipo_pesaje_neto == 'bascula' %}
+                                    Directo
+                                {% else %}
+                                    {{ tipo_pesaje_neto|title }}
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Fecha Pesaje Neto</div>
+                            <div class="info-value">{{ fecha_pesaje_neto }}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Hora Pesaje Neto</div>
+                            <div class="info-value">{{ hora_pesaje_neto }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="info-column">
+                {% if foto_bascula_neto %}
+                <div class="info-section">
+                    <div class="section-title">Imagen del Pesaje</div>
+                    <img src="{{ url_for('static', filename=foto_bascula_neto, _external=True) }}" alt="Imagen del pesaje" class="weight-image">
+                </div>
+                {% endif %}
+
+                <!-- Verificación de Placa (si existe) -->
+                {% if verificacion_placa %}
+                <div class="info-section">
+                    <div class="section-title">Verificación de Placa</div>
+                    <div class="verification-box {% if placa_coincide %}verification-success{% else %}verification-fail{% endif %}">
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <div class="info-label">Placa Registrada</div>
+                                <div class="info-value">{{ placa }}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">Placa Detectada</div>
+                                <div class="info-value">{{ placa_detectada }}</div>
+                            </div>
+                        </div>
+                        <div style="text-align: center; margin-top: 10px;">
+                            <strong>Estado: </strong>
+                            {% if placa_coincide %}
+                            <span class="status-badge badge-success">VERIFICADO ✓</span>
+                            {% else %}
+                            <span class="status-badge badge-danger">NO COINCIDE ✗</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <div class="qr-section">
+                    <div class="section-title">Código QR para seguimiento</div>
+                    <img src="{{ qr_code }}" alt="Código QR" class="qr-code">
+                </div>
+            </div>
+        </div>
+
+        <!-- Comparativa de Pesos -->
+        <div class="weight-comparison">
+            <div class="section-title">Comparativa de Pesos</div>
+            <table class="weight-table">
+                <tr>
+                    <th>Peso Bruto</th>
+                    <th>Peso Neto (Tara)</th>
+                    <th>Peso Producto</th>
+                </tr>
+                <tr>
+                    <td>
+                        <div class="weight-bruto">{{ peso_bruto }} kg</div>
+                        <div class="weight-description">Camión + Racimos</div>
+                    </td>
+                    <td>
+                        <div class="weight-neto">{{ peso_neto }} kg</div>
+                        <div class="weight-description">Camión Vacío</div>
+                    </td>
+                    <td>
+                        <div class="weight-producto">{{ peso_producto }} kg</div>
+                        <div class="weight-description">Racimos (Bruto - Neto)</div>
+                    </td>
+                </tr>
+            </table>
+        </div>
+        
+        <!-- Fotos de evidencia de pesaje -->
+        {% if fotos_pesaje_neto and fotos_pesaje_neto|length > 0 %}
+        <div class="info-section">
+            <div class="section-title">Evidencia Fotográfica del Pesaje</div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(45%, 1fr)); gap: 10px;">
+                {% for foto in fotos_pesaje_neto %}
+                <div style="text-align: center;">
+                    <img src="{{ url_for('static', filename=foto, _external=True) }}" 
+                         style="max-width: 100%; max-height: 200px; border: 1px solid #ddd; border-radius: 4px;" 
+                         alt="Evidencia de pesaje {{ loop.index }}">
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+            
+        {% if comentarios_neto %}
+        <div class="info-section">
+            <div class="section-title">Comentarios</div>
+            <div style="padding: 10px; background-color: #f8f9fa; border: 1px solid #ddd; border-radius: 5px;">
+                {{ comentarios_neto }}
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="footer">
+            <p>Documento generado el {{ fecha_generacion }} a las {{ hora_generacion }}</p>
+            <p>© {{ fecha_generacion.split('/')[2] }} Extractora María La Baja - Todos los derechos reservados</p>
+        </div>
+    </div>
+</body>
+</html> 

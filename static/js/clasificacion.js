@@ -240,6 +240,39 @@ async function procesarClasificacionAutomatica() {
             if (fotoActual > 3) {
                 clasificacionAutomaticaCompletada = true;
                 verificarClasificacionesCompletadas();
+                
+                // Mostrar indicador visual de clasificación completa
+                const statusIndicator = document.getElementById('procesamiento-status');
+                if (statusIndicator) {
+                    statusIndicator.classList.remove('d-none', 'alert-info');
+                    statusIndicator.classList.add('alert-success');
+                    
+                    // Actualizar mensaje y ocultar spinner
+                    const spinner = statusIndicator.querySelector('.spinner-grow');
+                    if (spinner) spinner.style.display = 'none';
+                    
+                    const mensaje = statusIndicator.querySelector('#estado-mensaje');
+                    if (mensaje) mensaje.innerHTML = '<i class="fas fa-check-circle me-2"></i>Clasificación automática completada';
+                    
+                    const detalle = statusIndicator.querySelector('#estado-detalle');
+                    if (detalle) detalle.textContent = `Completado el ${data.timestamp || new Date().toLocaleString()}`;
+                    
+                    // Actualizar barra de progreso
+                    const progressBar = statusIndicator.querySelector('#progress-bar');
+                    if (progressBar) {
+                        progressBar.style.width = '100%';
+                        progressBar.classList.remove('progress-bar-animated', 'progress-bar-striped');
+                        progressBar.classList.add('bg-success');
+                    }
+                }
+                
+                // Habilitar botón de ver detalles por foto si existe
+                const verDetallesBtn = document.getElementById('btn-ver-detalles');
+                const verDetallesContainer = document.getElementById('ver-detalles-container');
+                if (verDetallesBtn && verDetallesContainer) {
+                    verDetallesContainer.classList.remove('d-none');
+                    verDetallesBtn.classList.remove('disabled');
+                }
             }
         } else {
             alert('Error en la clasificación: ' + data.message);
@@ -333,7 +366,7 @@ async function registrarClasificacion() {
             nombre_proveedor: obtenerNombreProveedor()
         };
 
-        const response = await fetch('/registrar_clasificacion', {
+        const response = await fetch('/clasificacion/registrar_clasificacion_api', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -731,4 +764,86 @@ document.addEventListener('DOMContentLoaded', function() {
     // Inicializar estado de las fotos
     actualizarEstadoFotos();
     verificarProcesoCompleto();
-}); 
+});
+
+/**
+ * Verifica el estado de procesamiento de una guía
+ * @param {string} codigoGuia - Código de la guía
+ */
+function checkProcesamiento(codigoGuia) {
+    const statusUrl = `/clasificacion/check_procesamiento_status/${codigoGuia}`;
+    
+    console.log("Verificando estado de procesamiento para guía:", codigoGuia);
+    
+    // Elementos de interfaz
+    const procesamientoStatus = document.getElementById('procesamiento-status');
+    const spinner = document.querySelector('#procesamiento-status .spinner-grow');
+    const mensaje = document.getElementById('estado-mensaje');
+    const detalle = document.getElementById('estado-detalle');
+    const progressBar = document.getElementById('progress-bar');
+    const btnVerDetalles = document.getElementById('btn-ver-detalles');
+    
+    // Modal de procesamiento
+    const modalProcesando = new bootstrap.Modal(document.getElementById('modal-procesando'));
+    const modalProgressBar = document.getElementById('modal-progress-bar');
+    const modalCountdown = document.getElementById('modal-countdown');
+    
+    // Mostrar modal en lugar de la alerta
+    modalProcesando.show();
+    
+    // Iniciar temporizador y actualizar barra de progreso
+    let timeLeft = 20;
+    let progressValue = 0;
+    
+    const progressInterval = setInterval(() => {
+        progressValue += 5;
+        if (modalProgressBar) {
+            modalProgressBar.style.width = `${progressValue}%`;
+            modalProgressBar.setAttribute('aria-valuenow', progressValue);
+        }
+    }, 1000);
+    
+    const countdownInterval = setInterval(() => {
+        timeLeft -= 1;
+        if (modalCountdown) {
+            modalCountdown.textContent = timeLeft;
+        }
+        
+        if (timeLeft <= 0) {
+            clearInterval(countdownInterval);
+            clearInterval(progressInterval);
+            // Recargar la página después de 20 segundos
+            window.location.reload();
+        }
+    }, 1000);
+    
+    // También seguimos verificando el estado real en el servidor
+    const checkInterval = setInterval(function() {
+        fetch(statusUrl)
+        .then(response => response.json())
+        .then(data => {
+            console.log("Respuesta de estado:", data);
+            
+            // Verificar si la clasificación está completa
+            if (data.clasificacion_completa === true || data.status === 'completed') {
+                console.log("¡Clasificación completada!");
+                clearInterval(checkInterval);
+                clearInterval(countdownInterval);
+                clearInterval(progressInterval);
+                
+                // Actualizar barra de progreso a 100%
+                if (modalProgressBar) {
+                    modalProgressBar.style.width = '100%';
+                }
+                
+                // Recargar página con un pequeño retraso
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+            }
+        })
+        .catch(error => {
+            console.error("Error al verificar estado:", error);
+        });
+    }, 3000); // Verificar cada 3 segundos
+} 

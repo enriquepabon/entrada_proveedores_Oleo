@@ -1851,6 +1851,33 @@ def dashboard_stats():
     - proveedores (lista separada por comas de códigos de proveedor)
     - estado (valor del estado)
     """
+    # Initialize ALL crucial response variables FIRST with defaults, BEFORE the main try block
+    calidad_promedios = {
+        'Verde': 0, 'Sobremaduro': 0, 'Daño Corona': 0,
+        'Pendunculo Largo': 0, 'Podrido': 0
+    }
+    calidad_promedios_auto = {
+        'Verde': 0, 'Sobremaduro': 0, 'Daño Corona': 0,
+        'Pendunculo Largo': 0, 'Podrido': 0
+    }
+    registros_filtrados_count = 0
+    total_racimos = 0
+    peso_neto_total = 0
+    peso_neto_pepa = 0
+    pesajes_pendientes = 0
+    clasificaciones_pendientes = 0
+    peso_neto_hoy = 0
+    registros_diarios_chart_data = {'labels': [], 'data': []}
+    peso_neto_diario_chart_data = {'labels': [], 'data': []}
+    racimos_peso_promedio_chart_data = {'labels': [], 'data_racimos': [], 'data_peso_promedio': []}
+    ultimos_registros_tabla = []
+    tiempos_promedio_proceso = {
+        'entrada_a_bruto': 0.0, 'bruto_a_clasif': 0.0, 'clasif_a_neto': 0.0,
+        'neto_a_salida': 0.0, 'total': 0.0
+    }
+    top_5_peso_neto_tabla = []
+    alertas_calidad_tabla = []
+
     try:
         # Obtener parámetros de filtro de la solicitud
         start_date_str = request.args.get('startDate')
@@ -2075,108 +2102,117 @@ def dashboard_stats():
                 logger.info(f"Promedios de Calidad Manual calculados: {calidad_promedios}")
 
                 # --- Calcular Promedios de Calidad Automática (filtrado) --- 
+                # Initialize OUTSIDE the if block
                 calidad_promedios_auto = {
-                    'Verde': 0, 'Sobremaduro': 0, 'Daño Corona': 0, 
+                    'Verde': 0, 'Sobremaduro': 0, 'Daño Corona': 0,
                     'Pendunculo Largo': 0, 'Podrido': 0
                 }
-                count_clasificaciones_auto_validas = 0
-                sumas_calidad_auto = {k: 0 for k in calidad_promedios_auto.keys()}
-                counts_calidad_auto = {k: 0 for k in calidad_promedios_auto.keys()}
-                key_mapping_auto = { 
-                    'Verde': 'verde',              # Cambiado de 'verdes'
-                    'Sobremaduro': 'sobremaduro',    # Cambiado de 'sobremaduros'
-                    'Daño Corona': 'danio_corona', # Ya estaba bien
-                    'Pendunculo Largo': 'pendunculo_largo', # Ya estaba bien
-                    'Podrido': 'podrido'           # Cambiado de 'podridos'
+                sumas_calidad_auto = {k: 0 for k in calidad_promedios_auto.keys()} # Also init sums here
+                counts_calidad_auto = {k: 0 for k in calidad_promedios_auto.keys()} # And counts
+                count_clasificaciones_auto_validas = 0 # And valid count
+
+                # Define mapping outside the loop for efficiency
+                key_mapping_auto = {
+                    'Verde': 'verde',
+                    'Sobremaduro': 'sobremaduro',
+                    'Daño Corona': 'danio_corona',
+                    'Pendunculo Largo': 'pendunculo_largo',
+                    'Podrido': 'podrido'
                 }
+
                 logger.info(f"Calculando calidad automática para {len(clasificaciones_raw)} filas crudas.")
 
-                for row_index, row in enumerate(clasificaciones_raw):
-                    # --- LEER DE LA NUEVA COLUMNA --- 
-                    clasif_auto_json_str = None # Inicializar como None
-                    if 'clasificacion_consolidada' in row.keys(): # Verificar si la columna existe
-                        clasif_auto_json_str = row['clasificacion_consolidada'] # <--- CAMBIO DE COLUMNA
-                    else:
-                        logger.warning(f"Columna 'clasificacion_consolidada' no encontrada en la fila {row_index}. Verificando 'clasificacion_automatica' como fallback.")
-                        # Fallback a la columna vieja si la nueva no existe (transición)
-                        if 'clasificacion_automatica' in row.keys():
-                             clasif_auto_json_str = row['clasificacion_automatica']
-                    
-                    logger.debug(f"Procesando fila {row_index} para AUTO, JSON crudo leído: {clasif_auto_json_str}") # Log actualizado
-                    
-                    # --- CORREGIR EL SALTO INNECESARIO --- 
-                    # Solo continuar si realmente no hay JSON para procesar
-                    if not clasif_auto_json_str: 
-                        logger.debug("  -> JSON automático/consolidado realmente vacío o None, saltando fila.") 
-                        continue
-                        
-                    # Si llegamos aquí, tenemos un JSON (de consolidada o automática) para intentar procesar
-                    try:
-                        clasif_auto_data = json.loads(clasif_auto_json_str)
-                        logger.debug(f"  -> JSON automático parseado: {clasif_auto_data}")
-                        if clasif_auto_data:
-                            count_clasificaciones_auto_validas += 1
+                # Check if there are guides before proceeding with DB calls/processing
+                if codigos_guia_filtrados: # Keep the check
+
+                    # Remove the old initialization that was here
+
+                    for row_index, row in enumerate(clasificaciones_raw):
+                        # --- LEER DE LA NUEVA COLUMNA --- 
+                        clasif_auto_json_str = None # Inicializar como None
+                        if 'clasificacion_consolidada' in row.keys(): # Verificar si la columna existe
+                            clasif_auto_json_str = row['clasificacion_consolidada'] # <--- CAMBIO DE COLUMNA
                         else:
-                            logger.debug("  -> JSON automático parseado vacío, no se cuenta.")
+                            logger.warning(f"Columna 'clasificacion_consolidada' no encontrada en la fila {row_index}. Verificando 'clasificacion_automatica' como fallback.")
+                            # Fallback a la columna vieja si la nueva no existe (transición)
+                            if 'clasificacion_automatica' in row.keys():
+                                 clasif_auto_json_str = row['clasificacion_automatica']
+                        
+                        logger.debug(f"Procesando fila {row_index} para AUTO, JSON crudo leído: {clasif_auto_json_str}") # Log actualizado
+                        
+                        # --- CORREGIR EL SALTO INNECESARIO --- 
+                        # Solo continuar si realmente no hay JSON para procesar
+                        if not clasif_auto_json_str: 
+                            logger.debug("  -> JSON automático/consolidado realmente vacío o None, saltando fila.") 
+                            continue
+                            
+                        # Si llegamos aquí, tenemos un JSON (de consolidada o automática) para intentar procesar
+                        try:
+                            clasif_auto_data = json.loads(clasif_auto_json_str)
+                            logger.debug(f"  -> JSON automático parseado: {clasif_auto_data}")
+                            if clasif_auto_data:
+                                count_clasificaciones_auto_validas += 1
+                            else:
+                                logger.debug("  -> JSON automático parseado vacío, no se cuenta.")
+                                continue
+
+                            processed_keys_auto_in_row = set()
+                            for internal_key, json_key in key_mapping_auto.items():
+                                valor_obj = None
+                                if json_key in clasif_auto_data:
+                                    valor_obj = clasif_auto_data[json_key]
+                                    found_key = json_key
+                                    logger.debug(f"    -> AUTO: Got valor_obj for key '{json_key}'. Type: {type(valor_obj)}, Value: {valor_obj}") # Log type and value
+                                else:
+                                    logger.debug(f"    -> AUTO: Clave JSON '{json_key}' no encontrada para '{internal_key}'.")
+                                    continue
+                                
+                                # Extraer el porcentaje del objeto interno
+                                valor_str = None
+                                if isinstance(valor_obj, dict) and 'porcentaje' in valor_obj:
+                                    valor_str = valor_obj['porcentaje']
+                                else:
+                                    reason = "Not a dict" if not isinstance(valor_obj, dict) else "Missing 'porcentaje' key"
+                                    logger.warning(f"    -> AUTO: Failed to get percentage for '{json_key}'. Reason: {reason}. Object: {valor_obj}")
+                                    continue # No podemos obtener el porcentaje
+
+                                logger.debug(f"    -> AUTO: Clave '{found_key}' ('{internal_key}'), Porcentaje crudo: '{valor_str}'")
+                                processed_keys_auto_in_row.add(internal_key)
+                                
+                                try:
+                                    if isinstance(valor_str, str):
+                                        valor_num = float(valor_str.replace('%', '').strip())
+                                    elif isinstance(valor_str, (int, float)):
+                                         valor_num = float(valor_str)
+                                    else:
+                                         raise ValueError("Tipo no numérico")
+                                         
+                                    sumas_calidad_auto[internal_key] += valor_num
+                                    counts_calidad_auto[internal_key] += 1
+                                    logger.debug(f"      -> AUTO: Suma[{internal_key}]={sumas_calidad_auto[internal_key]}, Count[{internal_key}]={counts_calidad_auto[internal_key]}")
+                                except (ValueError, TypeError) as e:
+                                    logger.warning(f"    -> AUTO: Valor no numérico para '{internal_key}' ('{found_key}'='{valor_str}'): {e}")
+                                    pass
+                                    
+                            if not processed_keys_auto_in_row:
+                                 logger.warning(f"  -> AUTO: No se procesó ninguna clave esperada.")
+                                 
+                        except json.JSONDecodeError:
+                            logger.warning(f"  -> AUTO: Error parseando JSON: {clasif_auto_json_str}")
                             continue
 
-                        processed_keys_auto_in_row = set()
-                        for internal_key, json_key in key_mapping_auto.items():
-                            valor_obj = None
-                            if json_key in clasif_auto_data:
-                                valor_obj = clasif_auto_data[json_key]
-                                found_key = json_key
-                                logger.debug(f"    -> AUTO: Got valor_obj for key '{json_key}'. Type: {type(valor_obj)}, Value: {valor_obj}") # Log type and value
-                            else:
-                                logger.debug(f"    -> AUTO: Clave JSON '{json_key}' no encontrada para '{internal_key}'.")
-                                continue
-                            
-                            # Extraer el porcentaje del objeto interno
-                            valor_str = None
-                            if isinstance(valor_obj, dict) and 'porcentaje' in valor_obj:
-                                valor_str = valor_obj['porcentaje']
-                            else:
-                                reason = "Not a dict" if not isinstance(valor_obj, dict) else "Missing 'porcentaje' key"
-                                logger.warning(f"    -> AUTO: Failed to get percentage for '{json_key}'. Reason: {reason}. Object: {valor_obj}")
-                                continue # No podemos obtener el porcentaje
+                    logger.info(f"Sumas finales AUTO: {sumas_calidad_auto}")
+                    logger.info(f"Conteos finales AUTO: {counts_calidad_auto}")
+                    logger.info(f"Clasificaciones AUTO válidas: {count_clasificaciones_auto_validas}")
 
-                            logger.debug(f"    -> AUTO: Clave '{found_key}' ('{internal_key}'), Porcentaje crudo: '{valor_str}'")
-                            processed_keys_auto_in_row.add(internal_key)
-                            
-                            try:
-                                if isinstance(valor_str, str):
-                                    valor_num = float(valor_str.replace('%', '').strip())
-                                elif isinstance(valor_str, (int, float)):
-                                     valor_num = float(valor_str)
-                                else:
-                                     raise ValueError("Tipo no numérico")
-                                     
-                                sumas_calidad_auto[internal_key] += valor_num
-                                counts_calidad_auto[internal_key] += 1
-                                logger.debug(f"      -> AUTO: Suma[{internal_key}]={sumas_calidad_auto[internal_key]}, Count[{internal_key}]={counts_calidad_auto[internal_key]}")
-                            except (ValueError, TypeError) as e:
-                                logger.warning(f"    -> AUTO: Valor no numérico para '{internal_key}' ('{found_key}'='{valor_str}'): {e}")
-                                pass
-                                
-                        if not processed_keys_auto_in_row:
-                             logger.warning(f"  -> AUTO: No se procesó ninguna clave esperada.")
-                             
-                    except json.JSONDecodeError:
-                        logger.warning(f"  -> AUTO: Error parseando JSON: {clasif_auto_json_str}")
-                        continue
-                
-                logger.info(f"Sumas finales AUTO: {sumas_calidad_auto}")
-                logger.info(f"Conteos finales AUTO: {counts_calidad_auto}")
-                logger.info(f"Clasificaciones AUTO válidas: {count_clasificaciones_auto_validas}")
-
-                # Calcular promedios Automáticos
-                for key in calidad_promedios_auto.keys():
-                    if counts_calidad_auto[key] > 0:
-                        calidad_promedios_auto[key] = sumas_calidad_auto[key] / counts_calidad_auto[key]
-                    else:
-                        calidad_promedios_auto[key] = 0
-                logger.info(f"Promedios de Calidad Automática calculados: {calidad_promedios_auto}")
-                # -- Fin cálculo calidad automática --
+                    # Calcular promedios Automáticos
+                    # This calculation is now safe even if the loop didn't run
+                    for key in calidad_promedios_auto.keys():
+                        if counts_calidad_auto[key] > 0: # Check if count for this key is > 0
+                            calidad_promedios_auto[key] = sumas_calidad_auto[key] / counts_calidad_auto[key]
+                        # No else needed, initialized to 0
+                    logger.info(f"Promedios de Calidad Automática calculados: {calidad_promedios_auto}")
+                    # -- Fin cálculo calidad automática --
 
             except sqlite3.Error as db_err:
                  logger.error(f"Error consultando clasificaciones: {db_err}")
@@ -2771,7 +2807,40 @@ def dashboard_stats():
         response['alertas_calidad_tabla'] = alertas_calidad_tabla
         # --- Fin Generar Alertas de Calidad ---
 
+        # DEBUG: Log the variable right before use
+        logger.info(f"DEBUG: Value of calidad_promedios_auto before response: {calidad_promedios_auto}")
+        logger.info(f"DEBUG: Type of calidad_promedios_auto before response: {type(calidad_promedios_auto)}")
+
         # Devolver todos los datos calculados
+        response = {
+            # KPI principal filtrado
+            'registros_entrada_filtrados': registros_filtrados_count,
+            # Nuevo KPI calculado
+            'total_racimos_filtrados': total_racimos,
+            # Nuevo KPI Peso Neto Total
+            'peso_neto_total_filtrado': peso_neto_total,
+            # Nuevo KPI Peso Neto Pepa (en kg inicialmente)
+            'peso_neto_pepa': peso_neto_pepa,
+            # Nuevos KPIs de Calidad
+            'calidad_promedios_manual': calidad_promedios, # Promedios manuales
+            'calidad_promedios_automatica': calidad_promedios_auto, # Promedios automáticos
+            # Otros KPIs (aún no filtrados - placeholder)
+            'pesajes_pendientes': pesajes_pendientes,
+            'clasificaciones_pendientes': clasificaciones_pendientes,
+            'peso_neto_hoy': peso_neto_hoy,
+            # Datos para gráficos (ya filtrados)
+            'registros_diarios_chart_data': registros_diarios_chart_data,
+            'peso_neto_diario_chart_data': peso_neto_diario_chart_data,
+            'racimos_peso_promedio_chart_data': racimos_peso_promedio_chart_data,
+            'ultimos_registros_tabla': ultimos_registros_tabla,
+            'tiempos_promedio_proceso': tiempos_promedio_proceso,
+            'top_5_peso_neto_tabla': top_5_peso_neto_tabla,
+            'alertas_calidad_tabla': alertas_calidad_tabla
+            # Note: calidad_por_proveedor results aren't directly returned, used for alerts
+        }
+
+        # --- Fin Generar Alertas de Calidad ---
+
         return jsonify(response)
     except Exception as e:
         logger.error(f"Error al obtener estadísticas del dashboard: {str(e)}")

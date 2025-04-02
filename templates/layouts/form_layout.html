@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+
+{% block styles %}
+{{ super() }}
+<style>
+    body {
+        background-color: #f8f9fa;
+    }
+    .form-container {
+        max-width: 1000px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+    }
+    .form-header {
+        background: white;
+        border-radius: 15px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+    .form-body {
+        background: white;
+        border-radius: 15px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+    .form-footer {
+        background: white;
+        border-radius: 15px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+    .back-link {
+        margin-bottom: 1.5rem;
+        display: inline-block;
+    }
+    .form-section-title {
+        border-bottom: 1px solid #dee2e6;
+        padding-bottom: 0.75rem;
+        margin-bottom: 1.5rem;
+        font-weight: 600;
+        color: #344767;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="form-container">
+    <div class="form-header">
+        <a href="{{ volver_url|default(url_for('misc.upload_file')) }}" class="back-link">
+            <i class="fas fa-arrow-left me-2"></i>{{ volver_texto|default('Volver') }}
+        </a>
+        <h2>{% block form_titulo %}Formulario{% endblock %}</h2>
+        <p class="text-muted">{% block form_descripcion %}Complete la información solicitada{% endblock %}</p>
+
+        <!-- DEBUG: Datos pasados al formulario -->
+        <div id="debug-data-passed" style="display:none; background-color: #f5f5f5; padding: 10px; border-radius: 5px; margin-top: 15px;">
+            <h6>DEBUG - Datos pasados al formulario:</h6>
+            {% if nombre_proveedor is defined %}
+            <p><strong>Nombre del proveedor:</strong> {{ nombre_proveedor }}</p>
+            {% endif %}
+            {% if cantidad_racimos is defined %}
+            <p><strong>Cantidad de racimos:</strong> {{ cantidad_racimos }}</p>
+            {% endif %}
+            {% if codigo_proveedor is defined %}
+            <p><strong>Código del proveedor:</strong> {{ codigo_proveedor }}</p>
+            {% endif %}
+        </div>
+        <script>
+            // Activar solo en desarrollo
+            document.getElementById('debug-data-passed').style.display = 'block';
+        </script>
+    </div>
+
+    <form method="{{ method|default('POST') }}" action="{{ action }}" {% if enctype %}enctype="{{ enctype }}"{% endif %} class="needs-validation" novalidate>
+        <div class="form-body">
+            {% block form_body %}{% endblock %}
+        </div>
+
+        <div class="form-footer text-end">
+            {% block form_buttons %}
+            <a href="{{ volver_url|default('#') }}" class="btn btn-secondary me-2">
+                <i class="fas fa-times me-2"></i>Cancelar
+            </a>
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-save me-2"></i>Guardar
+            </button>
+            {% endblock %}
+        </div>
+    </form>
+</div>
+
+{% block extra_modals %}{% endblock %}
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+    // Validación de formulario de Bootstrap
+    (function () {
+        'use strict'
+        var forms = document.querySelectorAll('.needs-validation')
+        Array.prototype.slice.call(forms)
+            .forEach(function (form) {
+                form.addEventListener('submit', function (event) {
+                    if (!form.checkValidity()) {
+                        event.preventDefault()
+                        event.stopPropagation()
+                    }
+                    form.classList.add('was-validated')
+                }, false)
+            })
+    })()
+</script>
+{% block form_scripts %}{% endblock %}
+{% endblock %} 

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Registro de Pesaje</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif;
+            margin: 40px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .info-section {
+            margin-bottom: 20px;
+        }
+        .data-row {
+            margin: 10px 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 10px;
+            border: 1px solid #ddd;
+            text-align: left;
+        }
+        th {
+            background-color: #f5f5f5;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Registro de Pesaje</h1>
+        <h2>{{ codigo }}</h2>
+    </div>
+
+    <div class="info-section">
+        <table>
+            <tr>
+                <th>Tipo de Pesaje</th>
+                <td>{{ tipo|title }}</td>
+            </tr>
+            <tr>
+                <th>Peso Bruto</th>
+                <td>{{ peso }} kg</td>
+            </tr>
+            <tr>
+                <th>Fecha</th>
+                <td>{{ fecha }}</td>
+            </tr>
+            <tr>
+                <th>Hora</th>
+                <td>{{ hora }}</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="footer">
+        <p>Este documento es un comprobante oficial de pesaje.</p>
+        <p>Generado el {{ fecha }} a las {{ hora }}</p>
+    </div>
+</body>
+</html> 

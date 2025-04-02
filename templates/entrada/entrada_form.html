@@ -1,0 +1,214 @@
+{% extends "layouts/form_layout.html" %}
+{% import "components/forms/form_elements.html" as forms %}
+{% import "components/entrada_styles.html" as entrada_styles %}
+
+{% block form_titulo %}Registro de Nueva Entrada{% endblock %}
+{% block form_descripcion %}Ingrese los datos para registrar una nueva entrada de racimos{% endblock %}
+
+{% block styles %}
+{{ super() }}
+{{ entrada_styles.entrada_styles() }}
+{% endblock %}
+
+{% block form_body %}
+<form id="entradaForm" action="{{ url_for('entrada.registrar_entrada') }}" method="POST" enctype="multipart/form-data">
+    <div class="row">
+        <div class="col-md-6">
+            <h5 class="form-section-title">Información del Proveedor</h5>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    {{ forms.input_text(
+                        id="codigo_proveedor",
+                        etiqueta="Código Proveedor",
+                        required=true,
+                        help_text="Ingrese el código del proveedor"
+                    ) }}
+                </div>
+                <div class="col-md-6">
+                    {{ forms.input_text(
+                        id="nombre_proveedor",
+                        etiqueta="Nombre Proveedor",
+                        help_text="Se completará automáticamente al ingresar el código"
+                    ) }}
+                </div>
+            </div>
+            
+            <h5 class="form-section-title mt-4">Información de Transporte</h5>
+            <div class="row">
+                <div class="col-md-6">
+                    {{ forms.input_text(
+                        id="placa",
+                        etiqueta="Placa Vehículo",
+                        required=true
+                    ) }}
+                </div>
+                <div class="col-md-6">
+                    {{ forms.input_text(
+                        id="transportador",
+                        etiqueta="Transportador"
+                    ) }}
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    {{ forms.input_number(
+                        id="cantidad_racimos",
+                        etiqueta="Cantidad Racimos",
+                        min=1,
+                        required=true,
+                        help_text="Cantidad de racimos recibidos"
+                    ) }}
+                </div>
+                <div class="col-md-6">
+                    {{ forms.input_text(
+                        id="codigo_guia_transporte_sap",
+                        etiqueta="Código Guía SAP",
+                        help_text="Opcional: Referencia a código en SAP"
+                    ) }}
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <h5 class="form-section-title">Imagen del Tiquete</h5>
+            
+            <div class="upload-container" id="upload-container">
+                <input type="file" name="imagen_tiquete" id="imagen_tiquete" accept="image/*" class="file-input" required>
+                <div class="upload-icon">
+                    <i class="fas fa-file-upload"></i>
+                </div>
+                <h5 class="upload-title">Subir Imagen del Tiquete</h5>
+                <p class="upload-info">Arrastre una imagen aquí o haga clic para seleccionar</p>
+                <button type="button" class="btn btn-primary" id="upload-btn">Seleccionar Archivo</button>
+            </div>
+            
+            <div id="image-preview" class="mt-3 d-none">
+                <h6>Vista Previa:</h6>
+                <img src="" id="preview-img" class="tiquete-image">
+                <button type="button" class="btn btn-sm btn-danger mt-2" id="remove-img">
+                    <i class="fas fa-times me-1"></i>Quitar imagen
+                </button>
+            </div>
+            
+            <div class="form-check mt-4">
+                <input class="form-check-input" type="checkbox" id="procesar_ocr" name="procesar_ocr" checked>
+                <label class="form-check-label" for="procesar_ocr">
+                    Procesar automáticamente con OCR
+                </label>
+                <div class="form-text text-muted">
+                    Se extraerán automáticamente los datos del tiquete
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row mt-4">
+        <div class="col-md-12">
+            {{ forms.textarea(
+                id="observaciones",
+                etiqueta="Observaciones",
+                rows=3,
+                help_text="Ingrese cualquier observación adicional sobre la entrada"
+            ) }}
+        </div>
+    </div>
+</form>
+{% endblock %}
+
+{% block form_buttons %}
+<a href="{{ url_for('entrada.lista_entradas') }}" class="btn btn-secondary me-2">
+    <i class="fas fa-times me-2"></i>Cancelar
+</a>
+<button type="submit" class="btn btn-primary" form="entradaForm">
+    <i class="fas fa-save me-2"></i>Registrar Entrada
+</button>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const uploadContainer = document.getElementById('upload-container');
+        const fileInput = document.getElementById('imagen_tiquete');
+        const uploadBtn = document.getElementById('upload-btn');
+        const imagePreview = document.getElementById('image-preview');
+        const previewImg = document.getElementById('preview-img');
+        const removeImg = document.getElementById('remove-img');
+        
+        // Abrir el selector de archivos al hacer clic en el botón o en el contenedor
+        uploadBtn.addEventListener('click', () => fileInput.click());
+        uploadContainer.addEventListener('click', (e) => {
+            if (e.target !== uploadBtn && !uploadBtn.contains(e.target)) {
+                fileInput.click();
+            }
+        });
+        
+        // Funcionalidad de arrastrar y soltar
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            uploadContainer.addEventListener(eventName, preventDefaults, false);
+        });
+        
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        
+        ['dragenter', 'dragover'].forEach(eventName => {
+            uploadContainer.addEventListener(eventName, () => {
+                uploadContainer.classList.add('dragover');
+            }, false);
+        });
+        
+        ['dragleave', 'drop'].forEach(eventName => {
+            uploadContainer.addEventListener(eventName, () => {
+                uploadContainer.classList.remove('dragover');
+            }, false);
+        });
+        
+        uploadContainer.addEventListener('drop', (e) => {
+            const dt = e.dataTransfer;
+            fileInput.files = dt.files;
+            updatePreview();
+        }, false);
+        
+        // Actualizar vista previa cuando se selecciona un archivo
+        fileInput.addEventListener('change', updatePreview);
+        
+        function updatePreview() {
+            if (fileInput.files && fileInput.files[0]) {
+                const reader = new FileReader();
+                
+                reader.onload = (e) => {
+                    previewImg.src = e.target.result;
+                    uploadContainer.classList.add('d-none');
+                    imagePreview.classList.remove('d-none');
+                };
+                
+                reader.readAsDataURL(fileInput.files[0]);
+            }
+        }
+        
+        // Quitar imagen
+        removeImg.addEventListener('click', () => {
+            fileInput.value = '';
+            previewImg.src = '';
+            uploadContainer.classList.remove('d-none');
+            imagePreview.classList.add('d-none');
+        });
+        
+        // Auto-completar nombre del proveedor (simulación)
+        document.getElementById('codigo_proveedor').addEventListener('blur', function() {
+            // Esto sería reemplazado por una llamada AJAX real
+            const codigo = this.value.trim();
+            if (codigo) {
+                // Simulación de respuesta 
+                setTimeout(() => {
+                    document.getElementById('nombre_proveedor').value = 'Proveedor ' + codigo;
+                }, 500);
+            }
+        });
+    });
+</script>
+{% endblock %} 

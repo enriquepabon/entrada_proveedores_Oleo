@@ -1,0 +1,35 @@
+{
+    "id": "Clasificacion_0103095A_20250401_155130",
+    "codigo_guia": "0103095A_20250401_155130",
+    "codigo_proveedor": "0103095A",
+    "nombre_proveedor": "A3F1- JOS\u00c9 TOMAS VILLA RODRIGUEZ -",
+    "fecha_registro": "01/04/2025",
+    "hora_registro": "15:53:46",
+    "fecha_clasificacion": "01/04/2025",
+    "hora_clasificacion": "15:53:46",
+    "clasificacion_manual": {
+        "verdes": 2.0,
+        "maduros": 0.0,
+        "sobremaduros": 0.0,
+        "danio_corona": 1.0,
+        "pendunculo_largo": 0.0,
+        "podridos": 0.0
+    },
+    "clasificaciones": {
+        "verdes": 2.0,
+        "maduros": 0.0,
+        "sobremaduros": 0.0,
+        "danio_corona": 1.0,
+        "pendunculo_largo": 0.0,
+        "podridos": 0.0
+    },
+    "observaciones": "",
+    "estado": "completado",
+    "total_racimos_detectados": 3.0,
+    "fotos": [
+        "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/app/../static/uploads/temp_clasificacion/temp_clasificacion_0103095A_20250401_155130_1_1743540826.jpg",
+        "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/app/../static/uploads/temp_clasificacion/temp_clasificacion_0103095A_20250401_155130_2_1743540826.jpg",
+        "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatizacio\u0301n registro MLB/TiquetesApp/app/../static/uploads/temp_clasificacion/temp_clasificacion_0103095A_20250401_155130_3_1743540826.jpg"
+    ],
+    "clasificacion_automatica": {}
+}

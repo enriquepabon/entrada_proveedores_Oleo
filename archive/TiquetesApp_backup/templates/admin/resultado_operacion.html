@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ titulo }} - Sistema de Tiquetes{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header {% if exito %}bg-success{% else %}bg-danger{% endif %} text-white">
+                    <h5 class="card-title mb-0">{{ titulo }}</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert {% if exito %}alert-success{% else %}alert-danger{% endif %}">
+                        <i class="fas {% if exito %}fa-check-circle{% else %}fa-exclamation-circle{% endif %} me-2"></i>
+                        {{ mensaje }}
+                    </div>
+                    
+                    <div class="mt-4">
+                        <a href="{{ url_for('home') }}" class="btn btn-primary">
+                            <i class="fas fa-home me-1"></i> Volver al Inicio
+                        </a>
+                        
+                        <a href="{{ url_for('listar_clasificaciones_filtradas') }}" class="btn btn-secondary ms-2">
+                            <i class="fas fa-clipboard-list me-1"></i> Ir a Clasificaciones
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

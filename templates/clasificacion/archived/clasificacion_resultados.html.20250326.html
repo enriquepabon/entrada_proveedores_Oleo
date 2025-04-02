@@ -1,0 +1,908 @@
+{% extends "layouts/results_layout.html" %}
+{% import "components/cards/stat_cards.html" as cards %}
+
+{% block head_extra %}
+<style>
+    /* Category color classes */
+    .category-circle {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        margin-right: 8px;
+    }
+    .color-verde { color: #28a745; }
+    .color-maduro { color: #fd7e14; }
+    .color-sobremaduro { color: #dc3545; }
+    .color-danio-corona { color: #6f42c1; }
+    .color-pendunculo-largo { color: #17a2b8; }
+    .color-default { color: #6c757d; }
+    
+    .bg-verde { background-color: #28a745; }
+    .bg-maduro { background-color: #fd7e14; }
+    .bg-sobremaduro { background-color: #dc3545; }
+    .bg-danio-corona { background-color: #6f42c1; }
+    .bg-pendunculo-largo { background-color: #17a2b8; }
+    .bg-default { background-color: #6c757d; }
+    
+    .circle-container {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        display: inline-flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .progress-bar {
+        transition: width 0.3s ease;
+        width: 0;
+    }
+
+    /* Para las barras de progreso */
+    .progress {
+        height: 10px;
+        margin-bottom: 8px;
+    }
+    
+    /* Estilo para circulos de distribución */
+    .distribution-dot {
+        display: inline-block;
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        margin: 0 5px;
+        position: relative;
+        border: 2px solid #fff;
+        box-shadow: 0 0 5px rgba(0,0,0,0.2);
+        transition: transform 0.3s;
+    }
+    .distribution-dot:hover {
+        transform: scale(1.1);
+    }
+    .dot-number {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: white;
+        font-weight: bold;
+        text-shadow: 0 0 3px rgba(0,0,0,0.5);
+    }
+    
+    .card-icon-lg {
+        font-size: 2rem;
+        opacity: 0.8;
+    }
+    
+    .results-container {
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+    
+    .info-icon {
+        cursor: help;
+        color: #6c757d;
+    }
+
+    .visual-distribution {
+        text-align: center;
+        padding: 15px 0;
+    }
+    
+    .observation-box {
+        background-color: #f8f9fa;
+        border-left: 4px solid #6c757d;
+        padding: 10px 15px;
+        margin-bottom: 15px;
+    }
+    
+    .observation-box.warning {
+        border-left-color: #ffc107;
+    }
+    
+    .observation-box.danger {
+        border-left-color: #dc3545;
+    }
+    
+    .observation-box.success {
+        border-left-color: #28a745;
+    }
+
+    /* Estilos personalizados para mejorar la visualización */
+    .classification-card {
+        border: none;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        transition: transform 0.2s;
+    }
+    .classification-card:hover {
+        transform: translateY(-5px);
+    }
+    .card-header-custom {
+        background: linear-gradient(45deg, #2196F3, #1976D2);
+        color: white;
+        padding: 1.2rem;
+        border-radius: 8px 8px 0 0;
+    }
+    .stat-circle {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto;
+        position: relative;
+        background: white;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    .stat-circle::before {
+        content: '';
+        position: absolute;
+        top: -3px;
+        left: -3px;
+        right: -3px;
+        bottom: -3px;
+        border-radius: 50%;
+        background: linear-gradient(45deg, #4CAF50, #8BC34A);
+        z-index: -1;
+    }
+    .stat-number {
+        font-size: 1.8rem;
+        font-weight: bold;
+        color: #333;
+    }
+    .stat-label {
+        font-size: 0.9rem;
+        color: #666;
+        margin-top: 8px;
+        text-align: center;
+    }
+    .progress {
+        height: 12px;
+        border-radius: 6px;
+        background-color: #f5f5f5;
+        box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
+    }
+    .progress-bar {
+        border-radius: 6px;
+        transition: width 1s ease-in-out;
+    }
+    .category-badge {
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 0.9rem;
+        font-weight: 500;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 8px;
+    }
+    .bg-verde { background: linear-gradient(45deg, #4CAF50, #8BC34A); }
+    .bg-sobremaduro { background: linear-gradient(45deg, #FF9800, #F57C00); }
+    .bg-danio-corona { background: linear-gradient(45deg, #9C27B0, #7B1FA2); }
+    .bg-pendunculo-largo { background: linear-gradient(45deg, #795548, #5D4037); }
+    .bg-podrido { background: linear-gradient(45deg, #607D8B, #455A64); }
+    
+    .result-table {
+        background: white;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+        margin-bottom: 2rem;
+    }
+    .result-table th {
+        background: #f8f9fa;
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.85rem;
+        letter-spacing: 0.5px;
+        padding: 16px;
+        border-bottom: 2px solid #e9ecef;
+    }
+    .result-table td {
+        vertical-align: middle;
+        padding: 16px;
+        border-bottom: 1px solid #f1f1f1;
+    }
+    .result-table tr:hover {
+        background-color: #f8f9fa;
+    }
+    .category-icon {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 1rem;
+    }
+    .total-row {
+        background: #f8f9fa;
+        font-weight: 700;
+        border-top: 2px solid #e9ecef;
+    }
+    .total-row td {
+        padding: 20px 16px;
+    }
+    .alert-custom-info {
+        background: linear-gradient(135deg, #E3F2FD, #BBDEFB);
+        border: none;
+        border-radius: 12px;
+        padding: 1.25rem;
+        color: #1565C0;
+        margin-bottom: 2rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+    .alert-custom-info i {
+        font-size: 1.5rem;
+    }
+
+    /* Estilos mejorados para las categorías */
+    .category-cell {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-weight: 500;
+    }
+
+    /* Estilos mejorados para las barras de progreso */
+    .progress-container {
+        width: 100%;
+        background: #f8f9fa;
+        border-radius: 8px;
+        overflow: hidden;
+        height: 24px;
+        position: relative;
+        box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .progress-bar {
+        height: 100%;
+        transition: width 1s ease-in-out;
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 600;
+        font-size: 0.85rem;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    }
+
+    /* Estilos para la distribución visual */
+    .distribution-section {
+        margin-top: 3rem;
+        padding: 2rem;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+    }
+
+    .distribution-title {
+        text-align: center;
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin-bottom: 2rem;
+        color: #2c3e50;
+    }
+
+    .distribution-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1.5rem;
+        justify-items: center;
+    }
+
+    .distribution-item {
+        text-align: center;
+        padding: 1.5rem;
+        background: #f8f9fa;
+        border-radius: 12px;
+        width: 100%;
+        transition: transform 0.2s ease;
+    }
+
+    .distribution-item:hover {
+        transform: translateY(-5px);
+    }
+
+    .distribution-percentage {
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+        background: linear-gradient(135deg, #2c3e50, #3498db);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+
+    .distribution-label {
+        font-size: 1rem;
+        color: #7f8c8d;
+        margin-bottom: 0.5rem;
+    }
+
+    .distribution-count {
+        font-size: 0.9rem;
+        color: #95a5a6;
+    }
+</style>
+
+<!-- Mover los scripts al final del documento -->
+{% endblock %}
+
+{% block results_titulo %}Resultados de Clasificación - Guía {{ codigo_guia }}{% endblock %}
+{% block results_descripcion %}Detalles de la clasificación realizada{% endblock %}
+
+{% block header_actions %}
+<div class="d-flex gap-2">
+    <a href="{{ url_for('clasificacion.generar_pdf_clasificacion', codigo_guia=codigo_guia) }}" class="btn btn-success" target="_blank">
+        <i class="fas fa-file-pdf me-2"></i>Descargar PDF
+    </a>
+    <a href="{{ url_for('clasificacion.print_view_clasificacion', codigo_guia=codigo_guia) }}" class="btn btn-primary" target="_blank">
+        <i class="fas fa-print me-2"></i>Imprimir
+    </a>
+    <a href="{{ url_for('clasificacion.ver_detalles_clasificacion', url_guia=codigo_guia) }}" 
+       class="btn {{ 'btn-info' if clasificacion_automatica_consolidada and clasificacion_automatica_consolidada|length > 0 and total_racimos_detectados > 0 else 'btn-secondary disabled' }}"
+       {{ 'aria-disabled=true' if not (clasificacion_automatica_consolidada and clasificacion_automatica_consolidada|length > 0 and total_racimos_detectados > 0) }}>
+        <i class="fas fa-chart-bar me-2"></i>Ver Detalles por Foto
+    </a>
+    <a href="{{ url_for('clasificacion.clasificacion', codigo=codigo_guia, reclasificar='true') }}" class="btn btn-warning">
+        <i class="fas fa-sync-alt me-2"></i>Reclasificar
+    </a>
+    
+    <!-- Botón para iniciar clasificación automática -->
+    {% if not clasificacion_automatica or clasificacion_automatica|length == 0 %}
+    <button type="button" id="btn-iniciar-procesamiento" class="btn btn-info" data-codigo-guia="{{ codigo_guia }}">
+        <i class="fas fa-robot me-2"></i>Iniciar Clasificación Automática
+    </button>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block results_stats %}
+<div class="row mb-4">
+    <div class="col-md-3">
+        {{ cards.simple_stat_card(
+            "Proveedor", 
+            codigo_proveedor, 
+            "user", 
+            "primary",
+            nombre_proveedor
+        ) }}
+    </div>
+    <div class="col-md-3">
+        {{ cards.simple_stat_card(
+            "Peso Bruto", 
+            peso_bruto|string + " kg", 
+            "weight-hanging", 
+            "success"
+        ) }}
+    </div>
+    <div class="col-md-3">
+        {{ cards.simple_stat_card(
+            "Racimos", 
+            cantidad_racimos|string, 
+            "layer-group", 
+            "info"
+        ) }}
+    </div>
+    <div class="col-md-3">
+        {{ cards.simple_stat_card(
+            "Fecha", 
+            fecha_clasificacion, 
+            "calendar-alt", 
+            "secondary",
+            hora_clasificacion
+        ) }}
+    </div>
+</div>
+
+<!-- Sección para mostrar el estado del procesamiento automático -->
+<div id="procesamiento-status" class="alert alert-info d-none">
+    <div class="d-flex align-items-center mb-2">
+        <div class="spinner-grow spinner-grow-sm me-2 text-primary" role="status">
+            <span class="visually-hidden">Procesando...</span>
+        </div>
+        <div class="d-flex flex-column">
+            <span id="estado-mensaje" class="fw-bold">Iniciando procesamiento...</span>
+            <small id="estado-detalle" class="text-muted"></small>
+        </div>
+    </div>
+    <div class="progress mt-3" style="height: 10px;">
+        <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" 
+             role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block results_content %}
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Muestra analizada:</strong> 
+                    {% if cantidad_racimos|int > 1000 %}100{% else %}28{% endif %} 
+                    racimos de un total de {{ cantidad_racimos }} racimos
+                </div>
+
+                {% if clasificacion_manual_con_porcentajes %}
+                <div class="table-responsive">
+                    <table class="table table-bordered">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 40%">Categoría</th>
+                                <th class="text-center" style="width: 20%">Cantidad</th>
+                                <th class="text-center" style="width: 40%">Porcentaje</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for categoria, datos in clasificacion_manual_con_porcentajes.items() %}
+                            {% if categoria != 'maduros' and categoria != 'maduro' %}
+                            <tr>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <span class="badge rounded-pill me-2 
+                                            {% if categoria == 'verdes' or categoria == 'verde' %}
+                                                bg-success
+                                            {% elif categoria == 'sobremaduros' or categoria == 'sobremaduro' %}
+                                                bg-warning
+                                            {% elif categoria == 'danio_corona' or categoria == 'dano_corona' %}
+                                                bg-purple
+                                            {% elif categoria == 'pendunculo_largo' or categoria == 'pedunculo_largo' %}
+                                                bg-info
+                                            {% else %}
+                                                bg-secondary
+                                            {% endif %}">
+                                            &nbsp;
+                                        </span>
+                                        {{ categoria|title }}
+                                    </div>
+                                </td>
+                                <td class="text-center">
+                                    <strong>{{ datos.cantidad }}</strong>
+                                </td>
+                                <td>
+                                    <div class="progress" style="height: 20px;">
+                                        <div class="progress-bar 
+                                            {% if categoria == 'verdes' or categoria == 'verde' %}
+                                                bg-success
+                                            {% elif categoria == 'sobremaduros' or categoria == 'sobremaduro' %}
+                                                bg-warning
+                                            {% elif categoria == 'danio_corona' or categoria == 'dano_corona' %}
+                                                bg-purple
+                                            {% elif categoria == 'pendunculo_largo' or categoria == 'pedunculo_largo' %}
+                                                bg-info
+                                            {% else %}
+                                                bg-secondary
+                                            {% endif %}"
+                                            role="progressbar" 
+                                            style="width: {{ datos.porcentaje }}%"
+                                            aria-valuenow="{{ datos.porcentaje }}"
+                                            aria-valuemin="0"
+                                            aria-valuemax="100">
+                                            {{ datos.porcentaje|round(1) }}%
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endif %}
+                            {% endfor %}
+                            <tr class="table-light">
+                                <td><strong>Total</strong></td>
+                                <td class="text-center">
+                                    <strong>{% if cantidad_racimos|int > 1000 %}100{% else %}28{% endif %}</strong>
+                                </td>
+                                <td></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Distribución simplificada -->
+                <div class="mt-4">
+                    <h6 class="text-center mb-3">Distribución de Clasificación</h6>
+                    <div class="row row-cols-2 row-cols-md-3 g-3">
+                        {% for categoria, datos in clasificacion_manual_con_porcentajes.items() %}
+                        {% if categoria != 'maduros' and categoria != 'maduro' %}
+                        <div class="col">
+                            <div class="card h-100 border-0 shadow-sm">
+                                <div class="card-body text-center">
+                                    <h3 class="mb-0">{{ datos.porcentaje|round(1) }}%</h3>
+                                    <div class="text-muted small">{{ categoria|title }}</div>
+                                    <div class="text-muted smaller">{{ datos.cantidad }} racimos</div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+                {% elif clasificacion_manual %}
+                    <!-- Handle simple classification without percentages -->
+                    <ul class="list-group">
+                        {% for categoria, valor in clasificacion_manual.items() %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>
+                                {% if categoria == 'verdes' or categoria == 'verde' %}
+                                    <i class="fas fa-circle me-2 color-verde"></i>
+                                {% elif categoria == 'sobremaduros' or categoria == 'sobremaduro' %}
+                                    <i class="fas fa-circle me-2 color-sobremaduro"></i>
+                                {% elif categoria == 'danio_corona' or categoria == 'dano_corona' %}
+                                    <i class="fas fa-circle me-2 color-danio-corona"></i>
+                                {% elif categoria == 'pendunculo_largo' or categoria == 'pedunculo_largo' %}
+                                    <i class="fas fa-circle me-2 color-pendunculo-largo"></i>
+                                {% endif %}
+                                {{ categoria|title }}
+                            </span>
+                            <span class="badge bg-primary rounded-pill">{{ valor }}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        No hay datos de clasificación manual registrados.
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <!-- Resumen de Clasificación -->
+        <div class="card">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Resumen</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>Fecha</span>
+                        <span class="fw-bold">{{ fecha_clasificacion }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>Hora</span>
+                        <span class="fw-bold">{{ hora_clasificacion }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>Código Guía</span>
+                        <span class="fw-bold">{{ codigo_guia }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>Total Racimos</span>
+                        <span class="fw-bold">{{ cantidad_racimos }}</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Botón Ver Detalles por Foto -->
+{% if clasificacion_automatica_consolidada and clasificacion_automatica_consolidada|length > 0 %}
+<div class="row mt-4">
+    <div class="col-12 text-center">
+        <a href="{{ url_for('clasificacion.ver_detalles_clasificacion', url_guia=codigo_guia) }}" 
+           class="btn btn-info btn-lg">
+            <i class="fas fa-images me-2"></i>Ver Detalles por Foto
+        </a>
+    </div>
+</div>
+{% endif %}
+
+<!-- Distribution Results -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Distribución de racimos detectados</h3>
+            </div>
+            <div class="card-body">
+                {% if clasificacion_automatica_consolidada|length > 0 and total_racimos_detectados > 0 %}
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="alert alert-success">
+                                <i class="fas fa-check-circle me-2"></i>
+                                Clasificación automática completada exitosamente. Puede ver los detalles por foto haciendo clic en el botón "Ver Detalles por Foto".
+                            </div>
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        No hay datos de clasificación automática disponibles. Puede iniciar el proceso haciendo clic en "Iniciar Clasificación Automática".
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block action_buttons %}
+<div class="d-flex gap-2 mt-3">
+    <a href="{{ url_for('pesaje.lista_pesajes') }}" class="btn btn-secondary">
+        <i class="fas fa-list me-2"></i>Ver Lista de Pesajes
+    </a>
+    {% if not tiene_pesaje_neto %}
+    <a href="{{ url_for('pesaje.pesaje_neto', codigo=codigo_guia) }}" class="btn btn-primary">
+        <i class="fas fa-weight me-2"></i>Registrar Pesaje Neto
+    </a>
+    {% endif %}
+    
+    <form action="{{ url_for('clasificacion.guardar_clasificacion_final', codigo_guia=codigo_guia) }}" 
+          method="POST" 
+          class="d-inline"
+          id="formGuardarClasificacion">
+        <button type="submit" class="btn btn-success">
+            <i class="fas fa-save me-2"></i>Guardar Clasificación
+        </button>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Prevenir múltiples envíos del formulario
+    const form = document.getElementById('formGuardarClasificacion');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            const submitButton = this.querySelector('button[type="submit"]');
+            if (submitButton) {
+                submitButton.disabled = true;
+                submitButton.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Guardando...';
+            }
+        });
+    }
+
+    // Inicializar barras de progreso
+    const progressBars = document.querySelectorAll('.progress-bar');
+    progressBars.forEach(function(bar) {
+        const width = bar.style.width;
+        bar.style.width = '0%';
+        setTimeout(() => {
+            bar.style.width = width;
+        }, 100);
+    });
+
+    // DEBUG: Imprimir datos de clasificación manual disponibles en la consola
+    console.log('Datos de clasificación manual disponibles:');
+    {% if clasificacion_manual %}
+    console.log('clasificacion_manual:', {{ clasificacion_manual|tojson }});
+    {% endif %}
+    
+    {% if clasificacion_manual_con_porcentajes %}
+    console.log('clasificacion_manual_con_porcentajes:', {{ clasificacion_manual_con_porcentajes|tojson }});
+    {% endif %}
+    
+    const btnIniciarProcesamiento = document.getElementById('btn-iniciar-procesamiento');
+    const procesamientoStatus = document.getElementById('procesamiento-status');
+    const progressBar = document.getElementById('progress-bar');
+    const resultadosAutomaticos = document.getElementById('resultados-automaticos');
+    const btnVerDetalles = document.querySelector('a[href*="ver_detalles_clasificacion"]');
+    
+    // Verificar si la clasificación automática está completa
+    const clasificacionCompletada = Boolean({{ 1 if clasificacion_automatica_consolidada and clasificacion_automatica_consolidada|length > 0 else 0 }});
+    
+    // Habilitar/deshabilitar botón de ver detalles
+    if (btnVerDetalles) {
+        if (clasificacionCompletada) {
+            btnVerDetalles.classList.remove('disabled');
+            btnVerDetalles.classList.remove('btn-secondary');
+            btnVerDetalles.classList.add('btn-info');
+            btnVerDetalles.removeAttribute('aria-disabled');
+        } else {
+            btnVerDetalles.classList.add('disabled');
+            btnVerDetalles.classList.add('btn-secondary');
+            btnVerDetalles.classList.remove('btn-info');
+            btnVerDetalles.setAttribute('aria-disabled', 'true');
+        }
+    }
+    
+    if (btnIniciarProcesamiento) {
+        btnIniciarProcesamiento.addEventListener('click', function() {
+            const codigoGuia = this.getAttribute('data-codigo-guia');
+            
+            // Deshabilitar el botón y mostrar la barra de progreso
+            this.disabled = true;
+            procesamientoStatus.classList.remove('d-none');
+            procesamientoStatus.classList.add('d-block');
+            
+            // Actualizar mensaje inicial
+            document.getElementById('estado-mensaje').textContent = 'Iniciando procesamiento...';
+            document.getElementById('estado-detalle').textContent = 'Preparando imágenes para análisis';
+            
+            // Iniciar animación de progreso
+            let progress = 0;
+            const progressAnimation = setInterval(() => {
+                if (progress < 90) {
+                    progress += Math.random() * 2;
+                    progressBar.style.width = `${progress}%`;
+                    progressBar.setAttribute('aria-valuenow', progress);
+                }
+            }, 200);
+            
+            // Iniciar el procesamiento
+            fetch("{{ url_for('clasificacion.iniciar_procesamiento', url_guia='PLACEHOLDER') }}".replace('PLACEHOLDER', codigoGuia), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    if (response.status === 404) {
+                        throw new Error('No se encontraron imágenes para procesar. Por favor suba las fotos de clasificación para esta guía.');
+                    }
+                    throw new Error(`Error del servidor: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.status === 'started' || data.status === 'processing') {
+                    checkProcesamiento(codigoGuia);
+                } else {
+                    throw new Error(data.message || 'Error al iniciar el procesamiento');
+                }
+            })
+            .catch(error => {
+                clearInterval(progressAnimation);
+                procesamientoStatus.classList.remove('alert-info');
+                procesamientoStatus.classList.add('alert-danger');
+                procesamientoStatus.innerHTML = `<i class="fas fa-exclamation-triangle me-2"></i> ${error.message}`;
+                btnIniciarProcesamiento.disabled = false;
+            });
+        });
+    }
+    
+    function checkProcesamiento(codigoGuia) {
+        const statusUrl = "{{ url_for('clasificacion.check_procesamiento_status', url_guia='PLACEHOLDER') }}".replace('PLACEHOLDER', codigoGuia);
+        const resultadosUrl = "{{ url_for('clasificacion.mostrar_resultados_automaticos', url_guia='PLACEHOLDER') }}".replace('PLACEHOLDER', codigoGuia);
+        
+        const checkInterval = setInterval(function() {
+            fetch(statusUrl)
+            .then(response => response.json())
+            .then(data => {
+                // Actualizar progreso y mensaje
+                const progress = data.progress || 0;
+                progressBar.style.width = `${progress}%`;
+                progressBar.setAttribute('aria-valuenow', progress);
+                
+                if (data.message) {
+                    document.getElementById('estado-mensaje').textContent = data.message;
+                    if (data.detail) {
+                        document.getElementById('estado-detalle').textContent = data.detail;
+                    }
+                }
+                
+                if (data.status === 'completed') {
+                    clearInterval(checkInterval);
+                    procesamientoStatus.classList.remove('alert-info');
+                    procesamientoStatus.classList.add('alert-success');
+                    procesamientoStatus.innerHTML = `
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-check-circle me-2 fs-4"></i>
+                            <div>
+                                <div class="fw-bold">Procesamiento completado con éxito</div>
+                                <small>Los resultados se mostrarán en un momento...</small>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Habilitar el botón de ver detalles
+                    if (btnVerDetalles) {
+                        btnVerDetalles.classList.remove('disabled');
+                        btnVerDetalles.removeAttribute('aria-disabled');
+                    }
+                    
+                    // Redireccionar después de mostrar el mensaje de éxito
+                    setTimeout(() => {
+                        window.location.href = resultadosUrl;
+                    }, 2000);
+                } else if (data.status === 'error') {
+                    clearInterval(checkInterval);
+                    procesamientoStatus.classList.remove('alert-info');
+                    procesamientoStatus.classList.add('alert-danger');
+                    procesamientoStatus.innerHTML = `
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-exclamation-triangle me-2 fs-4"></i>
+                            <div>
+                                <div class="fw-bold">Error durante el procesamiento</div>
+                                <small>${data.message || 'Ocurrió un error inesperado'}</small>
+                            </div>
+                        </div>
+                    `;
+                    btnIniciarProcesamiento.disabled = false;
+                }
+            })
+            .catch(error => {
+                clearInterval(checkInterval);
+                procesamientoStatus.classList.remove('alert-info');
+                procesamientoStatus.classList.add('alert-danger');
+                procesamientoStatus.innerHTML = `
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-exclamation-triangle me-2 fs-4"></i>
+                        <div>
+                            <div class="fw-bold">Error de comunicación</div>
+                            <small>${error.message}</small>
+                        </div>
+                    </div>
+                `;
+                btnIniciarProcesamiento.disabled = false;
+            });
+        }, 2000);
+    }
+
+    // Configurar el gráfico si existe clasificación automática
+    {% if clasificacion_automatica_consolidada and clasificacion_automatica_consolidada|length > 0 %}
+    const ctx = document.getElementById('clasificacionChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: [
+                {% for categoria, datos in clasificacion_automatica_consolidada.items() %}
+                {% if categoria != 'total_racimos' %}
+                '{{ categoria|title }}',
+                {% endif %}
+                {% endfor %}
+            ],
+            datasets: [{
+                data: [
+                    {% for categoria, datos in clasificacion_automatica_consolidada.items() %}
+                    {% if categoria != 'total_racimos' %}
+                    {{ datos.cantidad if datos is mapping else datos }},
+                    {% endif %}
+                    {% endfor %}
+                ],
+                backgroundColor: [
+                    '#4CAF50', // verde
+                    '#FF9800', // sobremaduro
+                    '#9C27B0', // daño corona
+                    '#795548', // pendúnculo largo
+                    '#607D8B'  // podrido
+                ],
+                borderWidth: 2,
+                borderColor: '#ffffff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'right',
+                    labels: {
+                        padding: 20,
+                        font: {
+                            size: 12
+                        }
+                    }
+                }
+            },
+            cutout: '70%',
+            animation: {
+                animateScale: true,
+                animateRotate: true
+            }
+        }
+    });
+    {% endif %}
+});
+</script>
+
+<!-- Datos de depuración (no visibles para el usuario) -->
+<div style="display: none;" id="debug-data">
+    <h6>Datos de clasificación manual:</h6>
+    <pre>{{ clasificacion_manual|tojson(indent=2) }}</pre>
+    
+    <h6>Datos de clasificación manual con porcentajes:</h6>
+    <pre>{{ clasificacion_manual_con_porcentajes|tojson(indent=2) }}</pre>
+</div>
+{% endblock %} 

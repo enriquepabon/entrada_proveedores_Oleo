@@ -1,0 +1,47 @@
+{
+    "id": "Clasificacion_0150294A_20250310_164343_1741643023023",
+    "fecha_registro": "10/03/2025",
+    "hora_registro": "16:58:03",
+    "codigo_proveedor": "0150294A",
+    "nombre_proveedor": "N/A",
+    "fotos": [
+        "fotos_racimos_temp/0150294A_20250310_164343_1741643023023/foto1_0150294A_20250310_164343_1741643023023.jpg",
+        "fotos_racimos_temp/0150294A_20250310_164343_1741643023023/foto2_0150294A_20250310_164343_1741643023023.jpg",
+        "fotos_racimos_temp/0150294A_20250310_164343_1741643023023/foto3_0150294A_20250310_164343_1741643023023.jpg"
+    ],
+    "estado": "en_proceso",
+    "clasificacion_manual": {
+        "verdes": 2,
+        "sobremaduros": 3,
+        "danio_corona": 4,
+        "pendunculo_largo": 5,
+        "podridos": 6
+    },
+    "clasificacion_automatica": {
+        "verdes": {
+            "cantidad": 0,
+            "porcentaje": 0
+        },
+        "maduros": {
+            "cantidad": 0,
+            "porcentaje": 0
+        },
+        "sobremaduros": {
+            "cantidad": 0,
+            "porcentaje": 0
+        },
+        "podridos": {
+            "cantidad": 0,
+            "porcentaje": 0
+        },
+        "danio_corona": {
+            "cantidad": 0,
+            "porcentaje": 0
+        },
+        "pendunculo_largo": {
+            "cantidad": 0,
+            "porcentaje": 0
+        }
+    },
+    "resultados_por_foto": {}
+}

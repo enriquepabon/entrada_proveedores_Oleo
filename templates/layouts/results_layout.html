@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+
+{% block styles %}
+{{ super() }}
+<style>
+    body {
+        background-color: #f8f9fa;
+    }
+    .results-container {
+        max-width: 1200px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+    }
+    .results-header {
+        background: white;
+        border-radius: 15px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+    .results-body {
+        background: white;
+        border-radius: 15px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+    .results-footer {
+        background: white;
+        border-radius: 15px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+    .results-section {
+        background: white;
+        border-radius: 15px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+    .back-link {
+        margin-bottom: 1.5rem;
+        display: inline-block;
+    }
+    .section-title {
+        border-bottom: 1px solid #dee2e6;
+        padding-bottom: 0.75rem;
+        margin-bottom: 1.5rem;
+        font-weight: 600;
+        color: #344767;
+    }
+    .stat-card {
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        background: white;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    .stat-title {
+        font-size: 0.9rem;
+        color: #6c757d;
+        margin-bottom: 0.5rem;
+    }
+    .stat-value {
+        font-size: 1.75rem;
+        font-weight: 700;
+        margin-bottom: 0;
+    }
+    .image-preview {
+        max-width: 100%;
+        max-height: 300px;
+        border-radius: 10px;
+        margin-bottom: 1rem;
+    }
+    .btn-action {
+        min-width: 120px;
+        margin: 0.25rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="results-container">
+    <div class="results-header">
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <a href="{{ volver_url|default(url_for('misc.upload_file')) }}" class="back-link">
+                    <i class="fas fa-arrow-left me-2"></i>{{ volver_texto|default('Volver') }}
+                </a>
+                <h2>{% block results_titulo %}Resultados{% endblock %}</h2>
+                <p class="text-muted">{% block results_descripcion %}Visualización de resultados{% endblock %}</p>
+            </div>
+            <div>
+                {% block header_actions %}{% endblock %}
+            </div>
+        </div>
+    </div>
+
+    {% block results_stats %}{% endblock %}
+    
+    {% block results_content %}{% endblock %}
+    
+    {% block results_actions %}
+    <div class="results-footer text-center">
+        <div class="btn-group">
+            {% block action_buttons %}{% endblock %}
+        </div>
+    </div>
+    {% endblock %}
+</div>
+
+{% block extra_modals %}{% endblock %}
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+{% block results_scripts %}{% endblock %}
+{% endblock %} 

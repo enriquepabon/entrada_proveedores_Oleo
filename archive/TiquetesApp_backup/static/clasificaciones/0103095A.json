@@ -1,0 +1,30 @@
+{
+    "fotos": {
+        "foto1": {
+            "procesada": true,
+            "estado": "completada",
+            "resultados": {
+                "success": true,
+                "total_racimos": 10,
+                "clasificacion": {
+                    "verde": 3,
+                    "sobremaduro": 2,
+                    "danio_corona": 2,
+                    "pendunculo_largo": 2,
+                    "podrido": 1
+                },
+                "porcentajes": {
+                    "verde": 30,
+                    "sobremaduro": 20,
+                    "danio_corona": 20,
+                    "pendunculo_largo": 20,
+                    "podrido": 10
+                },
+                "imagen_etiquetada": "0103095A_foto1_20250220_112741.jpg"
+            },
+            "fecha_procesamiento": "2025-02-20 11:27:41"
+        }
+    },
+    "ultima_actualizacion": "2025-02-20 11:27:41",
+    "automatica_en_proceso": true
+}

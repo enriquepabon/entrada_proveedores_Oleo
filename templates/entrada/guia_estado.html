@@ -1,0 +1,538 @@
+{% extends "base.html" %}
+{% import "components/cards/stat_cards.html" as cards %}
+
+{% block title %}Guía {{ codigo_guia }} - Estado Actual{% endblock %}
+
+{% block styles %}
+{{ super() }}
+<style>
+    .proceso-timeline {
+        position: relative;
+        margin-bottom: 2rem;
+    }
+    .proceso-timeline::before {
+        content: '';
+        position: absolute;
+        top: 40px;
+        left: 0;
+        width: 100%;
+        height: 2px;
+        background-color: #e0e0e0;
+        z-index: 1;
+    }
+    .proceso-timeline .step {
+        position: relative;
+        z-index: 2;
+        background-color: #fff;
+        text-align: center;
+    }
+    .proceso-timeline .step-icon {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        background-color: #f8f9fa;
+        border: 2px solid #dee2e6;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 10px;
+        transition: all 0.3s ease;
+    }
+    .step-icon i {
+        font-size: 2rem;
+        color: #6c757d;
+        transition: all 0.3s ease;
+    }
+    .step.active .step-icon {
+        background-color: #e8f4ff;
+        border-color: #0d6efd;
+    }
+    .step.active .step-icon i {
+        color: #0d6efd;
+    }
+    .step.completed .step-icon {
+        background-color: #d1ffd1;
+        border-color: #28a745;
+    }
+    .step.completed .step-icon i {
+        color: #28a745;
+    }
+    .step-title {
+        font-size: 0.9rem;
+        font-weight: 600;
+        margin-top: 0.5rem;
+    }
+    .step-date {
+        font-size: 0.8rem;
+        color: #6c757d;
+    }
+    .qr-container {
+        text-align: center;
+        background-color: white;
+        border-radius: 8px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .qr-image {
+        max-width: 180px;
+        margin: 0 auto;
+    }
+    .datos-section {
+        margin-bottom: 1.5rem;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .datos-section .card-header {
+        background-color: #f8f9fa;
+        border-bottom: 1px solid #dee2e6;
+    }
+    .accion-btn {
+        transition: all 0.3s ease;
+    }
+    .accion-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    .badge-estado {
+        font-size: 0.9rem;
+        padding: 0.5rem 0.75rem;
+        border-radius: 50px;
+    }
+    .progress-container {
+        margin: 1.5rem 0;
+    }
+    .progress {
+        height: 8px;
+        background-color: #e9ecef;
+    }
+    .main-info {
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('misc.upload_file') }}">Inicio</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('entrada.lista_entradas') }}">Entradas</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Guía {{ codigo_guia }}</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h1 class="h3">Seguimiento de Guía: {{ codigo_guia }}</h1>
+            <p class="text-muted">
+                {{ estado_info.descripcion }} - 
+                {% if estado_info.estado == 'entrada_registrada' %}
+                <span class="badge bg-primary badge-estado">Entrada Registrada</span>
+                {% elif estado_info.estado == 'pesaje_completado' %}
+                <span class="badge bg-info badge-estado">Pesaje Completado</span>
+                {% elif estado_info.estado == 'clasificacion_completada' %}
+                <span class="badge bg-warning badge-estado">Clasificación Completada</span>
+                {% elif estado_info.estado == 'pesaje_neto_completado' %}
+                <span class="badge bg-secondary badge-estado">Pesaje Neto Completado</span>
+                {% elif estado_info.estado == 'proceso_completado' %}
+                <span class="badge bg-success badge-estado">Proceso Completo</span>
+                {% else %}
+                <span class="badge bg-danger badge-estado">Error</span>
+                {% endif %}
+            </p>
+        </div>
+        <div class="col-md-4 text-md-end">
+            <div class="d-flex justify-content-md-end gap-2">
+                <a href="{{ url_for('entrada.lista_entradas') }}" class="btn btn-outline-secondary">
+                    <i class="fas fa-list me-2"></i>Ver Lista
+                </a>
+                {% if estado_info.siguiente_paso %}
+                    {% if estado_info.siguiente_paso == 'pesaje' and urls.ir_a_pesaje %}
+                    <a href="{{ urls.ir_a_pesaje }}" class="btn btn-primary">
+                        <i class="fas fa-weight-hanging me-2"></i>Ir a Pesaje
+                    </a>
+                    {% elif estado_info.siguiente_paso == 'clasificacion' and urls.ir_a_clasificacion %}
+                    <a href="{{ urls.ir_a_clasificacion }}" class="btn btn-primary">
+                        <i class="fas fa-tags me-2"></i>Ir a Clasificación
+                    </a>
+                    {% elif estado_info.siguiente_paso == 'pesaje_neto' and urls.ir_a_pesaje_neto %}
+                    <a href="{{ urls.ir_a_pesaje_neto }}" class="btn btn-primary">
+                        <i class="fas fa-balance-scale me-2"></i>Ir a Pesaje Neto
+                    </a>
+                    {% elif estado_info.siguiente_paso == 'salida' and urls.ir_a_salida %}
+                    <a href="{{ urls.ir_a_salida }}" class="btn btn-primary">
+                        <i class="fas fa-check-circle me-2"></i>Completar Salida
+                    </a>
+                    {% endif %}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Barra de progreso -->
+    <div class="progress-container">
+        <div class="d-flex justify-content-between">
+            <span class="small">Progreso</span>
+            <span class="small">{{ estado_info.porcentaje_avance }}% Completado</span>
+        </div>
+        <div class="progress mt-2">
+            <div class="progress-bar 
+                {% if estado_info.porcentaje_avance < 30 %}bg-primary
+                {% elif estado_info.porcentaje_avance < 60 %}bg-info
+                {% elif estado_info.porcentaje_avance < 80 %}bg-warning
+                {% elif estado_info.porcentaje_avance < 100 %}bg-secondary
+                {% else %}bg-success{% endif %}" 
+                role="progressbar" 
+                style="width: {{ estado_info.porcentaje_avance }}%" 
+                aria-valuenow="{{ estado_info.porcentaje_avance }}" 
+                aria-valuemin="0" 
+                aria-valuemax="100">
+            </div>
+        </div>
+    </div>
+
+    <!-- Timeline del proceso -->
+    <div class="row proceso-timeline mb-4">
+        <div class="col step {% if 'entrada' in estado_info.pasos_completados %}completed{% endif %} active">
+            <div class="step-icon">
+                <i class="fas fa-clipboard-list"></i>
+            </div>
+            <h5 class="step-title">Entrada</h5>
+            <p class="step-date">{{ datos_guia.fecha_registro|default('N/A') }}</p>
+        </div>
+        <div class="col step {% if 'pesaje' in estado_info.pasos_completados %}completed{% elif estado_info.siguiente_paso == 'pesaje' %}active{% endif %}">
+            <div class="step-icon">
+                <i class="fas fa-weight-hanging"></i>
+            </div>
+            <h5 class="step-title">Pesaje</h5>
+            <p class="step-date">
+                {% if 'datos_pesaje' in estado_info %}
+                    {{ estado_info.datos_pesaje.fecha_pesaje|default('N/A') }}
+                {% else %}
+                    Pendiente
+                {% endif %}
+            </p>
+        </div>
+        <div class="col step {% if 'clasificacion' in estado_info.pasos_completados %}completed{% elif estado_info.siguiente_paso == 'clasificacion' %}active{% endif %}">
+            <div class="step-icon">
+                <i class="fas fa-tags"></i>
+            </div>
+            <h5 class="step-title">Clasificación</h5>
+            <p class="step-date">
+                {% if 'datos_clasificacion' in estado_info %}
+                    {{ estado_info.datos_clasificacion.fecha_clasificacion|default('N/A') }}
+                {% else %}
+                    Pendiente
+                {% endif %}
+            </p>
+        </div>
+        <div class="col step {% if 'pesaje_neto' in estado_info.pasos_completados %}completed{% elif estado_info.siguiente_paso == 'pesaje_neto' %}active{% endif %}">
+            <div class="step-icon">
+                <i class="fas fa-balance-scale"></i>
+            </div>
+            <h5 class="step-title">Pesaje Neto</h5>
+            <p class="step-date">
+                {% if 'datos_pesaje_neto' in estado_info %}
+                    {{ estado_info.datos_pesaje_neto.fecha_pesaje_neto|default('N/A') }}
+                {% else %}
+                    Pendiente
+                {% endif %}
+            </p>
+        </div>
+        <div class="col step {% if 'salida' in estado_info.pasos_completados %}completed{% elif estado_info.siguiente_paso == 'salida' %}active{% endif %}">
+            <div class="step-icon">
+                <i class="fas fa-check-circle"></i>
+            </div>
+            <h5 class="step-title">Salida</h5>
+            <p class="step-date">
+                {% if 'datos_salida' in estado_info %}
+                    {{ estado_info.datos_salida.fecha_salida|default('N/A') }}
+                {% else %}
+                    Pendiente
+                {% endif %}
+            </p>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <!-- Información principal del registro -->
+            <div class="card datos-section mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-info-circle me-2"></i>Información General
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <strong>Código:</strong> {{ datos_guia.codigo }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <strong>Nombre:</strong> {{ datos_guia.nombre }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <strong>Cantidad de Racimos:</strong> {{ datos_guia.cantidad_racimos }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <strong>Código Guía:</strong> {{ codigo_guia }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <strong>Placa:</strong> {{ datos_guia.placa }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <strong>Transportista:</strong> {{ datos_guia.transportista }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <strong>Fecha de Registro:</strong> {{ datos_guia.fecha_registro|default(datos_guia.fecha) }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <strong>Hora de Registro:</strong> {{ datos_guia.hora_registro|default(datos_guia.hora) }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sección de Pesaje -->
+            {% if 'pesaje' in estado_info.datos_disponibles and estado_info.datos_pesaje %}
+            <div class="card datos-section mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-weight-hanging me-2"></i>Datos de Pesaje
+                    </h5>
+                    {% if urls.ver_pesaje %}
+                    <a href="{{ urls.ver_pesaje }}" class="btn btn-sm btn-outline-primary">
+                        <i class="fas fa-eye me-1"></i>Ver Detalles
+                    </a>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <strong>Peso Bruto:</strong> {{ estado_info.datos_pesaje.peso_bruto }} kg
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <strong>Fecha de Pesaje:</strong> {{ estado_info.datos_pesaje.fecha_pesaje }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <strong>Hora de Pesaje:</strong> {{ estado_info.datos_pesaje.hora_pesaje }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Sección de Clasificación -->
+            {% if 'clasificacion' in estado_info.datos_disponibles and estado_info.datos_clasificacion %}
+            <div class="card datos-section mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-tags me-2"></i>Datos de Clasificación
+                    </h5>
+                    {% if urls.ver_clasificacion %}
+                    <a href="{{ urls.ver_clasificacion }}" class="btn btn-sm btn-outline-primary">
+                        <i class="fas fa-eye me-1"></i>Ver Detalles
+                    </a>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <strong>Calidad:</strong> {{ estado_info.datos_clasificacion.calidad }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <strong>Fecha de Clasificación:</strong> {{ estado_info.datos_clasificacion.fecha_clasificacion }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Sección de Pesaje Neto -->
+            {% if 'pesaje_neto' in estado_info.datos_disponibles and estado_info.datos_pesaje_neto %}
+            <div class="card datos-section mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-balance-scale me-2"></i>Datos de Pesaje Neto
+                    </h5>
+                    {% if urls.ver_pesaje_neto %}
+                    <a href="{{ urls.ver_pesaje_neto }}" class="btn btn-sm btn-outline-primary">
+                        <i class="fas fa-eye me-1"></i>Ver Detalles
+                    </a>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <strong>Peso Neto:</strong> {{ estado_info.datos_pesaje_neto.peso_neto }} kg
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <strong>Fecha de Pesaje Neto:</strong> {{ estado_info.datos_pesaje_neto.fecha_pesaje_neto }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <strong>Hora de Pesaje Neto:</strong> {{ estado_info.datos_pesaje_neto.hora_pesaje_neto }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Sección de Salida -->
+            {% if 'salida' in estado_info.datos_disponibles and estado_info.datos_salida %}
+            <div class="card datos-section mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-check-circle me-2"></i>Datos de Salida
+                    </h5>
+                    {% if urls.ver_salida %}
+                    <a href="{{ urls.ver_salida }}" class="btn btn-sm btn-outline-primary">
+                        <i class="fas fa-eye me-1"></i>Ver Detalles
+                    </a>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <strong>Fecha de Salida:</strong> {{ estado_info.datos_salida.fecha_salida }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <strong>Hora de Salida:</strong> {{ estado_info.datos_salida.hora_salida }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="col-md-4">
+            <!-- QR para Acceso Rápido -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-qrcode me-2"></i>Acceso Rápido
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="qr-container">
+                        <img src="{{ qr_url }}" class="qr-image img-fluid" alt="Código QR">
+                        <p class="mt-2 mb-0 small text-muted">Escanea este código para acceder rápidamente al estado de esta guía</p>
+                    </div>
+                    <div class="text-center mt-3">
+                        <button onclick="printQR()" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-print me-2"></i>Imprimir QR
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Acciones Disponibles -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-list-check me-2"></i>Acciones Disponibles
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        {% for accion in estado_info.acciones_disponibles %}
+                            {% if accion == 'ver_entrada' and urls.ver_entrada %}
+                            <a href="{{ urls.ver_entrada }}" class="btn btn-outline-primary accion-btn">
+                                <i class="fas fa-clipboard-list me-2"></i>Ver Registro de Entrada
+                            </a>
+                            {% elif accion == 'ir_a_pesaje' and urls.ir_a_pesaje %}
+                            <a href="{{ urls.ir_a_pesaje }}" class="btn btn-primary accion-btn">
+                                <i class="fas fa-weight-hanging me-2"></i>Ir a Pesaje Bruto
+                            </a>
+                            {% elif accion == 'ver_pesaje' and urls.ver_pesaje %}
+                            <a href="{{ urls.ver_pesaje }}" class="btn btn-outline-info accion-btn">
+                                <i class="fas fa-weight me-2"></i>Ver Resultados de Pesaje
+                            </a>
+                            {% elif accion == 'ir_a_clasificacion' and urls.ir_a_clasificacion %}
+                            <a href="{{ urls.ir_a_clasificacion }}" class="btn btn-primary accion-btn">
+                                <i class="fas fa-tags me-2"></i>Ir a Clasificación
+                            </a>
+                            {% elif accion == 'ver_clasificacion' and urls.ver_clasificacion %}
+                            <a href="{{ urls.ver_clasificacion }}" class="btn btn-outline-warning accion-btn">
+                                <i class="fas fa-tag me-2"></i>Ver Resultados de Clasificación
+                            </a>
+                            {% elif accion == 'ir_a_pesaje_neto' and urls.ir_a_pesaje_neto %}
+                            <a href="{{ urls.ir_a_pesaje_neto }}" class="btn btn-primary accion-btn">
+                                <i class="fas fa-balance-scale me-2"></i>Ir a Pesaje Neto
+                            </a>
+                            {% elif accion == 'ver_pesaje_neto' and urls.ver_pesaje_neto %}
+                            <a href="{{ urls.ver_pesaje_neto }}" class="btn btn-outline-secondary accion-btn">
+                                <i class="fas fa-balance-scale-right me-2"></i>Ver Resultados de Pesaje Neto
+                            </a>
+                            {% elif accion == 'ir_a_salida' and urls.ir_a_salida %}
+                            <a href="{{ urls.ir_a_salida }}" class="btn btn-primary accion-btn">
+                                <i class="fas fa-check-circle me-2"></i>Completar Salida
+                            </a>
+                            {% elif accion == 'ver_salida' and urls.ver_salida %}
+                            <a href="{{ urls.ver_salida }}" class="btn btn-outline-success accion-btn">
+                                <i class="fas fa-check-double me-2"></i>Ver Resultados de Salida
+                            </a>
+                            {% elif accion == 'generar_reporte' and urls.generar_reporte %}
+                            <a href="{{ urls.generar_reporte }}" class="btn btn-success accion-btn">
+                                <i class="fas fa-file-pdf me-2"></i>Generar Reporte Completo
+                            </a>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+    function printQR() {
+        // Crear una ventana nueva para imprimir solo el QR
+        const printWindow = window.open('', '', 'width=600,height=600');
+        printWindow.document.write('<html><head><title>Imprimir Código QR</title>');
+        printWindow.document.write('<style>');
+        printWindow.document.write(`
+            body { 
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                height: 100vh;
+                margin: 0;
+                font-family: Arial, sans-serif;
+            }
+            img {
+                max-width: 300px;
+                max-height: 300px;
+            }
+            .print-container {
+                text-align: center;
+            }
+            .code-text {
+                margin-top: 15px;
+                font-size: 16px;
+                font-weight: bold;
+            }
+        `);
+        printWindow.document.write('</style></head><body>');
+        printWindow.document.write('<div class="print-container">');
+        printWindow.document.write(`<img src="{{ qr_url }}" alt="Código QR">`);
+        printWindow.document.write(`<div class="code-text">Guía: {{ codigo_guia }}</div>`);
+        printWindow.document.write('</div></body></html>');
+        
+        // Esperar a que cargue la imagen y luego imprimir
+        printWindow.document.querySelector('img').onload = function() {
+            printWindow.print();
+            printWindow.close();
+        };
+    }
+</script>
+{% endblock %} 

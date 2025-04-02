@@ -1,0 +1,385 @@
+{% extends "base.html" %}
+
+{% block head_extra %}
+<style>
+    .card-header-tabs {
+        margin-right: -1rem;
+        margin-left: -1rem;
+        border-bottom: 0;
+    }
+    
+    .nav-tabs .nav-link.active {
+        background-color: #f8f9fa;
+        border-bottom-color: #f8f9fa;
+    }
+    
+    .card-body {
+        padding: 20px;
+    }
+    
+    .img-container {
+        position: relative;
+        margin-bottom: 20px;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    .img-container img {
+        width: 100%;
+        border-radius: 8px;
+    }
+    
+    .error-box {
+        padding: 20px;
+        background-color: #f8d7da;
+        color: #721c24;
+        border-radius: 8px;
+        margin-bottom: 20px;
+    }
+    
+    .category-circle {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        margin-right: 8px;
+    }
+    
+    .bg-verde { background-color: #28a745; }
+    .bg-maduro { background-color: #fd7e14; }
+    .bg-sobremaduro { background-color: #dc3545; }
+    .bg-danio_corona { background-color: #6f42c1; }
+    .bg-pendunculo_largo { background-color: #17a2b8; }
+    .bg-podrido { background-color: #343a40; }
+    
+    .stats-badge {
+        font-size: 0.9rem;
+        margin-right: 10px;
+        margin-bottom: 5px;
+        padding: 6px 12px;
+        border-radius: 20px;
+        display: inline-flex;
+        align-items: center;
+    }
+    
+    .detection-list {
+        max-height: 400px;
+        overflow-y: auto;
+    }
+    
+    .detection-item {
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        padding: 10px 15px;
+        margin-bottom: 10px;
+        border-left: 5px solid #007bff;
+    }
+    
+    .detection-item.verde { border-left-color: #28a745; }
+    .detection-item.maduro { border-left-color: #fd7e14; }
+    .detection-item.sobremaduro { border-left-color: #dc3545; }
+    .detection-item.danio_corona { border-left-color: #6f42c1; }
+    .detection-item.pendunculo_largo { border-left-color: #17a2b8; }
+    .detection-item.podrido { border-left-color: #343a40; }
+    
+    .actions-bar {
+        margin-top: 20px;
+        margin-bottom: 20px;
+        display: flex;
+        gap: 10px;
+    }
+    
+    @media (max-width: 768px) {
+        .actions-bar {
+            flex-direction: column;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-3">Detalles de Clasificación</h1>
+    <h5 class="text-muted mb-4">Guía: {{ url_guia }}</h5>
+    
+    {% if error %}
+    <div class="error-box">
+        <h5><i class="fas fa-exclamation-triangle me-2"></i>Error</h5>
+        <p class="mb-0">{{ error }}</p>
+    </div>
+    {% endif %}
+    
+    <div class="actions-bar">
+        <a href="{{ url_for('clasificacion.ver_resultados_clasificacion', url_guia=url_guia) }}" 
+           class="btn btn-primary">
+            <i class="fas fa-arrow-left me-2"></i>Volver a Resultados
+        </a>
+        <a href="{{ url_for('clasificacion.regenerar_imagenes', url_guia=url_guia) }}" 
+           class="btn btn-success">
+            <i class="fas fa-sync-alt me-2"></i>Regenerar Imágenes
+        </a>
+        <a href="{{ url_for('clasificacion.test_annotated_image', url_guia=url_guia) }}" 
+           class="btn btn-info">
+            <i class="fas fa-vial me-2"></i>Generar Imagen de Prueba
+        </a>
+    </div>
+    
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="card-title mb-0">
+                <i class="fas fa-chart-pie me-2"></i>Resumen de Clasificación
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <h6 class="mb-3">Distribución por Categorías</h6>
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Categoría</th>
+                                <th>Cantidad</th>
+                                <th>Porcentaje</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {# Reiniciar contadores #}
+                            {% set total_detecciones = 0 %}
+                            {% set total_racimos_global = 0 %}
+                            {% set categorias = {} %}
+                            
+                            {# Primera pasada: solo calcular totales #}
+                            {% for foto in fotos_procesadas %}
+                                {# Sumar racimos de cada foto - usar 0 por defecto si no hay valor #}
+                                {% set foto_racimos = foto.total_racimos|default(0)|int %}
+                                {% set total_racimos_global = total_racimos_global + foto_racimos %}
+                                
+                                {# Acumular detecciones por categoría #}
+                                {% for cat, datos in foto.conteo_categorias.items() %}
+                                    {% if datos.cantidad > 0 %}
+                                        {% if cat not in categorias %}
+                                            {% set _ = categorias.update({cat: datos.cantidad}) %}
+                                        {% else %}
+                                            {% set _ = categorias.update({cat: categorias[cat] + datos.cantidad}) %}
+                                        {% endif %}
+                                        {% set total_detecciones = total_detecciones + datos.cantidad %}
+                                    {% endif %}
+                                {% endfor %}
+                            {% endfor %}
+                            
+                            {# Para debugging (quitar en producción) #}
+                            <tr class="table-secondary small">
+                                <td colspan="3">
+                                    <strong>Debug:</strong> 
+                                    {% for foto in fotos_procesadas %}
+                                        Foto {{ foto.numero }}: {{ foto.total_racimos|default(0) }} racimos
+                                        {% if not loop.last %} | {% endif %}
+                                    {% endfor %}
+                                    | Calculado: {{ total_racimos_global }} | Enviado: {{ total_racimos_acumulados|default(0) }}
+                                </td>
+                            </tr>
+                            
+                            {# Usar el valor enviado desde el backend directamente #}
+                            {% set total_racimos_global = total_racimos_acumulados|default(0) %}
+                            
+                            {% for cat, count in categorias.items() %}
+                                <tr>
+                                    <td>
+                                        <span class="category-circle bg-{{ cat }}"></span>
+                                        {{ cat|title|replace('_', ' ') }}
+                                    </td>
+                                    <td>{{ count }}</td>
+                                    <td>
+                                        {% if total_racimos_global > 0 %}
+                                            {{ ((count / total_racimos_global) * 100)|round(1) }}%
+                                        {% else %}
+                                            0%
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                            <tr class="table-light">
+                                <td><strong>Total</strong></td>
+                                <td colspan="2"><strong>{{ total_racimos_global }} racimos</strong></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    
+                    {% if total_racimos_acumulados|default(0) > 0 %}
+                    <div class="alert alert-success mt-3 mb-0">
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-check-circle fa-2x me-3"></i>
+                            <div>
+                                <span>Total de racimos detectados en todas las fotos:</span>
+                                <h4 class="mb-0 mt-1">{{ total_racimos_acumulados }} racimos</h4>
+                            </div>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-warning mt-3 mb-0">
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-exclamation-triangle fa-2x me-3"></i>
+                            <div>
+                                <span>No se detectaron racimos en las fotos procesadas.</span>
+                                <div class="small text-muted mt-1">Verifica que las imágenes contengan racimos detectables.</div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-6">
+                    <h6 class="mb-3">Estadísticas</h6>
+                    <div class="mb-3">
+                        <span class="stats-badge bg-primary text-white">
+                            <i class="fas fa-images me-2"></i>
+                            {{ fotos_procesadas|length }} Fotos procesadas
+                        </span>
+                        <span class="stats-badge bg-success text-white">
+                            <i class="fas fa-tags me-2"></i>
+                            {{ total_racimos_acumulados|default(0) }} Racimos detectados
+                        </span>
+                        <span class="stats-badge bg-secondary text-white">
+                            <i class="fas fa-list me-2"></i>
+                            {{ total_detecciones }} Detecciones totales
+                        </span>
+                    </div>
+                    <div>
+                        <span class="stats-badge bg-info text-white">
+                            <i class="fas fa-clock me-2"></i>
+                            Tiempo de procesamiento: {{ tiempo_procesamiento }} segundos
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Detalles por Foto -->
+    <h4 class="mt-5 mb-3"><i class="fas fa-camera me-2"></i>Detalle por Foto</h4>
+
+    {% if fotos_procesadas %}
+        {% for foto in fotos_procesadas %}
+        <div class="card mb-4 foto-detalle-card" id="foto-{{ foto.numero }}">
+            <div class="card-header bg-light">
+                <strong>Foto {{ foto.numero }} - {{ foto.total_racimos }} Racimos Detectados</strong>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <h6 class="mb-3">Imagen Original</h6>
+                        <div class="img-container">
+                            {% if foto.imagen_original %}
+                                {# Manually use the URL string provided by the backend #}
+                                <img src="{{ foto.imagen_original }}" alt="Imagen Original {{ foto.numero }}" class="img-fluid">
+                            {% else %}
+                                <div class="alert alert-warning">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>
+                                    Ruta de imagen original no disponible.
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <h6 class="mb-3">Imagen Anotada (Roboflow)</h6>
+                        <div class="img-container">
+                            {% if foto.imagen_annotated %}
+                                {% set annotated_img_path = foto.imagen_annotated.replace('/static/', '', 1) %}
+                                <img src="{{ url_for('static', filename=annotated_img_path) }}" alt="Imagen Anotada {{ foto.numero }}" class="img-fluid">
+                            {% else %}
+                                <div class="alert alert-warning">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>
+                                    No hay imagen anotada (de Roboflow) disponible.
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <h6 class="mb-3">Imagen Clasificada (Etiquetas)</h6>
+                        <div class="img-container">
+                            {% if foto.imagen_clasificada %}
+                                {% set classified_img_path = foto.imagen_clasificada.replace('/static/', '', 1) %}
+                                <img src="{{ url_for('static', filename=classified_img_path) }}" alt="Imagen Clasificada {{ foto.numero }}" class="img-fluid">
+                            {% else %}
+                                <div class="alert alert-warning">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>
+                                    No hay imagen clasificada (etiquetas) disponible.
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mt-4">
+                    <div class="col-md-6">
+                        <h6 class="mb-3">Distribución de Categorías ({{ foto.total_racimos }} racimos)</h6>
+                        {% if foto.total_racimos > 0 %}
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Categoría</th>
+                                        <th>Cantidad</th>
+                                        <th>Porcentaje</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for cat, datos in foto.conteo_categorias.items() %}
+                                        {% if datos.cantidad > 0 %}
+                                            <tr>
+                                                <td>
+                                                    <span class="category-circle bg-{{ cat }}"></span>
+                                                    {{ cat|title|replace('_', ' ') }}
+                                                </td>
+                                                <td>{{ datos.cantidad }}</td>
+                                                <td>{{ datos.porcentaje }}%</td>
+                                            </tr>
+                                        {% endif %}
+                                    {% endfor %}
+                                    <tr class="table-light">
+                                        <td><strong>Total</strong></td>
+                                        <td colspan="2"><strong>{{ foto.total_racimos }} racimos</strong></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        {% else %}
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle me-2"></i>
+                                No hay racimos detectados para esta foto.
+                            </div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="mb-3">Detalle de Detecciones</h6>
+                        {% if foto.detecciones|length > 0 %}
+                            <div class="detection-list">
+                                {% for det in foto.detecciones %}
+                                    <div class="detection-item {{ det.class }}">
+                                        <h6>{{ det.class|title|replace('_', ' ') }}</h6>
+                                        <div class="row">
+                                            <div class="col-6">
+                                                <strong>Confianza:</strong> {{ det.confidence|round(2) }}
+                                            </div>
+                                            <div class="col-6">
+                                                <strong>Posición:</strong> ({{ det.x|round }}, {{ det.y|round }})
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <strong>Dimensiones:</strong> {{ det.width|round }}x{{ det.height|round }}
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle me-2"></i>
+                                No hay detecciones para esta foto.
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    {% endif %}
+</div>
+{% endblock %} 

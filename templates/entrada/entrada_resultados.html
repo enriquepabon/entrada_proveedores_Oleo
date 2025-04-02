@@ -1,0 +1,173 @@
+{% extends "layouts/results_layout.html" %}
+{% import "components/cards/stat_cards.html" as cards %}
+{% import "components/entrada_datos.html" as entrada_componentes %}
+{% import "components/entrada_styles.html" as entrada_styles %}
+
+{% block styles %}
+{{ super() }}
+{{ entrada_styles.entrada_styles() }}
+{% endblock %}
+
+{% block results_titulo %}Resultados de Procesamiento - Guía {{ codigo_guia }}{% endblock %}
+{% block results_descripcion %}Detalles del procesamiento OCR y datos extraídos{% endblock %}
+
+{% block header_actions %}
+<div class="d-flex gap-2">
+    {% if estado_procesamiento == 'success' %}
+    <a href="{{ url_for('entrada.editar_entrada', codigo_guia=codigo_guia) }}" class="btn btn-warning">
+        <i class="fas fa-edit me-2"></i>Editar Datos
+    </a>
+    <a href="{{ url_for('pesaje.pesaje', codigo=codigo_guia) }}" class="btn btn-success">
+        <i class="fas fa-weight-hanging me-2"></i>Continuar a Pesaje
+    </a>
+    {% elif estado_procesamiento == 'error' %}
+    <a href="{{ url_for('entrada.procesar_nuevamente', codigo_guia=codigo_guia) }}" class="btn btn-primary">
+        <i class="fas fa-sync me-2"></i>Procesar Nuevamente
+    </a>
+    <a href="{{ url_for('entrada.editar_entrada', codigo_guia=codigo_guia) }}" class="btn btn-warning">
+        <i class="fas fa-edit me-2"></i>Ingresar Datos Manualmente
+    </a>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block results_stats %}
+<div class="results-section">
+    <div class="row">
+        <div class="col-md-3">
+            {{ cards.simple_stat_card(
+                "Código Guía", 
+                codigo_guia, 
+                "barcode", 
+                "primary"
+            ) }}
+        </div>
+        <div class="col-md-3">
+            {{ cards.simple_stat_card(
+                "Fecha de Registro", 
+                fecha_registro, 
+                "calendar-alt", 
+                "secondary",
+                hora_registro
+            ) }}
+        </div>
+        <div class="col-md-3">
+            {{ cards.simple_stat_card(
+                "Estado", 
+                estado, 
+                "check-circle" if estado == "procesado" else "exclamation-circle" if estado == "pendiente" else "times-circle", 
+                "success" if estado == "procesado" else "warning" if estado == "pendiente" else "danger"
+            ) }}
+        </div>
+        <div class="col-md-3">
+            {{ cards.simple_stat_card(
+                "Confianza OCR", 
+                porcentaje_confianza|string + "%", 
+                "robot", 
+                "info"
+            ) if porcentaje_confianza is defined else "" }}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block results_content %}
+<div class="results-section">
+    {{ entrada_componentes.estado_procesamiento(
+        estado_procesamiento, 
+        mensaje_procesamiento, 
+        progreso_procesamiento
+    ) }}
+    
+    {% if estado_procesamiento != 'processing' %}
+    <div class="row">
+        <div class="col-md-6">
+            <div class="results-body">
+                <h5 class="mb-4">Datos Extraídos</h5>
+                {% if datos_extraidos %}
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Código Proveedor</label>
+                            <div>{{ datos_extraidos.codigo_proveedor }}</div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Nombre Proveedor</label>
+                            <div>{{ datos_extraidos.nombre_proveedor }}</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Placa Vehículo</label>
+                            <div>{{ datos_extraidos.placa }}</div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Transportador</label>
+                            <div>{{ datos_extraidos.transportador|default('No especificado') }}</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Cantidad Racimos</label>
+                            <div>{{ datos_extraidos.cantidad_racimos }}</div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Código SAP</label>
+                            <div>{{ datos_extraidos.codigo_guia_transporte_sap|default('No disponible') }}</div>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="alert alert-warning">
+                    No se pudieron extraer datos del tiquete. Puedes ingresar los datos manualmente.
+                </div>
+                {% endif %}
+                
+                {% if observaciones %}
+                <div class="mt-4">
+                    <h6 class="fw-bold">Observaciones:</h6>
+                    <p>{{ observaciones }}</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="results-body">
+                <h5 class="mb-4">Imagen del Tiquete</h5>
+                <div class="text-center">
+                    <img src="{{ url_for('static', filename=imagen_tiquete) }}" alt="Imagen del tiquete" class="tiquete-image">
+                </div>
+                
+                {% if texto_extraido %}
+                <div class="mt-4">
+                    <h6 class="fw-bold">Texto Extraído:</h6>
+                    <div class="bg-light p-3 rounded" style="max-height: 200px; overflow-y: auto">
+                        <pre class="mb-0" style="white-space: pre-wrap; font-size: 0.8rem">{{ texto_extraido }}</pre>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block action_buttons %}
+<a href="{{ url_for('entrada.lista_entradas') }}" class="btn btn-secondary me-2">
+    <i class="fas fa-list me-2"></i>Volver a Lista de Entradas
+</a>
+{% endblock %} 

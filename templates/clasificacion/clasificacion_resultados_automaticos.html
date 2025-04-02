@@ -1,0 +1,163 @@
+{% extends 'base.html' %}
+
+{% block title %}Resultados de Clasificación Automática{% endblock %}
+
+{% block styles %}
+<style>
+    .results-container {
+        margin-top: 20px;
+    }
+    .result-card {
+        margin-bottom: 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    .result-header {
+        background-color: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px 8px 0 0;
+    }
+    .result-body {
+        padding: 15px;
+    }
+    .result-images {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 15px;
+        margin-bottom: 15px;
+    }
+    .result-image {
+        max-width: 100%;
+        height: auto;
+        border-radius: 4px;
+    }
+    .image-container {
+        flex: 1;
+        min-width: 300px;
+        max-width: 500px;
+    }
+    .image-caption {
+        text-align: center;
+        margin-top: 5px;
+        font-weight: bold;
+    }
+    .result-table {
+        width: 100%;
+    }
+    .btn-edit {
+        margin-top: 10px;
+    }
+    .summary-card {
+        margin-bottom: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="mb-4">Resultados de Clasificación Automática</h1>
+            
+            <div class="card summary-card">
+                <div class="card-header">
+                    <h3>Información de la Guía</h3>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>Código de Guía:</strong> {{ url_guia }}</p>
+                            <p><strong>Proveedor:</strong> {{ datos_guia.nombre_proveedor }}</p>
+                            <p><strong>Código Proveedor:</strong> {{ datos_guia.codigo_proveedor }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>Fecha:</strong> {{ datos_guia.fecha_registro }}</p>
+                            <p><strong>Hora:</strong> {{ datos_guia.hora_registro }}</p>
+                            <p><strong>Cantidad de Racimos:</strong> {{ datos_guia.cantidad_racimos }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="results-container">
+                <h2 class="mb-3">Imágenes Procesadas</h2>
+                
+                {% if fotos_procesadas %}
+                    {% for foto in fotos_procesadas %}
+                    <div class="card result-card">
+                        <div class="result-header">
+                            <h4>Imagen {{ loop.index }}</h4>
+                        </div>
+                        <div class="result-body">
+                            <div class="result-images">
+                                <div class="image-container">
+                                    <img src="{{ foto.original }}" class="result-image" alt="Imagen Original">
+                                    <p class="image-caption">Imagen Original</p>
+                                </div>
+                                {% if foto.annotated %}
+                                <div class="image-container">
+                                    <img src="{{ foto.annotated }}" class="result-image" alt="Imagen Anotada">
+                                    <p class="image-caption">Imagen Anotada por Roboflow</p>
+                                </div>
+                                {% endif %}
+                                {% if foto.clusters %}
+                                <div class="image-container">
+                                    <img src="{{ foto.clusters }}" class="result-image" alt="Clusters Detectados">
+                                    <p class="image-caption">Visualización de Etiquetas</p>
+                                </div>
+                                {% endif %}
+                                {% if foto.procesada and foto.procesada != foto.annotated and foto.procesada != foto.clusters %}
+                                <div class="image-container">
+                                    <img src="{{ foto.procesada }}" class="result-image" alt="Imagen Procesada">
+                                    <p class="image-caption">Imagen Procesada</p>
+                                </div>
+                                {% endif %}
+                            </div>
+                            
+                            <h5>Resultados de Clasificación</h5>
+                            <div class="alert alert-info">
+                                <strong>Total de racimos detectados:</strong> {{ foto.total_racimos }}
+                            </div>
+                            <table class="table table-striped result-table">
+                                <thead>
+                                    <tr>
+                                        <th>Categoría</th>
+                                        <th>Cantidad</th>
+                                        <th>Porcentaje</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for categoria, datos in foto.resultados.items() %}
+                                    <tr>
+                                        <td>{{ categoria }}</td>
+                                        <td>{{ datos.cantidad }}</td>
+                                        <td>{{ datos.porcentaje }}%</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="alert alert-warning">
+                        No se encontraron imágenes procesadas para esta guía.
+                    </div>
+                {% endif %}
+                
+                <div class="mt-4">
+                    <a href="{{ url_for('clasificacion.procesar_clasificacion_manual', url_guia=url_guia) }}" class="btn btn-primary">
+                        Editar Clasificación Manualmente
+                    </a>
+                    <a href="{{ url_for('clasificacion.generar_pdf_clasificacion', codigo_guia=url_guia) }}" class="btn btn-success">
+                        Generar PDF
+                    </a>
+                    <a href="{{ url_for('misc.upload_file') }}" class="btn btn-secondary">
+                        Volver al Inicio
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

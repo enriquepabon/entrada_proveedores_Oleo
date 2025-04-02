@@ -1,0 +1,988 @@
+import os
+import qrcode
+import time
+from datetime import datetime, timedelta
+import json
+import traceback
+import logging
+from weasyprint import HTML
+from flask import session, render_template, current_app
+from bs4 import BeautifulSoup
+import re
+import glob
+
+logger = logging.getLogger(__name__)
+
+class Utils:
+    def __init__(self, app):
+        self.app = app
+        self.ensure_directories()
+
+    def ensure_directories(self, additional_directories=None):
+        """
+        Crea los directorios necesarios si no existen
+        """
+        try:
+            # Directorios base
+            directories = [
+                os.path.join(self.app.static_folder, 'uploads'),
+                os.path.join(self.app.static_folder, 'pdfs'),
+                os.path.join(self.app.static_folder, 'guias'),
+                os.path.join(self.app.static_folder, 'qr'),
+                os.path.join(self.app.static_folder, 'images'),
+                os.path.join(self.app.static_folder, 'excels')
+            ]
+            
+            # Agregar directorios adicionales si existen
+            if additional_directories:
+                directories.extend(additional_directories)
+                
+            for directory in directories:
+                os.makedirs(directory, exist_ok=True)
+                logger.info(f"Directorio asegurado: {directory}")
+                
+        except Exception as e:
+            logger.error(f"Error creando directorios: {str(e)}")
+            logger.error(traceback.format_exc())
+            raise
+
+    def generate_qr(self, qr_data, filename):
+        """
+        Genera un código QR y un archivo HTML que contiene el código.
+        """
+        try:
+            logger.info(f"Iniciando generación de QR para {filename}")
+            
+            # Verificar que tengamos la configuración de carpetas
+            if 'GUIAS_FOLDER' not in self.app.config:
+                logger.warning("GUIAS_FOLDER no definido en la configuración, usando ruta por defecto")
+                self.app.config['GUIAS_FOLDER'] = os.path.join(self.app.static_folder, 'guias')
+                
+            if 'QR_FOLDER' not in self.app.config:
+                logger.warning("QR_FOLDER no definido en la configuración, usando ruta por defecto")
+                self.app.config['QR_FOLDER'] = os.path.join(self.app.static_folder, 'qr')
+            
+            # Asegurar que los directorios existan
+            guias_dir = self.app.config['GUIAS_FOLDER']
+            qr_dir = self.app.config['QR_FOLDER']
+            os.makedirs(guias_dir, exist_ok=True)
+            os.makedirs(qr_dir, exist_ok=True)
+            
+            logger.info(f"Directorios verificados: GUIAS_FOLDER={guias_dir}, QR_FOLDER={qr_dir}")
+            
+            # Ruta completa para el archivo QR
+            qr_path = os.path.join(qr_dir, filename)
+            
+            # Normalizar los datos QR
+            if isinstance(qr_data, dict):
+                qr_content = "\n".join([f"{k}: {v}" for k, v in qr_data.items() if v])
+            else:
+                qr_content = str(qr_data)
+                
+            # Extraer nombre base para el HTML (sin extensión)
+            base_name = os.path.splitext(filename)[0]
+            if base_name.startswith('qr_'):
+                base_name = base_name[3:]  # Quitar prefijo 'qr_'
+                
+            # Generar nombre de archivo HTML
+            html_filename = f"guia_{base_name}.html"
+            
+            # Generar contenido HTML
+            html_content = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Información de Guía</title>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <style>
+                    body {{ font-family: Arial, sans-serif; margin: 20px; }}
+                    .container {{ max-width: 800px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }}
+                    h1 {{ color: #333; }}
+                    .info {{ margin-bottom: 20px; }}
+                    .label {{ font-weight: bold; }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1>Información de Guía</h1>
+                    <div class="info">
+                        <pre>{qr_content}</pre>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
+            
+            # Guardar el archivo HTML
+            html_path = os.path.join(self.app.config['GUIAS_FOLDER'], html_filename)
+            with open(html_path, 'w', encoding='utf-8') as f:
+                f.write(html_content)
+            
+            # Generar URL para el QR
+            base_url = "http://localhost:8081"
+            # Forzar el uso del puerto correcto independientemente de la configuración
+            
+            url = f"{base_url}/guias/{html_filename}"
+            logger.info(f"URL generada para el QR: {url}")
+            
+            # Generar QR con la URL
+            qr = qrcode.QRCode(
+                version=1,
+                error_correction=qrcode.constants.ERROR_CORRECT_H,
+                box_size=10,
+                border=4,
+            )
+            qr.add_data(url)
+            qr.make(fit=True)
+            
+            # Crear y guardar imagen QR
+            qr_image = qr.make_image(fill_color="black", back_color="white")
+            qr_image.save(qr_path)
+            
+            # Verificar que el archivo se guardó correctamente
+            if os.path.exists(qr_path):
+                logger.info(f"QR verificado en: {qr_path}")
+            else:
+                raise Exception(f"Error al verificar archivo QR guardado: {qr_path}")
+            
+            return filename
+            
+        except Exception as e:
+            logger.error(f"Error en generación QR: {str(e)}")
+            logger.error(traceback.format_exc())
+            # Devolver un nombre de archivo predeterminado para no romper el flujo
+            return "default_qr.png"
+
+    def generate_pdf(self, parsed_data, image_filename, fecha_procesamiento, hora_procesamiento, revalidation_data=None, codigo_guia=None):
+        """
+        Genera un PDF a partir de los datos del webhook.
+        """
+        try:
+            logger.info("Iniciando generación de PDF")
+            
+            # Verificar que tengamos la configuración de carpetas
+            if 'PDF_FOLDER' not in self.app.config:
+                logger.warning("PDF_FOLDER no definido en la configuración, usando ruta por defecto")
+                self.app.config['PDF_FOLDER'] = os.path.join(self.app.static_folder, 'pdfs')
+                
+            # Asegurar que el directorio existe
+            pdf_dir = self.app.config['PDF_FOLDER']
+            os.makedirs(pdf_dir, exist_ok=True)
+            
+            logger.info(f"Directorio verificado: PDF_FOLDER={pdf_dir}")
+            
+            now = datetime.now()
+            
+            # Extraer datos del webhook response
+            data = {}
+            if 'webhook_response' in session and session['webhook_response'].get('data'):
+                webhook_data = session['webhook_response']['data']
+                data = {
+                    'codigo': webhook_data.get('codigo', ''),
+                    'nombre_agricultor': webhook_data.get('nombre_agricultor', ''),
+                    'racimos': webhook_data.get('racimos', ''),
+                    'placa': webhook_data.get('placa', ''),
+                    'acarreo': webhook_data.get('acarreo', 'No'),
+                    'cargo': webhook_data.get('cargo', 'No'),
+                    'transportador': webhook_data.get('transportador', 'No registrado'),
+                    'fecha_tiquete': webhook_data.get('fecha_tiquete', ''),
+                    'nota': webhook_data.get('nota', '')
+                }
+            else:
+                logger.warning("No se encontró webhook_response en la sesión")
+                # Tratar de obtener datos básicos de los parámetros
+                if revalidation_data:
+                    data = revalidation_data
+                elif parsed_data:
+                    # Intentar extraer datos básicos
+                    data = {
+                        'codigo': parsed_data.get('codigo', ''),
+                        'nombre_agricultor': parsed_data.get('nombre_agricultor', ''),
+                        'racimos': parsed_data.get('racimos', ''),
+                        'placa': parsed_data.get('placa', ''),
+                        'fecha_tiquete': parsed_data.get('fecha_tiquete', '')
+                    }
+                else:
+                    logger.error("No se encontraron datos suficientes para generar el PDF")
+                    return None
+
+            # Obtener el QR filename de la sesión
+            qr_filename = session.get('qr_filename')
+            if not qr_filename:
+                # Si no hay QR filename, crear uno predeterminado
+                qr_filename = f"default_qr_{now.strftime('%Y%m%d%H%M%S')}.png"
+                try:
+                    # Generar un QR simple con el código de guía
+                    codigo = data.get('codigo', 'unknown')
+                    # Usar el código_guia si está disponible, si no generar un ID único
+                    codigo_guia_for_qr = codigo_guia if codigo_guia else f"{codigo}_{now.strftime('%Y%m%d%H%M%S')}"
+                    # Crear datos para generar el QR
+                    qr_data_simple = {
+                        'codigo': codigo,
+                        'nombre': data.get('nombre_agricultor', ''),
+                        'cantidad_racimos': data.get('racimos', ''),
+                        'codigo_guia': codigo_guia_for_qr
+                    }
+                    # Generar el QR con los datos actualizados
+                    self.generate_qr(qr_data_simple, qr_filename)
+                    session['qr_filename'] = qr_filename
+                    session.modified = True
+                except Exception as e:
+                    logger.error(f"Error generando QR predeterminado: {str(e)}")
+                    # Si todo falla, usar un QR estático
+                    qr_filename = "default_qr.png"
+
+            # Preparar datos para el template
+            template_data = {
+                'image_filename': image_filename,
+                'codigo': data.get('codigo', ''),
+                'nombre_agricultor': data.get('nombre_agricultor', ''),
+                'racimos': data.get('racimos', ''),
+                'placa': data.get('placa', ''),
+                'acarreo': data.get('acarreo', 'No'),
+                'cargo': data.get('cargo', 'No'),
+                'transportador': data.get('transportador', 'No registrado'),
+                'fecha_tiquete': data.get('fecha_tiquete', ''),
+                'hora_registro': hora_procesamiento,
+                'fecha_emision': now.strftime("%d/%m/%Y"),
+                'hora_emision': now.strftime("%H:%M:%S"),
+                'nota': data.get('nota', ''),
+                'qr_filename': qr_filename,
+                # Agregar indicadores de campos modificados
+                'codigo_modificado': session.get('modified_fields', {}).get('codigo', False),
+                'nombre_agricultor_modificado': session.get('modified_fields', {}).get('nombre_agricultor', False),
+                'cantidad_de_racimos_modificado': session.get('modified_fields', {}).get('racimos', False),
+                'placa_modificado': session.get('modified_fields', {}).get('placa', False),
+                'acarreo_modificado': session.get('modified_fields', {}).get('acarreo', False),
+                'cargo_modificado': session.get('modified_fields', {}).get('cargo', False),
+                'transportador_modificado': session.get('modified_fields', {}).get('transportador', False),
+                'fecha_modificado': session.get('modified_fields', {}).get('fecha_tiquete', False)
+            }
+
+            # Renderizar plantilla
+            rendered = render_template(
+                'pdf_template.html',
+                **template_data
+            )
+            
+            # Generar nombre del archivo usando el código_guia para mantener consistencia
+            # Si hay un código_guia proporcionado, usar ese; si no, generarlo con el código original
+            if codigo_guia:
+                pdf_filename = f'tiquete_{codigo_guia}.pdf'
+            else:
+                # Mantener el formato original del código del proveedor (sin normalizar)
+                codigo_original = data.get('codigo', 'unknown')
+                fecha_hora = now.strftime("%Y%m%d_%H%M%S")
+                pdf_filename = f'tiquete_{codigo_original}_{fecha_hora}.pdf'
+                
+            pdf_path = os.path.join(self.app.config['PDF_FOLDER'], pdf_filename)
+            
+            # Asegurar que el directorio existe
+            os.makedirs(os.path.dirname(pdf_path), exist_ok=True)
+            
+            # Generar PDF
+            try:
+                HTML(string=rendered, base_url=self.app.static_folder).write_pdf(pdf_path)
+                logger.info(f"PDF generado: {pdf_path}")
+                return pdf_filename
+            except Exception as e:
+                logger.error(f"Error al generar PDF con WeasyPrint: {str(e)}")
+                logger.error(traceback.format_exc())
+                # Intentar guardar como HTML en lugar de PDF como fallback
+                html_filename = pdf_filename.replace('.pdf', '.html')
+                html_path = os.path.join(self.app.config['GUIAS_FOLDER'], html_filename)
+                with open(html_path, 'w', encoding='utf-8') as f:
+                    f.write(rendered)
+                logger.info(f"HTML guardado como alternativa: {html_path}")
+                return html_filename
+                
+        except Exception as e:
+            logger.error(f"Error en generate_pdf: {str(e)}")
+            logger.error(traceback.format_exc())
+            # Devolver None pero no levantar excepción para no romper el flujo
+            return None
+
+    def format_date(self, parsed_data):
+        """
+        Formatea la fecha del tiquete en un formato consistente
+        """
+        for row in parsed_data.get('table_data', []):
+            if row['campo'] == 'Fecha':
+                fecha_str = row['original'] if row['sugerido'] == 'No disponible' else row['sugerido']
+                try:
+                    for fmt in ['%d-%m-%Y', '%Y-%m-%d', '%d/%m/%Y']:
+                        try:
+                            return datetime.strptime(fecha_str, fmt).strftime("%d/%m/%Y")
+                        except ValueError:
+                            continue
+                except Exception as e:
+                    logger.error(f"Error parseando fecha: {str(e)}")
+                    return fecha_str
+        return datetime.now().strftime("%d/%m/%Y")
+
+    def get_codigo_from_data(self, parsed_data):
+        """
+        Obtiene el código del tiquete de los datos parseados
+        """
+        for row in parsed_data.get('table_data', []):
+            if row['campo'] == 'Código':
+                return row['sugerido'] if row['sugerido'] != 'No disponible' else row['original']
+        return 'desconocido'
+
+    def generar_codigo_guia(self, codigo_proveedor):
+        """
+        Genera un código único para la guía usando el código validado del webhook.
+        Formato simplificado: codigo_proveedor_YYYYMMDD_HHMM
+        """
+        try:
+            # Intentar obtener el código del webhook response
+            if 'webhook_response' in session and session['webhook_response'].get('data'):
+                webhook_data = session['webhook_response']['data']
+                codigo_proveedor = webhook_data.get('codigo', codigo_proveedor)
+            
+            # Guardar el código original
+            codigo_original = codigo_proveedor
+            
+            # Para búsquedas y comparaciones, usar una versión normalizada sin guiones ni símbolos especiales
+            codigo_normalizado = re.sub(r'[^a-zA-Z0-9]', '', codigo_proveedor)
+            
+            # Obtener la fecha actual para crear un código único
+            now = datetime.now()
+            fecha_actual = now.strftime('%Y%m%d')
+            # Solo usar horas y minutos para que sea más legible
+            hora_formateada = now.strftime('%H%M')
+            
+            # Generar el código en formato simplificado
+            codigo_guia = f"{codigo_original}_{fecha_actual}_{hora_formateada}"
+            
+            logger.info(f"Generando nuevo código de guía simplificado: {codigo_guia}")
+            
+            # Registrar guías existentes para el mismo proveedor (solo para información)
+            try:
+                import sqlite3
+                from db_schema import DB_PATH
+                conn = sqlite3.connect(DB_PATH)
+                cursor = conn.cursor()
+                
+                # Buscar guías existentes para este proveedor desde el inicio del día actual
+                today_start = f"{fecha_actual[:4]}-{fecha_actual[4:6]}-{fecha_actual[6:8]} 00:00:00"
+                cursor.execute(
+                    "SELECT codigo_guia FROM entry_records WHERE codigo_proveedor = ? AND created_at >= ?",
+                    (codigo_normalizado, today_start)
+                )
+                db_guides = cursor.fetchall()
+                conn.close()
+                
+                if db_guides:
+                    existing_guides = [g[0] for g in db_guides]
+                    logger.info(f"Guías previas encontradas para {codigo_proveedor} hoy: {existing_guides} - Generando nueva guía única")
+            except Exception as db_error:
+                logger.warning(f"Error al verificar guías existentes en BD (solo informativo): {str(db_error)}")
+            
+            return codigo_guia
+            
+        except Exception as e:
+            logger.error(f"Error generando código de guía: {str(e)}")
+            # Fallback seguro con formato consistente y simplificado
+            return f"{re.sub(r'[^a-zA-Z0-9]', '', str(codigo_proveedor))}_{datetime.now().strftime('%Y%m%d_%H%M')}"
+
+    def registrar_fecha_porteria(self):
+        """
+        Registra la fecha actual de entrada en portería
+        """
+        return datetime.now().strftime('%d/%m/%Y %H:%M')
+
+    def get_ticket_date(self, parsed_data):
+        """
+        Obtiene la fecha del tiquete de los datos parseados
+        """
+        for row in parsed_data.get('table_data', []):
+            if row['campo'] == 'Fecha':
+                fecha_str = row['original'] if row['sugerido'] == 'No disponible' else row['sugerido']
+                try:
+                    for fmt in ['%d-%m-%Y', '%Y-%m-%d', '%d/%m/%Y']:
+                        try:
+                            fecha_obj = datetime.strptime(fecha_str, fmt)
+                            return fecha_obj.strftime("%d/%m/%Y")
+                        except ValueError:
+                            continue
+                except Exception as e:
+                    logger.error(f"Error parseando fecha: {str(e)}")
+                    return fecha_str
+        return datetime.now().strftime("%d/%m/%Y")
+
+    def prepare_revalidation_data(self, parsed_data, data):
+        """
+        Prepara los datos de revalidación
+        """
+        revalidation_data = {}
+        for row in parsed_data.get('table_data', []):
+            campo = row['campo']
+            valor = row['sugerido'] if row['sugerido'] != 'No disponible' else row['original']
+            revalidation_data[campo] = valor
+
+        if data:
+            if data.get('Nombre'):
+                revalidation_data['Nombre del Agricultor'] = data['Nombre']
+            if data.get('Codigo'):
+                revalidation_data['Código'] = data['Codigo']
+            if data.get('Nota'):
+                revalidation_data['nota'] = data['Nota']
+
+        return revalidation_data
+
+    def get_datos_guia(self, codigo):
+        """
+        Obtiene los datos de una guía específica.
+        
+        Args:
+            codigo (str): El código de la guía a buscar
+        
+        Returns:
+            dict: Los datos de la guía si se encuentra, None en caso contrario
+        """
+        try:
+            logger.info(f"Buscando datos de guía: {codigo}")
+            
+            # Primero, intentar obtener los datos desde la base de datos
+            with self.app.app_context():
+                from db_operations import get_pesaje_bruto_by_codigo_guia
+                
+                # Verificar si existe en la base de datos
+                datos_guia = get_pesaje_bruto_by_codigo_guia(codigo)
+                if datos_guia:
+                    logger.info(f"Datos de guía encontrados en la base de datos: {codigo}")
+                    # Si hay peso_bruto pero no estado_actual, establecer estado_actual
+                    if datos_guia.get('peso_bruto') and not datos_guia.get('estado_actual'):
+                        datos_guia['estado_actual'] = 'pesaje_completado'
+                        logger.info(f"Estado actualizado a pesaje_completado debido a peso_bruto={datos_guia.get('peso_bruto')}")
+                    
+                    # Verificar y corregir campos clave antes de devolver
+                    datos_guia = self._verificar_y_corregir_campos(datos_guia, codigo)
+                    return datos_guia
+            
+            # Si no se encuentra en la base de datos, buscar en archivos JSON
+            directorio_guias = self.app.config.get('GUIAS_DIR', 'guias')
+            
+            # Asegurarse de que el directorio existe
+            if not os.path.exists(directorio_guias):
+                os.makedirs(directorio_guias, exist_ok=True)
+                logger.warning(f"Directorio de guías creado: {directorio_guias}")
+            
+            # Buscar archivo exacto
+            guias_files = glob.glob(os.path.join(directorio_guias, f'guia_{codigo}.json'))
+            
+            if guias_files:
+                logger.info(f"Encontrado archivo de guía: {guias_files[0]}")
+                with open(guias_files[0], 'r', encoding='utf-8') as file:
+                    datos_guia = json.load(file)
+                    datos_guia = self._verificar_y_corregir_campos(datos_guia, codigo)
+                    return datos_guia
+            
+            # Si todavía no se encuentra, buscar en archivos con código parcial
+            codigo_base = codigo.split('_')[0] if '_' in codigo else codigo
+            guias_files_partial = glob.glob(os.path.join(directorio_guias, f'guia_{codigo_base}_*.json'))
+            
+            if guias_files_partial:
+                # Ordenar por fecha de modificación, más reciente primero
+                guias_files_partial.sort(key=os.path.getmtime, reverse=True)
+                logger.info(f"Encontrado archivo de guía parcial: {guias_files_partial[0]}")
+                with open(guias_files_partial[0], 'r', encoding='utf-8') as file:
+                    datos_guia = json.load(file)
+                    datos_guia = self._verificar_y_corregir_campos(datos_guia, codigo)
+                    return datos_guia
+            
+            logger.warning(f"No se encontraron datos para la guía: {codigo}")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error al obtener datos de guía {codigo}: {str(e)}")
+            logger.error(traceback.format_exc())
+            return None
+    
+    def _verificar_y_corregir_campos(self, datos, codigo):
+        """
+        Método auxiliar para verificar y corregir los campos de datos de guía.
+        
+        Args:
+            datos (dict): Diccionario con los datos a verificar y corregir
+            codigo (str): Código de guía para extraer información si es necesario
+            
+        Returns:
+            dict: Datos verificados y corregidos
+        """
+        if not datos:
+            return datos
+            
+        # Si no existe código, intentar extraerlo del código de guía
+        if not datos.get('codigo') and '_' in codigo:
+            datos['codigo'] = codigo.split('_')[0]
+        
+        # Verificar campos importantes y copiar de campos alternativos si es necesario
+        key_mappings = {
+            'codigo': ['codigo_proveedor', 'Código'],
+            'nombre': ['nombre_proveedor', 'nombre_agricultor', 'Nombre del Agricultor'],
+            'cantidad_racimos': ['racimos', 'Cantidad de Racimos']
+        }
+        
+        for target_key, source_keys in key_mappings.items():
+            if not datos.get(target_key):
+                for source_key in source_keys:
+                    if datos.get(source_key):
+                        datos[target_key] = datos[source_key]
+                        break
+        
+        # Asegurarse de que estos campos siempre tengan un valor
+        for field in ['codigo', 'nombre', 'cantidad_racimos']:
+            if not datos.get(field):
+                datos[field] = 'N/A'
+                
+        return datos
+
+    def update_datos_guia(self, codigo, datos_guia):
+        """
+        Actualiza los datos de una guía específica en la base de datos o archivo JSON.
+        
+        Args:
+            codigo (str): El código de la guía a actualizar
+            datos_guia (dict): Los nuevos datos de la guía
+        
+        Returns:
+            bool: True si la actualización fue exitosa, False en caso contrario
+        """
+        try:
+            logger.info(f"Actualizando datos de guía: {codigo}")
+            
+            # Primero, intentar actualizar los datos en la base de datos
+            with self.app.app_context():
+                from db_operations import get_pesaje_bruto_by_codigo_guia, store_pesaje_neto
+                
+                # Verificar si existe en la base de datos
+                pesaje_existente = get_pesaje_bruto_by_codigo_guia(codigo)
+                if pesaje_existente:
+                    logger.info(f"Actualizando datos en la base de datos para: {codigo}")
+                    # Si tiene información de peso neto, guardarlo
+                    if 'peso_neto' in datos_guia and 'peso_tara' in datos_guia:
+                        store_pesaje_neto(datos_guia)
+                        logger.info(f"Datos de pesaje neto guardados en la base de datos para: {codigo}")
+                    return True
+            
+            # Si no está en la base de datos o no se pudo actualizar, usar JSON
+            try:
+                directorio_guias = self.app.config.get('GUIAS_DIR', 'guias')
+                
+                # Asegurarse de que el directorio existe
+                if not os.path.exists(directorio_guias):
+                    os.makedirs(directorio_guias, exist_ok=True)
+                    logger.warning(f"Directorio de guías creado: {directorio_guias}")
+                
+                archivo_guia = os.path.join(directorio_guias, f'guia_{codigo}.json')
+                
+                # Verificar si existe el archivo
+                if os.path.exists(archivo_guia):
+                    # Guardar los datos actualizados
+                    with open(archivo_guia, 'w', encoding='utf-8') as file:
+                        json.dump(datos_guia, file, ensure_ascii=False, indent=4)
+                    logger.info(f"Datos de guía actualizados en archivo: {archivo_guia}")
+                    return True
+                else:
+                    # Si no existe, crear un nuevo archivo
+                    with open(archivo_guia, 'w', encoding='utf-8') as file:
+                        json.dump(datos_guia, file, ensure_ascii=False, indent=4)
+                    logger.info(f"Nuevo archivo de guía creado: {archivo_guia}")
+                    return True
+            except Exception as e:
+                logger.error(f"Error al guardar en archivo JSON: {str(e)}")
+                logger.error(traceback.format_exc())
+                return False
+        
+        except Exception as e:
+            logger.error(f"Error al actualizar datos de guía {codigo}: {str(e)}")
+            logger.error(traceback.format_exc())
+            return False
+
+    def get_datos_registro(self, codigo_guia):
+        """
+        Recupera los datos de un registro a partir del código de guía.
+        
+        Args:
+            codigo_guia (str): El código de la guía a recuperar
+            
+        Returns:
+            dict: Diccionario con los datos del registro, o None si hay error
+        """
+        try:
+            logger.info(f"Obteniendo datos para registro de guía {codigo_guia}")
+            
+            # Inicializar valores por defecto
+            fecha_str = 'No disponible'
+            hora_str = 'No disponible'
+            codigo_proveedor = ''
+            
+            # Intentar extraer datos del código de guía (formato: CODIGO_AAAAMMDD_HHMMSS)
+            if '_' in codigo_guia:
+                parts = codigo_guia.split('_')
+                if len(parts) >= 1:
+                    # Extraer código de proveedor - asegurar que termine con A mayúscula
+                    codigo_raw = parts[0]
+                    # Usar regex para encontrar dígitos seguidos opcionalmente por letras
+                    match = re.match(r'(\d+[a-zA-Z]?)', codigo_raw)
+                    if match:
+                        codigo_base = match.group(1)
+                        # Si termina en letra, asegurar que sea A mayúscula
+                        if re.search(r'[a-zA-Z]$', codigo_base):
+                            codigo_proveedor = codigo_base[:-1] + 'A'
+                        else:
+                            codigo_proveedor = codigo_base + 'A'
+                    else:
+                        codigo_proveedor = codigo_raw
+
+                # Extraer fecha si está disponible
+                if len(parts) >= 2 and len(parts[1]) == 8:
+                    try:
+                        # Convertir AAAAMMDD a DD/MM/AAAA
+                        fecha_obj = datetime.strptime(parts[1], '%Y%m%d')
+                        fecha_str = fecha_obj.strftime('%d/%m/%Y')
+                    except:
+                        pass
+
+                # Extraer hora si está disponible
+                if len(parts) >= 3 and len(parts[2]) == 6:
+                    try:
+                        # Convertir HHMMSS a HH:MM:SS
+                        hora_obj = datetime.strptime(parts[2], '%H%M%S')
+                        hora_str = hora_obj.strftime('%H:%M:%S')
+                    except:
+                        pass
+            # Intentar extraer datos para el formato alternativo (ejemplo: 20250227105313-8867)
+            elif '-' in codigo_guia:
+                parts = codigo_guia.split('-')
+                if len(parts) >= 2:
+                    # El segundo elemento suele contener el código de proveedor
+                    codigo_raw = parts[1]
+                    # Usar regex para encontrar dígitos seguidos opcionalmente por letras
+                    match = re.match(r'(\d+[a-zA-Z]?)', codigo_raw)
+                    if match:
+                        codigo_base = match.group(1)
+                        # Si termina en letra, asegurar que sea A mayúscula
+                        if re.search(r'[a-zA-Z]$', codigo_base):
+                            codigo_proveedor = codigo_base[:-1] + 'A'
+                        else:
+                            codigo_proveedor = codigo_base + 'A'
+                    else:
+                        codigo_proveedor = codigo_raw
+                    
+                    # Si el primer elemento tiene 14 caracteres, podría contener fecha y hora
+                    if len(parts[0]) == 14:
+                        try:
+                            timestamp = parts[0]
+                            # Extraer fecha (AAAAMMDD)
+                            fecha_part = timestamp[:8]
+                            fecha_obj = datetime.strptime(fecha_part, '%Y%m%d')
+                            fecha_str = fecha_obj.strftime('%d/%m/%Y')
+                            
+                            # Extraer hora (HHMMSS)
+                            hora_part = timestamp[8:14]
+                            hora_obj = datetime.strptime(hora_part, '%H%M%S')
+                            hora_str = hora_obj.strftime('%H:%M:%S')
+                        except:
+                            pass
+            
+            # Preparar la ruta al archivo HTML o JSON de la guía
+            html_file = os.path.join(self.app.static_folder, 'guias', f'guia_{codigo_guia}.html')
+            
+            # Verificar si el archivo existe
+            if not os.path.exists(html_file):
+                logger.warning(f"Archivo de guía no encontrado: {html_file}")
+                # Crear un registro básico con la información disponible del código
+                registro = {
+                    'codigo_guia': codigo_guia,
+                    'codigo_proveedor': codigo_proveedor,
+                    'nombre_proveedor': '',
+                    'fecha_registro': fecha_str,
+                    'hora_registro': hora_str,
+                    'placa': '',
+                    'cantidad_racimos': '',
+                    'transportador': '',
+                    'acarreo': '',
+                    'cargo': '',
+                    'modified_fields': [],
+                    'image_filename': ''
+                }
+                return registro
+            
+            # Leer el contenido del archivo
+            with open(html_file, 'r', encoding='utf-8') as file:
+                content = file.read()
+            
+            # Inicializar el diccionario del registro
+            registro = {
+                'codigo_guia': codigo_guia,
+                'codigo_proveedor': codigo_proveedor,
+                'nombre_proveedor': '',
+                'fecha_registro': fecha_str,
+                'hora_registro': hora_str,
+                'placa': '',
+                'cantidad_racimos': '',
+                'transportador': '',
+                'acarreo': '',
+                'cargo': '',
+                'modified_fields': [],
+                'image_filename': ''
+            }
+            
+            # Intentar cargar como JSON primero
+            try:
+                data = json.loads(content)
+                logger.info(f"Datos JSON cargados correctamente desde {html_file}")
+                
+                # Asignar valores del JSON al registro
+                registro['codigo_proveedor'] = data.get('codigo_proveedor', codigo_proveedor)
+                # Normalizar código de proveedor para que termine en A mayúscula
+                if registro['codigo_proveedor'] and registro['codigo_proveedor'].endswith('a'):
+                    registro['codigo_proveedor'] = registro['codigo_proveedor'][:-1] + 'A'
+                
+                registro['nombre_proveedor'] = data.get('nombre_proveedor', '')
+                registro['fecha_registro'] = data.get('fecha_registro', fecha_str)
+                registro['hora_registro'] = data.get('hora_registro', hora_str)
+                registro['placa'] = data.get('placa', '')
+                registro['cantidad_racimos'] = data.get('cantidad_racimos', '')
+                registro['transportador'] = data.get('transportador', '')
+                registro['acarreo'] = data.get('acarreo', '')
+                registro['cargo'] = data.get('cargo', '')
+                registro['image_filename'] = data.get('image_filename', '')
+                registro['modified_fields'] = data.get('modified_fields', [])
+                
+            except json.JSONDecodeError:
+                logger.info(f"El archivo {html_file} no es JSON. Procesando como HTML.")
+                
+                # Analizar el HTML usando BeautifulSoup
+                soup = BeautifulSoup(content, 'html.parser')
+                
+                # Buscar las tablas en el HTML
+                tables = soup.find_all('table')
+                
+                # Intentar extraer datos de tablas
+                for table in tables:
+                    rows = table.find_all('tr')
+                    for row in rows:
+                        cells = row.find_all(['td', 'th'])
+                        if len(cells) >= 2:
+                            # Extraer el nombre del campo y su valor
+                            field_name = cells[0].get_text().strip().lower()
+                            field_value = cells[1].get_text().strip()
+                            
+                            # Asignar valores según el nombre del campo
+                            if 'código proveedor' in field_name or 'codigo proveedor' in field_name:
+                                # Asegurarse de que el código de proveedor termine con A mayúscula
+                                if field_value and field_value.endswith('a'):
+                                    registro['codigo_proveedor'] = field_value[:-1] + 'A'
+                                else:
+                                    registro['codigo_proveedor'] = field_value
+                            elif 'nombre proveedor' in field_name or 'nombre del proveedor' in field_name:
+                                registro['nombre_proveedor'] = field_value
+                            elif 'placa' in field_name:
+                                registro['placa'] = field_value
+                            elif 'racimos' in field_name or 'cantidad' in field_name:
+                                registro['cantidad_racimos'] = field_value
+                            elif 'transportador' in field_name:
+                                registro['transportador'] = field_value
+                            elif 'acarreo' in field_name:
+                                registro['acarreo'] = field_value
+                            elif 'cargo' in field_name:
+                                registro['cargo'] = field_value
+                
+                # Si no se encontró información en tablas, buscar mediante patrones en el texto
+                if not registro['codigo_proveedor'] or not registro['nombre_proveedor']:
+                    # Buscar códigos y nombres de proveedores
+                    code_pattern = r'Código(?:\s+de)?(?:\s+Proveedor)?:\s*(\d+[A-Za-z]?)'
+                    name_pattern = r'Nombre(?:\s+del)?(?:\s+Proveedor)?:\s*([^\n<>]+)'
+                    
+                    code_match = re.search(code_pattern, content, re.IGNORECASE)
+                    name_match = re.search(name_pattern, content, re.IGNORECASE)
+                    
+                    if code_match:
+                        code_value = code_match.group(1).strip()
+                        # Asegurarse de que termine con A mayúscula
+                        if code_value.endswith('a'):
+                            registro['codigo_proveedor'] = code_value[:-1] + 'A'
+                        elif not code_value.endswith('A'):
+                            registro['codigo_proveedor'] = code_value + 'A'
+                        else:
+                            registro['codigo_proveedor'] = code_value
+                    
+                    if name_match:
+                        name_value = name_match.group(1).strip()
+                        if name_value and name_value != "del Agricultor":
+                            registro['nombre_proveedor'] = name_value
+                
+                # Buscar placa y cantidad de racimos si no se encontraron en tablas
+                if not registro['placa']:
+                    placa_pattern = r'Placa:\s*([A-Z0-9-]+)'
+                    placa_match = re.search(placa_pattern, content, re.IGNORECASE)
+                    if placa_match:
+                        registro['placa'] = placa_match.group(1).strip()
+                
+                if not registro['cantidad_racimos']:
+                    racimos_pattern = r'Racimos:\s*(\d+)'
+                    racimos_match = re.search(racimos_pattern, content, re.IGNORECASE)
+                    if racimos_match:
+                        registro['cantidad_racimos'] = racimos_match.group(1).strip()
+                
+                # Buscar imágenes en el HTML
+                img_tags = soup.find_all('img')
+                for img in img_tags:
+                    src = img.get('src', '')
+                    if src and not src.startswith('data:'):
+                        # Extraer el nombre del archivo de la imagen
+                        registro['image_filename'] = os.path.basename(src)
+                        break
+                
+                # Comprobar si hay campos modificados
+                modified_fields = []
+                modified_divs = soup.find_all('div', {'class': 'modified'})
+                for div in modified_divs:
+                    field_name = div.get('data-field', '')
+                    if field_name:
+                        modified_fields.append(field_name)
+                
+                # Almacenar los campos modificados en el registro
+                registro['modified_fields'] = modified_fields
+                
+                # Buscar la fecha de emisión (podemos usarla como fecha de registro si no hay otra)
+                footer = soup.find('div', {'class': 'footer'})
+                if footer:
+                    fecha_emisión_p = footer.find('p', string=re.compile(r'Fecha de Emisión:'))
+                    if fecha_emisión_p:
+                        match = re.search(r'Fecha de Emisión: (\d{2}/\d{2}/\d{4})', fecha_emisión_p.text)
+                        if match:
+                            registro['fecha_registro'] = match.group(1)
+                
+                # Intentar extraer la fecha del nombre del archivo si no se encontró en el HTML
+                if not registro['fecha_registro'] or registro['fecha_registro'] == 'No disponible':
+                    # Intentar varios formatos de código de guía
+                    if '_' in codigo_guia:
+                        # Formato: CODIGO_AAAAMMDD_HHMMSS
+                        date_match = re.search(r'_(\d{8})_', codigo_guia)
+                        if date_match:
+                            date_str = date_match.group(1)
+                            try:
+                                # Convertir de AAAAMMDD a DD/MM/AAAA
+                                date_obj = datetime.strptime(date_str, '%Y%m%d')
+                                registro['fecha_registro'] = date_obj.strftime('%d/%m/%Y')
+                            except:
+                                pass
+                    elif '-' in codigo_guia:
+                        # Formato: AAAAMMDDHHMMSS-CODIGO
+                        timestamp_part = codigo_guia.split('-')[0]
+                        if len(timestamp_part) >= 8:
+                            date_str = timestamp_part[:8]
+                            try:
+                                # Convertir de AAAAMMDD a DD/MM/AAAA
+                                date_obj = datetime.strptime(date_str, '%Y%m%d')
+                                registro['fecha_registro'] = date_obj.strftime('%d/%m/%Y')
+                            except:
+                                pass
+            
+            # Normalización final de los datos
+            
+            # Búsqueda adicional de nombre si está vacío o es "del Agricultor"
+            if not registro['nombre_proveedor'] or registro['nombre_proveedor'] == "del Agricultor":
+                # Intentar buscar un nombre asociado con el código en alguna base de datos o 
+                # tabla de proveedores comunes si está disponible
+                
+                # También podemos buscar en el código HTML completo
+                if registro['codigo_proveedor']:
+                    # Buscar patrones como "CÓDIGO - NOMBRE" o tablas donde aparecen ambos
+                    name_search = re.search(rf'{registro["codigo_proveedor"]}.*?[<>\-:,\s]+([^<>\n]{3,50}?)[\s<]', content, re.IGNORECASE)
+                    if name_search:
+                        potential_name = name_search.group(1).strip()
+                        if potential_name and len(potential_name) > 3 and potential_name != "del Agricultor":
+                            registro['nombre_proveedor'] = potential_name
+                    
+                    # Buscar con patrón alternativo para casos especiales
+                    if not registro['nombre_proveedor'] or registro['nombre_proveedor'] == "del Agricultor":
+                        alternate_search = re.search(r'(?:proveedor|agricultor)[:<>\s]+(?:\w+\s*)+', content, re.IGNORECASE)
+                        if alternate_search:
+                            potential_name = alternate_search.group(0).split(':')[-1].strip()
+                            if potential_name and len(potential_name) > 3 and potential_name != "del Agricultor":
+                                registro['nombre_proveedor'] = potential_name
+            
+            # Convertir valores vacíos a "No disponible" solo en la presentación final
+            for key in registro:
+                if key not in ['modified_fields', 'image_filename'] and (registro[key] is None or registro[key] == ''):
+                    registro[key] = 'No disponible'
+            
+            logger.info(f"Datos recuperados para el registro de guía {codigo_guia}")
+            return registro
+            
+        except Exception as e:
+            logger.error(f"Error obteniendo datos de registro: {str(e)}")
+            logger.error(traceback.format_exc())
+            return None
+
+    def generar_qr(self, url, output_path):
+        """
+        Genera un código QR simple para una URL dada y lo guarda en la ruta especificada
+        
+        Args:
+            url (str): La URL o texto a codificar en el QR
+            output_path (str): La ruta donde guardar el archivo QR generado
+            
+        Returns:
+            bool: True si se generó correctamente, False en caso contrario
+        """
+        try:
+            # Crear el código QR
+            qr = qrcode.QRCode(
+                version=1,
+                error_correction=qrcode.constants.ERROR_CORRECT_L,
+                box_size=10,
+                border=4,
+            )
+            qr.add_data(url)
+            qr.make(fit=True)
+            
+            # Crear la imagen
+            img = qr.make_image(fill_color="black", back_color="white")
+            
+            # Guardar la imagen
+            img.save(output_path)
+            
+            # Verificar que se guardó correctamente
+            if os.path.exists(output_path):
+                logger.info(f"QR generado correctamente en: {output_path}")
+                return True
+            else:
+                logger.error(f"No se pudo verificar la creación del QR en: {output_path}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Error generando QR: {str(e)}")
+            logger.error(traceback.format_exc())
+            return False
+
+    def generate_unique_id(self):
+        """
+        Genera un ID único basado en el timestamp actual
+        
+        Returns:
+            str: Un ID único
+        """
+        try:
+            # Generar timestamp con milisegundos
+            timestamp = datetime.now().strftime('%Y%m%d%H%M%S%f')
+            return timestamp[:17]  # Truncar a 17 caracteres para mayor legibilidad
+        except Exception as e:
+            logger.error(f"Error generando ID único: {str(e)}")
+            # Fallback seguro usando time.time()
+            return str(int(time.time() * 1000))
+
+# Para mantener compatibilidad con código existente que no use la clase
+utils = None
+
+def init_utils(app):
+    global utils
+    utils = Utils(app)
+    return utils

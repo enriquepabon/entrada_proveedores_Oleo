@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block styles %}
+{{ super() }}
+<style>
+    body {
+        background-color: #f8f9fa;
+    }
+    .main-container {
+        max-width: 1400px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+    }
+    .header-section {
+        background: white;
+        border-radius: 15px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+    .filters-section {
+        background: white;
+        border-radius: 15px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+    .list-section {
+        background: white;
+        border-radius: 15px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+    .table-responsive {
+        overflow-x: auto;
+    }
+    .btn-action {
+        min-width: 120px;
+        margin: 0.25rem;
+    }
+    .back-link {
+        margin-bottom: 1.5rem;
+        display: inline-block;
+    }
+    .status-badge {
+        font-size: 0.85rem;
+        padding: 0.35rem 0.65rem;
+    }
+    /* Estilo para las celdas en la tabla */
+    .table td {
+        vertical-align: middle;
+    }
+    /* Tamaño específico para columnas */
+    .col-guia {
+        min-width: 140px;
+    }
+    .col-proveedor {
+        min-width: 200px;
+    }
+    .col-fecha {
+        min-width: 110px;
+    }
+    .col-hora {
+        min-width: 100px;
+    }
+    .col-transportista {
+        min-width: 180px;
+    }
+    .col-peso {
+        min-width: 120px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="main-container">
+    <div class="header-section">
+        <a href="{{ volver_url|default(url_for('misc.upload_file')) }}" class="back-link">
+            <i class="fas fa-arrow-left me-2"></i>{{ volver_texto|default('Volver al inicio') }}
+        </a>
+        <h2>{% block lista_titulo %}Lista de Elementos{% endblock %}</h2>
+        <p class="text-muted">{% block lista_descripcion %}Busque y filtre elementos{% endblock %}</p>
+    </div>
+
+    {% block filtros %}{% endblock %}
+    
+    {% block lista %}{% endblock %}
+</div>
+{% endblock %} 

@@ -1,0 +1,149 @@
+<!-- 
+    Bloque de depuración a agregar al inicio de clasificacion.html 
+    Este código debe insertarse justo después de las etiquetas de inicio del body
+-->
+{% if debug %}
+<div class="card my-3 border-danger">
+    <div class="card-header bg-danger text-white">
+        <h5 class="mb-0">Información de Depuración</h5>
+    </div>
+    <div class="card-body">
+        <h6>Variables disponibles:</h6>
+        <ul>
+            <li><strong>codigo_guia:</strong> {{ codigo_guia }}</li>
+            <li><strong>nombre_proveedor:</strong> {{ nombre_proveedor }}</li>
+            <li><strong>nombre (fallback):</strong> {{ nombre }}</li>
+            <li><strong>codigo_proveedor:</strong> {{ codigo_proveedor }}</li>
+            <li><strong>cantidad_racimos:</strong> {{ cantidad_racimos }}</li>
+            <li><strong>peso_bruto:</strong> {{ peso_bruto }}</li>
+            <li><strong>fecha_pesaje:</strong> {{ fecha_pesaje }}</li>
+            <li><strong>hora_pesaje:</strong> {{ hora_pesaje }}</li>
+        </ul>
+    </div>
+</div>
+{% endif %}
+
+<!-- 
+    Cambios a implementar en la cabecera de información de la guía 
+    Buscar y reemplazar las siguientes secciones:
+-->
+
+<!-- ANTES: -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <h4>Guía: {{ codigo_guia }}</h4>
+        <h5>Proveedor: {{ codigo }} - {{ nombre }}</h5>
+    </div>
+    <div class="col-md-6">
+        <h5>Racimos: {{ cantidad_racimos }}</h5>
+        <h5>Peso Bruto: {{ peso_bruto }} kg</h5>
+    </div>
+</div>
+
+<!-- DESPUÉS (con variables redundantes para mayor compatibilidad): -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <h4>Guía: {{ codigo_guia }}</h4>
+        <h5>Proveedor: {{ codigo_proveedor or codigo }} - {{ nombre_proveedor or nombre }}</h5>
+    </div>
+    <div class="col-md-6">
+        <h5>Racimos: {{ cantidad_racimos }}</h5>
+        <h5>Peso Bruto: {{ peso_bruto }} kg</h5>
+    </div>
+</div>
+
+<!-- 
+    Cambios en el encabezado de la sección de clasificación 
+-->
+
+<!-- ANTES: -->
+<div class="card-header bg-primary text-white">
+    <h5 class="mb-0">Clasificación Manual de Racimos para {{ nombre }}</h5>
+</div>
+
+<!-- DESPUÉS: -->
+<div class="card-header bg-primary text-white">
+    <h5 class="mb-0">Clasificación Manual de Racimos para {{ nombre_proveedor or nombre }}</h5>
+</div>
+
+<!-- 
+    Modificación en el formulario de clasificación 
+-->
+
+<!-- ANTES: -->
+<form id="clasificacionForm" action="{{ url_for('registrar_clasificacion') }}" method="POST" enctype="multipart/form-data">
+    <input type="hidden" name="codigo_guia" value="{{ codigo_guia }}">
+    <input type="hidden" name="codigo" value="{{ codigo }}">
+    <input type="hidden" name="nombre" value="{{ nombre }}">
+    <input type="hidden" name="cantidad_racimos" value="{{ cantidad_racimos }}">
+    <!-- Resto del formulario... -->
+</form>
+
+<!-- DESPUÉS: -->
+<form id="clasificacionForm" action="{{ url_for('registrar_clasificacion') }}" method="POST" enctype="multipart/form-data">
+    <input type="hidden" name="codigo_guia" value="{{ codigo_guia }}">
+    <input type="hidden" name="codigo" value="{{ codigo_proveedor or codigo }}">
+    <input type="hidden" name="nombre" value="{{ nombre_proveedor or nombre }}">
+    <input type="hidden" name="cantidad_racimos" value="{{ cantidad_racimos }}">
+    <!-- Nuevos campos explícitos -->
+    <input type="hidden" name="codigo_proveedor" value="{{ codigo_proveedor or codigo }}">
+    <input type="hidden" name="nombre_proveedor" value="{{ nombre_proveedor or nombre }}">
+    <!-- Resto del formulario... -->
+</form>
+
+<!-- 
+    Modificación en los campos de validación JavaScript 
+-->
+
+<!-- ANTES: -->
+<script>
+    // Código de validación
+    const cantidadRacimos = parseInt("{{ cantidad_racimos }}");
+    
+    function validarClasificacion() {
+        // Código existente...
+        
+        // Mostrar resultados al usuario
+        document.getElementById('resumenResultados').innerHTML = `
+            <p><strong>Proveedor:</strong> {{ nombre }}</p>
+            <p><strong>Racimos Totales:</strong> {{ cantidad_racimos }}</p>
+            <p><strong>Total Clasificado:</strong> ${totalConteo}</p>
+        `;
+        // Resto del código...
+    }
+</script>
+
+<!-- DESPUÉS: -->
+<script>
+    // Código de validación
+    const cantidadRacimos = parseInt("{{ cantidad_racimos }}");
+    
+    function validarClasificacion() {
+        // Código existente...
+        
+        // Mostrar resultados al usuario
+        document.getElementById('resumenResultados').innerHTML = `
+            <p><strong>Proveedor:</strong> {{ nombre_proveedor or nombre }}</p>
+            <p><strong>Racimos Totales:</strong> {{ cantidad_racimos }}</p>
+            <p><strong>Total Clasificado:</strong> ${totalConteo}</p>
+        `;
+        // Resto del código...
+    }
+</script>
+
+<!-- 
+    Resumen de los cambios realizados:
+    
+    1. Se agregó un bloque de depuración que solo se muestra cuando debug=True
+    2. Se modificaron todas las referencias a "nombre" para usar "nombre_proveedor or nombre"
+    3. Se modificaron todas las referencias a "codigo" para usar "codigo_proveedor or codigo"
+    4. Se mantuvieron las variables originales para compatibilidad
+    5. Se agregaron variables adicionales explícitas en los formularios para asegurar
+       que los datos correctos se envían al servidor
+-->
+
+<!-- 
+    Nota importante: Este archivo es solo un ejemplo de los cambios a realizar.
+    La implementación real debe hacerse en el archivo templates/clasificacion.html
+    teniendo en cuenta el código HTML existente completo.
+-->
