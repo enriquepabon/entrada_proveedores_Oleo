@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}Resultados del Pesaje - {{ datos.codigo_guia }}{% endblock %}
+
+{% block head_extra %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/resultados_pesaje.css') }}">
+<style>
+    .timeline-step {
+        /* ... estilos para la línea de tiempo ... */
+    }
+    .section h4 {
+        border-bottom: 2px solid #007bff;
+        padding-bottom: 5px;
+        margin-bottom: 15px;
+        color: #007bff;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="card shadow-sm">
+        <div class="card-header bg-primary text-white">
+            <h3 class="mb-0">Resultados del Pesaje - Guía: {{ datos.codigo_guia }}</h3>
+        </div>
+        <div class="card-body">
+            <!-- Datos del Proveedor -->
+            <div class="section mb-4">
+                <h4>Datos del Proveedor</h4>
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Código:</strong> {{ datos.codigo_proveedor }}</p>
+                        <p><strong>Nombre:</strong> {{ datos.nombre_proveedor }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Placa Vehículo:</strong> {{ datos.placa }}</p>
+                        <p><strong>Transportador:</strong> {{ datos.transportador }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Datos del Pesaje -->
+            <div class="section mb-4">
+                <h4>Datos del Pesaje</h4>
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Peso Bruto:</strong> {{ datos.peso_bruto|default('No disponible') }} kg</p>
+                        {% if datos.fecha_pesaje and datos.hora_pesaje %}
+                        {% set fecha_pesaje_bogota, hora_pesaje_bogota = convert_to_bogota_time(datos.fecha_pesaje, datos.hora_pesaje) %}
+                        <p><strong>Fecha:</strong> {{ fecha_pesaje_bogota }}</p>
+                        <p><strong>Hora:</strong> {{ hora_pesaje_bogota }}</p>
+                        {% else %}
+                        <p><strong>Fecha:</strong> No registrada</p>
+                        <p><strong>Hora:</strong> No registrada</p>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Guía SAP:</strong> {{ datos.codigo_guia_transporte_sap|default('No registrada') }}</p>
+                        <p><strong>Tipo de Pesaje:</strong> {{ datos.tipo_pesaje|default('No especificado')|title }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Acciones -->
+            <div class="section">
+                <div class="d-flex justify-content-center gap-2">
+                    <a href="{{ url_for('clasificacion.clasificacion', codigo=datos.codigo_guia) }}" class="btn btn-primary">
+                        <i class="fas fa-tasks me-2"></i>Continuar a Clasificación
+                    </a>
+                    <a href="{{ url_for('misc.generar_pdf_pesaje', codigo_guia=datos.codigo_guia) }}" class="btn btn-success">
+                        <i class="fas fa-file-pdf me-2"></i>Generar PDF
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

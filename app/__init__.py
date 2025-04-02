@@ -5,6 +5,7 @@ from config import app as app_config
 import db_schema
 import secrets
 from werkzeug.middleware.proxy_fix import ProxyFix
+from app.utils.common import convert_to_bogota_time
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -212,8 +213,12 @@ def register_error_handlers(app):
 
 def register_template_filters(app):
     """
-    Registra filtros personalizados para las plantillas
+    Registra filtros personalizados y utilidades globales para las plantillas
     """
     @app.template_filter('file_exists')
     def file_exists_filter(path):
         return os.path.exists(path)
+
+    # Registrar convert_to_bogota_time como una utilidad global
+    app.jinja_env.globals.update(convert_to_bogota_time=convert_to_bogota_time)
+    logger.info("Función 'convert_to_bogota_time' registrada como global en Jinja.")
