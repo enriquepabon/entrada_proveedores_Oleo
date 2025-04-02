@@ -6,11 +6,25 @@ from datetime import datetime
 import json
 import glob
 import sqlite3
+import pytz
 from app.blueprints.pesaje_neto import bp
 from app.utils.common import CommonUtils as Utils
 
 # Configurar logging
 logger = logging.getLogger(__name__)
+
+# Definir zona horaria de Bogotá
+BOGOTA_TZ = pytz.timezone('America/Bogota')
+
+def get_bogota_datetime():
+    """
+    Obtiene la fecha y hora actual en la zona horaria de Bogotá.
+    Returns:
+        tuple: (fecha_str, hora_str) en formato DD/MM/YYYY y HH:MM:SS
+    """
+    now_utc = datetime.now(pytz.UTC)
+    now_bogota = now_utc.astimezone(BOGOTA_TZ)
+    return now_bogota.strftime('%d/%m/%Y'), now_bogota.strftime('%H:%M:%S')
 
 def ensure_pesajes_neto_schema():
     """
@@ -173,10 +187,8 @@ def registrar_peso_neto_directo():
         
         logger.info("Procesando solicitud de registro de peso neto directo")
         
-        # Convertir fechas y horas a UTC
-        fecha_hora_actual_utc = datetime.utcnow()
-        fecha_actual = fecha_hora_actual_utc.strftime('%d/%m/%Y')
-        hora_actual = fecha_hora_actual_utc.strftime('%H:%M:%S')
+        # Obtener fecha y hora en zona horaria de Bogotá
+        fecha_actual, hora_actual = get_bogota_datetime()
         
         # Obtener datos del formulario
         codigo_guia = request.form.get('codigo_guia')
@@ -412,10 +424,8 @@ def registrar_peso_neto():
         else:
              raise ValueError("El peso bruto no está disponible para calcular el peso neto.")
 
-        # Convertir fechas y horas a UTC
-        fecha_hora_actual_utc = datetime.utcnow()
-        fecha_actual = fecha_hora_actual_utc.strftime('%d/%m/%Y')
-        hora_actual = fecha_hora_actual_utc.strftime('%H:%M:%S')
+        # Obtener fecha y hora en zona horaria de Bogotá
+        fecha_actual, hora_actual = get_bogota_datetime()
 
         # Preparar datos para la base de datos
         datos_db = {
