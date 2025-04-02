@@ -144,10 +144,15 @@ def completar_registro_salida():
                 flash("Guía no encontrada", "error")
                 return redirect(url_for('misc.index'))
         
+        # Convertir fecha y hora a UTC
+        fecha_hora_actual_utc = datetime.utcnow()
+        fecha_actual = fecha_hora_actual_utc.strftime('%d/%m/%Y')
+        hora_actual = fecha_hora_actual_utc.strftime('%H:%M:%S')
+        
         # Actualizar datos de la guía
         datos_actualizados = {
-            'fecha_salida': fecha_salida,
-            'hora_salida': hora_salida,
+            'fecha_salida': fecha_actual,
+            'hora_salida': hora_actual,
             'comentarios_salida': comentarios,
             'estado_actual': 'proceso_completado',
             'estado_salida': 'Completado',
@@ -173,7 +178,7 @@ def completar_registro_salida():
                         UPDATE salidas 
                         SET fecha_salida = ?, hora_salida = ?, comentarios_salida = ?, estado = ?
                         WHERE codigo_guia = ?
-                    """, (fecha_salida, hora_salida, comentarios, 'completado', codigo_guia))
+                    """, (fecha_actual, hora_actual, comentarios, 'completado', codigo_guia))
                 else:
                     # Insertar nuevo registro
                     cursor.execute("""
@@ -183,8 +188,8 @@ def completar_registro_salida():
                         codigo_guia, 
                         datos_guia.get('codigo_proveedor', ''),
                         datos_guia.get('nombre_proveedor', ''),
-                        fecha_salida,
-                        hora_salida,
+                        fecha_actual,
+                        hora_actual,
                         comentarios
                     ))
                 
@@ -200,8 +205,8 @@ def completar_registro_salida():
                     if datos_actualizados_completos:
                         # Asegurarse de que los datos de salida estén incluidos
                         datos_actualizados_completos.update({
-                            'fecha_salida': fecha_salida,
-                            'hora_salida': hora_salida,
+                            'fecha_salida': fecha_actual,
+                            'hora_salida': hora_actual,
                             'comentarios_salida': comentarios,
                             'estado_actual': 'proceso_completado',
                             'estado_salida': 'Completado',

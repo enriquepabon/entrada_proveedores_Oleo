@@ -173,13 +173,17 @@ def registrar_peso_neto_directo():
         
         logger.info("Procesando solicitud de registro de peso neto directo")
         
+        # Convertir fechas y horas a UTC
+        fecha_hora_actual_utc = datetime.utcnow()
+        fecha_actual = fecha_hora_actual_utc.strftime('%d/%m/%Y')
+        hora_actual = fecha_hora_actual_utc.strftime('%H:%M:%S')
+        
         # Obtener datos del formulario
         codigo_guia = request.form.get('codigo_guia')
         peso_tara = request.form.get('peso_tara')
         peso_neto = request.form.get('peso_neto')
         comentarios = request.form.get('comentarios', '')
         respuesta_sap = request.form.get('respuesta_sap')
-        # Implicitly get peso_producto from calculation or SAP response later if needed
         
         data_received = {k: v for k, v in request.form.items()}
         logger.info(f"Datos recibidos para pesaje neto directo: {data_received}")
@@ -201,11 +205,6 @@ def registrar_peso_neto_directo():
             error_message = "Los valores de peso deben ser numéricos"
             raise ValueError(error_message)
             
-        # Convertir fechas y horas a UTC
-        fecha_hora_actual_utc = datetime.utcnow()
-        fecha_actual = fecha_hora_actual_utc.strftime('%d/%m/%Y')
-        hora_actual = fecha_hora_actual_utc.strftime('%H:%M:%S')
-        
         # Obtener datos originales de la guía (incluyendo peso bruto)
         datos_originales = utils.get_datos_guia(codigo_guia)
         if not datos_originales:
@@ -221,7 +220,7 @@ def registrar_peso_neto_directo():
                  peso_producto = round(peso_bruto_float - peso_tara, 3) # Calculate with 3 decimals
             except (ValueError, TypeError):
                  logger.warning(f"No se pudo calcular peso_producto para {codigo_guia}, peso_bruto o peso_tara no son numéricos.")
-
+        
         # Actualizar directamente en la base de datos
         try:
             conn = sqlite3.connect(db_path)
@@ -244,12 +243,12 @@ def registrar_peso_neto_directo():
                     peso_tara,
                     peso_neto,
                     peso_producto,
-                    fecha_actual, # Use correct column name
-                    hora_actual,  # Use correct column name
+                    fecha_actual, # Use UTC date
+                    hora_actual,  # Use UTC time
                     'directo',
                     comentarios,
                     respuesta_sap,
-                    datos_originales.get('peso_bruto'), # Uncommented
+                    datos_originales.get('peso_bruto'),
                     codigo_guia
                 ))
             else:
@@ -265,31 +264,30 @@ def registrar_peso_neto_directo():
                     peso_tara,
                     peso_neto,
                     peso_producto,
-                    fecha_actual, # Use correct column name
-                    hora_actual,  # Use correct column name
+                    fecha_actual, # Use UTC date
+                    hora_actual,  # Use UTC time
                     'directo',
                     comentarios,
                     respuesta_sap,
-                    datos_originales.get('codigo_proveedor'), # Uncommented
-                    datos_originales.get('nombre_proveedor'), # Uncommented
-                    datos_originales.get('peso_bruto')         # Uncommented
+                    datos_originales.get('codigo_proveedor'),
+                    datos_originales.get('nombre_proveedor'),
+                    datos_originales.get('peso_bruto')
                 ))
             
             conn.commit()
             logger.info(f"Datos actualizados en la base de datos para guía {codigo_guia}")
             
-        except sqlite3.Error as db_e: # Catch specifically DB errors
+        except sqlite3.Error as db_e:
             logger.error(f"Error actualizando la base de datos: {str(db_e)}")
-            # Check for specific errors like missing columns if needed
             if "no column named" in str(db_e):
                 error_message = f"Error de base de datos: {db_e}. Por favor, verifica la estructura de la tabla."
             else:
                 error_message = f"Error de base de datos al guardar pesaje neto: {db_e}"
-            raise sqlite3.Error(error_message) # Re-raise DB error
+            raise sqlite3.Error(error_message)
         except Exception as e:
             logger.error(f"Error inesperado durante la operación de base de datos: {str(e)}")
             error_message = f"Error inesperado: {str(e)}"
-            raise # Re-raise other exceptions
+            raise
         finally:
             if conn:
                 conn.close()
@@ -298,7 +296,7 @@ def registrar_peso_neto_directo():
         datos_ui = {
             'peso_tara': peso_tara,
             'peso_neto': peso_neto,
-            'peso_producto': peso_producto, # Add calculated value
+            'peso_producto': peso_producto,
             'tipo_pesaje_neto': 'directo',
             'fecha_pesaje_neto': fecha_actual,
             'hora_pesaje_neto': hora_actual,

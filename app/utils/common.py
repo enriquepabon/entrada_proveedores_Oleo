@@ -22,28 +22,40 @@ UTC = pytz.utc
 BOGOTA_TZ = pytz.timezone('America/Bogota')
 
 def format_datetime_bogota(date_str, time_str):
-    """Combines date and time strings, assumes UTC, converts to Bogota TZ, and formats."""
+    """
+    Combines date and time strings, assumes UTC, converts to Bogota TZ, and formats.
+    
+    Args:
+        date_str (str): Date string in DD/MM/YYYY format
+        time_str (str): Time string in HH:MM:SS format
+        
+    Returns:
+        tuple: (formatted_date, formatted_time) in Bogota timezone
+    """
     if not date_str or not time_str:
         return None, None # Return None for both if either is missing
     
     try:
-        # Combine date and time strings into a naive datetime object
-        # Assuming format DD/MM/YYYY HH:MM:SS
-        naive_dt = datetime.strptime(f"{date_str} {time_str}", "%d/%m/%Y %H:%M:%S")
+        # Parse the input strings into a datetime object
+        dt_str = f"{date_str} {time_str}"
+        naive_dt = datetime.strptime(dt_str, "%d/%m/%Y %H:%M:%S")
         
-        # Localize the naive datetime object to UTC
+        # Make it UTC aware
         utc_dt = UTC.localize(naive_dt)
         
         # Convert to Bogota timezone
         bogota_dt = utc_dt.astimezone(BOGOTA_TZ)
         
-        # Format back into separate date and time strings in Bogota time
+        # Format back to strings
         formatted_date = bogota_dt.strftime('%d/%m/%Y')
         formatted_time = bogota_dt.strftime('%H:%M:%S')
         
+        logger.debug(f"Timezone conversion: UTC {utc_dt} -> Bogota {bogota_dt}")
+        logger.debug(f"Formatted result: date={formatted_date}, time={formatted_time}")
+        
         return formatted_date, formatted_time
     except (ValueError, TypeError) as e:
-        logger.error(f"Error formatting/converting datetime ({date_str} {time_str}): {e}")
+        logger.error(f"Error formatting datetime ({date_str} {time_str}): {e}")
         return date_str, time_str # Return original strings on error
 
 class CommonUtils:
