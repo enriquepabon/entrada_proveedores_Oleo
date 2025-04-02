@@ -60,97 +60,76 @@
 {% endblock %}
 
 {% block content %}
-<div class="container py-4">
-    <div class="main-container">
-        <h2 class="text-center mb-2">Registro de Salida Completado</h2>
-        <h4 class="text-center mb-4">Guía: {{ datos.codigo_guia }}</h4>
+<div class="container mt-4">
+    <div class="card">
+        <div class="card-header bg-success text-white">
+            <h2>Registro de Salida Completado - Guía {{ datos.codigo_guia }}</h2>
+        </div>
+        <div class="card-body">
+            <!-- Datos del Proveedor -->
+            <div class="section mb-4">
+                <h4>Datos del Proveedor</h4>
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Código:</strong> {{ datos.codigo_proveedor }}</p>
+                        <p><strong>Nombre:</strong> {{ datos.nombre_proveedor }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Placa:</strong> {{ datos.placa }}</p>
+                        <p><strong>Transportador:</strong> {{ datos.transportador }}</p>
+                    </div>
+                </div>
+            </div>
 
-        <!-- Mensaje de Completado -->
-        <div class="completion-banner">
-            <div class="d-flex align-items-center">
-                <i class="fas fa-check-circle me-3" style="font-size: 1.5rem;"></i>
-                <div>
-                    <h5 class="mb-1">¡Proceso Finalizado Correctamente!</h5>
-                    <p class="mb-0">El vehículo ha sido registrado para salida.</p>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Información de la Guía -->
-        <div class="info-card">
-            <h4 class="mb-3">Información de la Guía</h4>
-            <div class="row">
-                <div class="col-md-6">
-                    <div class="info-row">
-                        <span class="info-label">Proveedor:</span> {{ datos.nombre_proveedor }}
+            <!-- Datos de Pesaje -->
+            <div class="section mb-4">
+                <h4>Datos de Pesaje</h4>
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Peso Bruto:</strong> {{ datos.peso_bruto|default('No disponible') }} kg</p>
+                        <p><strong>Peso Tara:</strong> {{ datos.peso_tara|default('No disponible') }} kg</p>
+                        <p><strong>Peso Neto:</strong> {{ datos.peso_neto|default('No disponible') }} kg</p>
                     </div>
-                    <div class="info-row">
-                        <span class="info-label">Transportador:</span> {{ datos.transportador }}
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">Placa:</span> {{ datos.placa }}
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="info-row">
-                        <span class="info-label">Entrada:</span> {{ datos.fecha_registro }} {{ datos.hora_registro }}
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">Salida:</span> {{ datos.fecha_salida }} {{ datos.hora_salida }}
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">Estado:</span> <span class="complete-badge">COMPLETADO</span>
+                    <div class="col-md-6">
+                        {% if datos.fecha_pesaje_neto %}
+                        {% set fecha_pesaje_neto_bogota, hora_pesaje_neto_bogota = utils.convert_to_bogota_time(datos.fecha_pesaje_neto, datos.hora_pesaje_neto) %}
+                        <p><strong>Fecha Pesaje Neto:</strong> {{ fecha_pesaje_neto_bogota }}</p>
+                        <p><strong>Hora Pesaje Neto:</strong> {{ hora_pesaje_neto_bogota }}</p>
+                        {% endif %}
                     </div>
                 </div>
             </div>
-            
-            {% if datos.comentarios_salida %}
-            <div class="mt-3">
-                <span class="info-label">Comentarios:</span>
-                <p class="mt-1">{{ datos.comentarios_salida }}</p>
-            </div>
-            {% endif %}
-        </div>
-        
-        <!-- Resumen de Pesos -->
-        <div class="result-card">
-            <h4 class="mb-3">Resumen de Pesos</h4>
-            <div class="row">
-                <div class="col-md-4">
-                    <div class="info-row">
-                        <span class="info-label">Peso Bruto:</span> {{ datos.peso_bruto }} kg
+
+            <!-- Datos de Salida -->
+            <div class="section mb-4">
+                <h4>Datos de Salida</h4>
+                <div class="row">
+                    <div class="col-md-6">
+                        {% if datos.fecha_salida %}
+                        {% set fecha_salida_bogota, hora_salida_bogota = utils.convert_to_bogota_time(datos.fecha_salida, datos.hora_salida) %}
+                        <p><strong>Fecha Salida:</strong> {{ fecha_salida_bogota }}</p>
+                        <p><strong>Hora Salida:</strong> {{ hora_salida_bogota }}</p>
+                        {% endif %}
                     </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="info-row">
-                        <span class="info-label">Peso Neto:</span> {{ datos.peso_neto }} kg
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="info-row">
-                        <span class="info-label">Peso Producto:</span> {{ datos.peso_producto }} kg
+                    <div class="col-md-6">
+                        {% if datos.comentarios_salida %}
+                        <p><strong>Comentarios:</strong> {{ datos.comentarios_salida }}</p>
+                        {% endif %}
                     </div>
                 </div>
             </div>
-        </div>
-        
-        <!-- QR Code -->
-        <div class="qr-container">
-            <h5 class="mb-3">Código QR de la Guía</h5>
-            <img src="{{ qr_code_url }}" alt="Código QR">
-        </div>
-        
-        <!-- Botones de Acción -->
-        <div class="action-buttons text-center">
-            <a href="{{ url_for('misc.ver_guia_centralizada', codigo_guia=datos.codigo_guia) }}" class="btn btn-primary me-2">
-                <i class="fas fa-eye me-1"></i> Ver Guía Centralizada
-            </a>
-            <a href="#" class="btn btn-secondary me-2" onclick="window.print()">
-                <i class="fas fa-print me-1"></i> Imprimir
-            </a>
-            <a href="{{ url_for('misc.upload_file') }}" class="btn btn-outline-primary">
-                <i class="fas fa-home me-1"></i> Volver al Inicio
-            </a>
+
+            <!-- Acciones -->
+            <div class="section">
+                <div class="d-flex justify-content-center gap-2">
+                    <a href="{{ url_for('misc.generar_pdf_registro', codigo_guia=datos.codigo_guia) }}" class="btn btn-success">
+                        <i class="fas fa-file-pdf me-2"></i>Generar PDF
+                    </a>
+                    <a href="{{ url_for('misc.ver_guia_centralizada', codigo_guia=datos.codigo_guia) }}" class="btn btn-primary">
+                        <i class="fas fa-eye me-2"></i>Ver Guía Completa
+                    </a>
+                </div>
+            </div>
         </div>
     </div>
 </div>
