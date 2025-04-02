@@ -3,7 +3,7 @@ import logging
 import traceback
 from datetime import datetime
 import json
-from flask import current_app, render_template, session
+from flask import render_template, session
 import time
 import re
 import glob
@@ -20,6 +20,36 @@ logger = logging.getLogger(__name__)
 # Define timezones
 UTC = pytz.utc
 BOGOTA_TZ = pytz.timezone('America/Bogota')
+
+def convert_to_bogota_time(date_str, time_str):
+    """
+    Convierte una fecha y hora en formato string a la zona horaria de Bogotá.
+    
+    Args:
+        date_str (str): Fecha en formato DD/MM/YYYY
+        time_str (str): Hora en formato HH:MM:SS
+        
+    Returns:
+        tuple: (fecha_str, hora_str) en zona horaria de Bogotá
+    """
+    try:
+        if not date_str or not time_str or date_str == 'None' or time_str == 'None':
+            return date_str, time_str
+            
+        # Convertir strings a datetime
+        dt = datetime.strptime(f"{date_str} {time_str}", "%d/%m/%Y %H:%M:%S")
+        
+        # Asumir que la fecha y hora están en UTC
+        dt_utc = pytz.UTC.localize(dt)
+        
+        # Convertir a zona horaria de Bogotá
+        dt_bogota = dt_utc.astimezone(BOGOTA_TZ)
+        
+        # Retornar en el formato original
+        return dt_bogota.strftime("%d/%m/%Y"), dt_bogota.strftime("%H:%M:%S")
+    except Exception as e:
+        logger.error(f"Error convirtiendo hora a zona Bogotá: {str(e)}")
+        return date_str, time_str
 
 def format_datetime_bogota(date_str, time_str):
     """
@@ -152,6 +182,7 @@ class CommonUtils:
         """
         conn = None # Initialize conn
         try:
+            from flask import current_app # Import current_app locally
             # Use the configured DB path
             db_path = current_app.config['TIQUETES_DB_PATH']
             conn = sqlite3.connect(db_path)
