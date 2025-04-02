@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resultados de Clasificación - {{ codigo_guia }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: Arial, sans-serif;
+            color: #333;
+        }
+        .main-container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+        .header-section {
+            background: white;
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            text-align: center;
+            border-bottom: 2px solid #dee2e6;
+        }
+        .header-logo {
+            max-width: 150px;
+            margin-bottom: 10px;
+        }
+        .content-section {
+            background: white;
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        .content-row {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        .info-column {
+            width: 48%;
+        }
+        .info-section {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        .section-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #dee2e6;
+            padding-bottom: 5px;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .info-item {
+            margin-bottom: 5px;
+        }
+        .info-label {
+            font-weight: bold;
+            color: #6c757d;
+            font-size: 13px;
+        }
+        .info-value {
+            font-size: 14px;
+        }
+        .back-link {
+            margin-bottom: 1.5rem;
+            display: inline-block;
+        }
+        .classification-value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #198754;
+        }
+        .table-responsive {
+            margin-top: 15px;
+        }
+        .results-table th {
+            background-color: #f8f9fa;
+            color: #495057;
+        }
+        .photos-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .photo-item {
+            width: calc(33.3% - 10px);
+            margin-bottom: 10px;
+        }
+        .photo-item img {
+            width: 100%;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .action-button {
+            min-width: 180px;
+            padding: 0.75rem;
+            margin-bottom: 1rem;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+        .action-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .btn-container {
+            margin-top: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            justify-content: center;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            font-size: 12px;
+            color: #6c757d;
+            border-top: 1px solid #dee2e6;
+            padding-top: 10px;
+        }
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+            body {
+                padding: 0;
+                margin: 0;
+            }
+            .main-container {
+                max-width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <div class="header-section">
+            <div class="no-print">
+                <a href="{{ url_for('clasificacion.listar_clasificaciones_filtradas') }}" class="back-link">
+                    <i class="fas fa-arrow-left me-2"></i>Volver a lista de clasificaciones
+                </a>
+            </div>
+            <img src="{{ url_for('static', filename='images/logo.png') }}" 
+                 alt="Logo" class="header-logo">
+            <h2>Resultados de Clasificación</h2>
+            <h4>Guía: {{ codigo_guia }}</h4>
+        </div>
+
+        <div class="content-row">
+            <div class="info-column">
+                <div class="info-section">
+                    <div class="section-title">Información del Proveedor</div>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <div class="info-label">Código Guía:</div>
+                            <div class="info-value">{{ codigo_guia }}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Código:</div>
+                            <div class="info-value">{{ datos_guia.codigo }}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Proveedor:</div>
+                            <div class="info-value">{{ datos_guia.nombre if datos_guia.nombre and datos_guia.nombre != 'N/A' and datos_guia.nombre != 'None' and datos_guia.nombre != 'No disponible' else "No disponible" }}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Cantidad de Racimos:</div>
+                            <div class="info-value">{{ datos_guia.cantidad_racimos if datos_guia.cantidad_racimos and datos_guia.cantidad_racimos != 'N/A' and datos_guia.cantidad_racimos != 'None' and datos_guia.cantidad_racimos != 'No disponible' else "No disponible" }}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Peso Bruto:</div>
+                            <div class="info-value">{{ datos_guia.peso_bruto }} kg</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Guía Transporte SAP:</div>
+                            <div class="info-value">{{ codigo_guia_transporte_sap if codigo_guia_transporte_sap and codigo_guia_transporte_sap != 'None' and codigo_guia_transporte_sap != 'No disponible' else "No disponible" }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="info-column">
+                <div class="info-section">
+                    <div class="section-title">Resumen de Clasificación</div>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <div class="info-label">Total de Racimos</div>
+                            <div class="classification-value">{{ cantidad_racimos or 'No disponible' }}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Tipo de Clasificación</div>
+                            <div class="info-value">
+                                <span class="badge bg-success">Manual</span>
+                            </div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Estado</div>
+                            <div class="info-value">
+                                <span class="badge bg-success">Completada</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="content-section">
+            <div class="section-title">Resultados de la Clasificación Manual</div>
+            <div class="table-responsive">
+                <table class="table table-bordered results-table">
+                    <thead>
+                        <tr>
+                            <th>Tipo de Racimo</th>
+                            <th>Cantidad</th>
+                            <th>Porcentaje</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Racimos Verdes</td>
+                            <td>{{ clasificacion_manual.verdes or 0 }}</td>
+                            <td>
+                                {% if cantidad_racimos and cantidad_racimos|int > 0 %}
+                                    {{ ((clasificacion_manual.verdes or 0) / cantidad_racimos|int * 100) | round(1) }}%
+                                {% else %}
+                                    0%
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Racimos Sobremaduros</td>
+                            <td>{{ clasificacion_manual.sobremaduros or 0 }}</td>
+                            <td>
+                                {% if cantidad_racimos and cantidad_racimos|int > 0 %}
+                                    {{ ((clasificacion_manual.sobremaduros or 0) / cantidad_racimos|int * 100) | round(1) }}%
+                                {% else %}
+                                    0%
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Racimos con Daño en Corona</td>
+                            <td>{{ clasificacion_manual.danio_corona or 0 }}</td>
+                            <td>
+                                {% if cantidad_racimos and cantidad_racimos|int > 0 %}
+                                    {{ ((clasificacion_manual.danio_corona or 0) / cantidad_racimos|int * 100) | round(1) }}%
+                                {% else %}
+                                    0%
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Racimos Pendúnculo Largo</td>
+                            <td>{{ clasificacion_manual.pendunculo_largo or 0 }}</td>
+                            <td>
+                                {% if cantidad_racimos and cantidad_racimos|int > 0 %}
+                                    {{ ((clasificacion_manual.pendunculo_largo or 0) / cantidad_racimos|int * 100) | round(1) }}%
+                                {% else %}
+                                    0%
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Racimos Podridos</td>
+                            <td>{{ clasificacion_manual.podridos or 0 }}</td>
+                            <td>
+                                {% if cantidad_racimos and cantidad_racimos|int > 0 %}
+                                    {{ ((clasificacion_manual.podridos or 0) / cantidad_racimos|int * 100) | round(1) }}%
+                                {% else %}
+                                    0%
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            {% if clasificacion_manual.fotos %}
+            <div class="section-title mt-4">Fotos de Racimos</div>
+            <div class="photos-grid">
+                {% for foto in clasificacion_manual.fotos %}
+                <div class="photo-item">
+                    <img src="{{ url_for('static', filename=foto) }}" alt="Foto de racimos" class="img-fluid">
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        
+        <div class="content-section">
+            <div class="section-title">Resultados de la Clasificación Automática</div>
+            
+            {% if clasificacion_automatica %}
+                {% set all_zeros = true %}
+                {% set total_racimos_detectados = 0 %}
+                {% for key, value in clasificacion_automatica.items() %}
+                    {% if value.cantidad and value.cantidad > 0 %}
+                        {% set all_zeros = false %}
+                        {% set total_racimos_detectados = total_racimos_detectados + value.cantidad %}
+                    {% endif %}
+                {% endfor %}
+                
+                {% if all_zeros %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Clasificación automática completada</strong> 
+                        <p class="mt-2 mb-0">No se detectaron racimos en las imágenes. Esto puede ocurrir por las siguientes razones:</p>
+                        <ul class="mt-2 mb-0">
+                            <li>Las imágenes no contienen racimos detectables</li>
+                            <li>El modelo de detección necesita ser reentrenado para su entorno</li>
+                            <li>Hubo un problema durante el procesamiento de las imágenes</li>
+                        </ul>
+                        <div class="mt-3 p-2 bg-light rounded">
+                            <small class="text-muted">Información de depuración:</small>
+                            <pre class="small mb-0">{{ clasificacion_automatica|tojson(indent=2) }}</pre>
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="table-responsive">
+                        <table class="table table-bordered results-table">
+                            <thead>
+                                <tr>
+                                    <th>Categoría</th>
+                                    <th>Cantidad</th>
+                                    <th>Porcentaje</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Racimos Verdes</td>
+                                    <td>{{ clasificacion_automatica.verdes.cantidad if clasificacion_automatica.verdes is defined else 0 }}</td>
+                                    <td>{{ clasificacion_automatica.verdes.porcentaje|round(1) if clasificacion_automatica.verdes is defined else 0 }}%</td>
+                                </tr>
+                                <tr>
+                                    <td>Racimos Maduros</td>
+                                    <td>{{ clasificacion_automatica.maduros.cantidad if clasificacion_automatica.maduros is defined else 0 }}</td>
+                                    <td>{{ clasificacion_automatica.maduros.porcentaje|round(1) if clasificacion_automatica.maduros is defined else 0 }}%</td>
+                                </tr>
+                                <tr>
+                                    <td>Racimos Sobremaduros</td>
+                                    <td>{{ clasificacion_automatica.sobremaduros.cantidad if clasificacion_automatica.sobremaduros is defined else 0 }}</td>
+                                    <td>{{ clasificacion_automatica.sobremaduros.porcentaje|round(1) if clasificacion_automatica.sobremaduros is defined else 0 }}%</td>
+                                </tr>
+                                <tr>
+                                    <td>Racimos Podridos</td>
+                                    <td>{{ clasificacion_automatica.podridos.cantidad if clasificacion_automatica.podridos is defined else 0 }}</td>
+                                    <td>{{ clasificacion_automatica.podridos.porcentaje|round(1) if clasificacion_automatica.podridos is defined else 0 }}%</td>
+                                </tr>
+                                <tr>
+                                    <td>Daño en Corona</td>
+                                    <td>{{ clasificacion_automatica.danio_corona.cantidad if clasificacion_automatica.danio_corona is defined else 0 }}</td>
+                                    <td>{{ clasificacion_automatica.danio_corona.porcentaje|round(1) if clasificacion_automatica.danio_corona is defined else 0 }}%</td>
+                                </tr>
+                                <tr>
+                                    <td>Pedúnculo Largo</td>
+                                    <td>{{ clasificacion_automatica.pendunculo_largo.cantidad if clasificacion_automatica.pendunculo_largo is defined else 0 }}</td>
+                                    <td>{{ clasificacion_automatica.pendunculo_largo.porcentaje|round(1) if clasificacion_automatica.pendunculo_largo is defined else 0 }}%</td>
+                                </tr>
+                                <tr class="table-primary">
+                                    <td><strong>Total de Racimos</strong></td>
+                                    <td><strong>{{ total_racimos_detectados }}</strong></td>
+                                    <td><strong>100%</strong></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Imágenes de Clasificación Automática -->
+                    <div class="section-title mt-4">Imágenes Procesadas</div>
+                    <div class="row">
+                        {% for i in range(1, 4) %}
+                            {% if fotos and i <= fotos|length %}
+                                <div class="col-md-6 mb-4">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h5 class="card-title">Foto {{ i }}</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            {% set foto = fotos[i-1] %}
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <h6>Original</h6>
+                                                    {% if foto.virtual is defined and foto.virtual %}
+                                                        <div class="alert alert-info">
+                                                            Vista previa no disponible
+                                                        </div>
+                                                    {% elif foto.dir_alternativo is defined and foto.dir_alternativo %}
+                                                        <a href="{{ url_for('static', filename='fotos_racimos_temp/' + id + '/' + foto.original) }}" target="_blank">
+                                                            <img src="{{ url_for('static', filename='fotos_racimos_temp/' + id + '/' + foto.original) }}" 
+                                                                 class="img-fluid img-thumbnail" alt="Foto {{ i }} Original">
+                                                        </a>
+                                                    {% else %}
+                                                        <a href="{{ url_for('static', filename='clasificaciones/fotos/' + id + '/' + foto.original) }}" target="_blank">
+                                                            <img src="{{ url_for('static', filename='clasificaciones/fotos/' + id + '/' + foto.original) }}" 
+                                                                 class="img-fluid img-thumbnail" alt="Foto {{ i }} Original">
+                                                        </a>
+                                                    {% endif %}
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <h6>Procesada</h6>
+                                                    {% if foto.virtual is defined and foto.virtual %}
+                                                        <div class="alert alert-info">
+                                                            Vista previa no disponible
+                                                        </div>
+                                                    {% elif foto.dir_alternativo is defined and foto.dir_alternativo %}
+                                                        {% set procesada_path = 'fotos_racimos_temp/' + id + '/' + foto.procesada %}
+                                                        {% if procesada_path|file_exists %}
+                                                            <a href="{{ url_for('static', filename=procesada_path) }}" target="_blank">
+                                                                <img src="{{ url_for('static', filename=procesada_path) }}" 
+                                                                     class="img-fluid img-thumbnail" alt="Foto {{ i }} Procesada">
+                                                            </a>
+                                                        {% else %}
+                                                            <div class="alert alert-warning">
+                                                                Imagen procesada no disponible
+                                                            </div>
+                                                        {% endif %}
+                                                    {% else %}
+                                                        {% set procesada_path = 'clasificaciones/fotos/' + id + '/' + foto.procesada %}
+                                                        {% if procesada_path|file_exists %}
+                                                            <a href="{{ url_for('static', filename=procesada_path) }}" target="_blank">
+                                                                <img src="{{ url_for('static', filename=procesada_path) }}" 
+                                                                     class="img-fluid img-thumbnail" alt="Foto {{ i }} Procesada">
+                                                            </a>
+                                                        {% else %}
+                                                            <div class="alert alert-warning">
+                                                                Imagen procesada no disponible
+                                                            </div>
+                                                        {% endif %}
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Detalles de detección para esta foto -->
+                                            {% if resultados_por_foto and resultados_por_foto[i|string] %}
+                                                <div class="mt-3">
+                                                    <h6>Detecciones en esta foto:</h6>
+                                                    <ul class="list-group">
+                                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                            Total racimos detectados
+                                                            <span class="badge bg-primary rounded-pill">
+                                                                {{ resultados_por_foto[i|string].potholes_detected }}
+                                                            </span>
+                                                        </li>
+                                                        {% if resultados_por_foto[i|string].detecciones %}
+                                                            {% for categoria, cantidad in resultados_por_foto[i|string].detecciones.items() %}
+                                                                {% if cantidad > 0 %}
+                                                                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                                        {{ categoria|replace('_', ' ')|title }}
+                                                                        <span class="badge bg-success rounded-pill">{{ cantidad }}</span>
+                                                                    </li>
+                                                                {% endif %}
+                                                            {% endfor %}
+                                                        {% endif %}
+                                                    </ul>
+                                                </div>
+                                            {% elif foto.virtual is defined and foto.virtual and foto.detecciones is defined %}
+                                                <div class="mt-3">
+                                                    <h6>Detecciones en esta foto:</h6>
+                                                    <ul class="list-group">
+                                                        {% for categoria, cantidad in foto.detecciones.items() %}
+                                                            {% if cantidad > 0 %}
+                                                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                                    {{ categoria|replace('_', ' ')|title }}
+                                                                    <span class="badge bg-success rounded-pill">{{ cantidad }}</span>
+                                                                </li>
+                                                            {% endif %}
+                                                        {% endfor %}
+                                                    </ul>
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% else %}
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    La clasificación automática está en proceso. Los resultados se actualizarán automáticamente.
+                </div>
+            {% endif %}
+        </div>
+            
+        <div class="content-section">
+            <div class="section-title">Acciones</div>
+            <div class="btn-container">
+                <a href="{{ url_for('serve_guia', filename='guia_' + codigo_guia + '.html') }}" class="btn btn-primary action-button">
+                    <i class="fas fa-file-alt me-2"></i> Ver Guía
+                </a>
+                <a href="{{ url_for('clasificacion.clasificacion', codigo=codigo_guia) }}" class="btn btn-warning action-button">
+                    <i class="fas fa-redo me-2"></i> Reintentar Clasificación
+                </a>
+                <button class="btn btn-success action-button" onclick="iniciarEscaneoQR()">
+                    <i class="fas fa-qrcode me-2"></i> Escanear Otro QR
+                </button>
+                <a href="{{ url_for('generar_pdf_clasificacion', codigo_guia=codigo_guia) }}" class="btn btn-danger action-button" target="_blank">
+                    <i class="fas fa-file-pdf me-2"></i> Generar PDF
+                </a>
+                {% if automatica_completado %}
+                <a href="{{ url_for('clasificacion.mostrar_resultados_automaticos', url_guia=codigo_guia) }}" class="btn btn-secondary action-button">
+                    <i class="fas fa-robot me-2"></i> Ver Resultados Automáticos
+                </a>
+                {% else %}
+                <a href="{{ url_for('ver_resultados_automaticos', url_guia=codigo_guia) }}" class="btn btn-primary action-button">
+                    <i class="fas fa-robot me-2"></i> Iniciar Clasificación Automática
+                </a>
+                {% endif %}
+                <a href="{{ url_for('pesaje_neto.pesaje_neto', codigo=codigo_guia) }}" class="btn btn-info action-button">
+                    <i class="fas fa-balance-scale me-2"></i> Registrar Peso Neto
+                </a>
+            </div>
+        </div>
+
+        <div class="footer no-print">
+            <p>© {{ fecha_clasificacion.split('/')[2] if fecha_clasificacion else '2023' }} Extractora María La Baja - Todos los derechos reservados</p>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+    let scannerInterval;
+
+    async function iniciarEscaneoQR() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: 'environment' }
+            });
+            
+            // Crear elementos para la vista previa de la cámara
+            const modal = document.createElement('div');
+            modal.className = 'modal fade';
+            modal.id = 'qrScannerModal';
+            modal.innerHTML = `
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Escanear Código QR</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body text-center">
+                            <video id="qrVideo" style="width: 100%; max-width: 500px;"></video>
+                            <canvas id="qrCanvas" style="display: none;"></canvas>
+                            <div id="loadingMessage" class="alert alert-info mt-3" style="display: none;">
+                                <i class="fas fa-spinner fa-spin"></i> Buscando código QR...
+                            </div>
+                            <div id="errorMessage" class="alert alert-danger mt-3" style="display: none;"></div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            
+            // Inicializar el modal de Bootstrap
+            const modalInstance = new bootstrap.Modal(modal);
+            modalInstance.show();
+            
+            // Configurar el video
+            const video = document.getElementById('qrVideo');
+            const canvas = document.getElementById('qrCanvas');
+            const loadingMessage = document.getElementById('loadingMessage');
+            const errorMessage = document.getElementById('errorMessage');
+            
+            video.srcObject = stream;
+            await video.play();
+            
+            // Configurar el canvas para capturar frames
+            const canvasContext = canvas.getContext('2d');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            
+            loadingMessage.style.display = 'block';
+            
+            // Función para procesar cada frame
+            function procesarFrame() {
+                if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                    canvasContext.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    const imageData = canvasContext.getImageData(0, 0, canvas.width, canvas.height);
+                    
+                    const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                        inversionAttempts: "dontInvert",
+                    });
+                    
+                    if (code) {
+                        // Detener el escaneo
+                        clearInterval(scannerInterval);
+                        
+                        // Procesar la URL del QR
+                        const url = code.data;
+                        if (url.includes('/guias/')) {
+                            // Extraer el código de guía de la URL
+                            const match = url.match(/guia_(.+)\.html/);
+                            if (match) {
+                                const codigoGuia = match[1];
+                                // Redirigir a la página de clasificación
+                                window.location.href = `/clasificacion/${codigoGuia}`;
+                            } else {
+                                errorMessage.textContent = 'Código QR no válido';
+                                errorMessage.style.display = 'block';
+                            }
+                        } else {
+                            errorMessage.textContent = 'El código QR no contiene una URL de guía válida';
+                            errorMessage.style.display = 'block';
+                        }
+                    }
+                }
+            }
+            
+            // Iniciar el escaneo
+            scannerInterval = setInterval(procesarFrame, 100);
+            
+            // Cuando se cierre el modal, detener todo
+            modal.addEventListener('hidden.bs.modal', () => {
+                clearInterval(scannerInterval);
+                stream.getTracks().forEach(track => track.stop());
+                modal.remove();
+            });
+            
+        } catch (error) {
+            console.error('Error al acceder a la cámara:', error);
+            alert('Error al acceder a la cámara. Por favor, intente nuevamente.');
+        }
+    }
+    </script>
+</body>
+</html> 

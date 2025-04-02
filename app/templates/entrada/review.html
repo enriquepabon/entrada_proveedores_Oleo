@@ -1,0 +1,485 @@
+<!-- templates/review.html -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Revisión de Datos</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        body {
+            background-color: #f8f9fa;
+            padding-top: 0; /* Remove padding since we'll manage it in the container */
+        }
+        .review-container {
+            max-width: 1200px;
+            margin: 30px auto;
+            padding: 30px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .tiquete-image {
+            max-width: 100%;
+            height: auto;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .plate-section {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            background-color: #f8f9fa;
+        }
+        .plate-image {
+            max-width: 30%;
+            height: auto;
+            margin: 10px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .plate-text {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .plate-warning {
+            color: #856404;
+            background-color: #fff3cd;
+            border: 1px solid #ffeeba;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .table th {
+            background-color: #f8f9fa;
+        }
+        .modified {
+            background-color: #fff3cd;
+        }
+        .btn-container {
+            margin-top: 30px;
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+        .form-control[readonly] {
+            background-color: #f8f9fa;
+            cursor: not-allowed;
+        }
+        .form-control:not([readonly]) {
+            background-color: #fff;
+            cursor: text;
+        }
+        /* Estilos para el overlay de carga */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.9);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+        .loading-content {
+            text-align: center;
+            background-color: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .loading-content h2 {
+            margin-top: 1rem;
+            font-size: 1.5rem;
+            color: #0d6efd;
+        }
+        .loading-content p {
+            color: #6c757d;
+            margin-top: 0.5rem;
+        }
+        /* Navigation styles */
+        .navbar {
+            margin-bottom: 20px;
+        }
+        .navbar-brand {
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('misc.upload_file') }}">
+                <i class="fas fa-palm-tree me-2"></i>Oleoflores - Extractora MLB
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" 
+                    aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('misc.upload_file') }}">
+                            <i class="fas fa-home me-1"></i>Inicio
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('entrada.lista_entradas') }}">
+                            <i class="fas fa-clipboard-list me-1"></i>Listado de Entradas
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('entrada.nueva_entrada') }}">
+                            <i class="fas fa-plus-circle me-1"></i>Nueva Entrada
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Overlay de carga -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-content">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Procesando...</span>
+            </div>
+            <h2>Procesando datos...</h2>
+            <p>Por favor espere mientras validamos la información.</p>
+        </div>
+    </div>
+
+    <div class="review-container">
+        <h2 class="text-center mb-4">Revisión de Datos</h2>
+        
+        <div class="row">
+            <div class="col-md-8">
+                {% if image_filename %}
+                <div class="text-center">
+                    <img src="{{ url_for('static', filename='uploads/' + image_filename) }}?{{ timestamp }}" 
+                         alt="Tiquete" class="tiquete-image">
+                </div>
+                {% endif %}
+
+                <form id="reviewForm" class="mt-4">
+                    <div class="table-responsive">
+                        <table id="dataTable" class="table table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>Campo</th>
+                                    <th>Valor Original</th>
+                                    <th>Valor Sugerido</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in parsed_data.table_data %}
+                                <tr>
+                                    <td>{{ row.campo }}</td>
+                                    <td>{{ row.original }}</td>
+                                    <td>
+                                        <input type="text" 
+                                               class="form-control" 
+                                               value="{{ row.sugerido }}"
+                                               readonly
+                                               {% if row.sugerido != row.original %}data-modified="true"{% endif %}>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                                
+                                <!-- Campos adicionales (solo si no están ya incluidos en table_data) -->
+                                {% if not parsed_data.table_data|selectattr('campo', 'equalto', 'Se Acarreó')|list %}
+                                <tr>
+                                    <td>Se Acarreó</td>
+                                    <td>{{ parsed_data.acarreo|default('') }}</td>
+                                    <td>
+                                        <input type="text" 
+                                               class="form-control" 
+                                               value="{{ parsed_data.acarreo|default('') }}"
+                                               readonly>
+                                    </td>
+                                </tr>
+                                {% endif %}
+                                
+                                {% if not parsed_data.table_data|selectattr('campo', 'equalto', 'Se Cargó')|list %}
+                                <tr>
+                                    <td>Se Cargó</td>
+                                    <td>{{ parsed_data.cargo|default('') }}</td>
+                                    <td>
+                                        <input type="text" 
+                                               class="form-control" 
+                                               value="{{ parsed_data.cargo|default('') }}"
+                                               readonly>
+                                    </td>
+                                </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {% if parsed_data.nota %}
+                    <div class="alert alert-info mt-3">
+                        <h5><i class="fas fa-info-circle me-2"></i>Nota de Validación:</h5>
+                        <p>{{ parsed_data.nota }}</p>
+                    </div>
+                    {% endif %}
+
+                    <div class="btn-container">
+                        <button type="button" id="editButton" class="btn btn-primary">
+                            <i class="fas fa-edit me-2"></i>Editar
+                        </button>
+                        <button type="button" id="saveButton" class="btn btn-success d-none">
+                            <i class="fas fa-save me-2"></i>Guardar
+                        </button>
+                        <button type="button" id="cancelButton" class="btn btn-secondary d-none">
+                            <i class="fas fa-times me-2"></i>Cancelar
+                        </button>
+                        <button type="button" onclick="window.location.href='/'" class="btn btn-primary">
+                            <i class="fas fa-camera me-2"></i>Escanear Otro
+                        </button>
+                    </div>
+                </form>
+            </div>
+            
+            <div class="col-md-4">
+                {% if plate_image_filename %}
+                <div class="plate-section">
+                    <h4>Información de Placa</h4>
+                    <div class="text-center">
+                        <img src="{{ url_for('static', filename='uploads/' + plate_image_filename) }}?{{ timestamp }}" 
+                             alt="Placa" class="plate-image">
+                    </div>
+                    {% if plate_text %}
+                    <div class="plate-text text-center">
+                        Placa detectada: {{ plate_text }}
+                    </div>
+                    {% endif %}
+                    {% if plate_error %}
+                    <div class="plate-warning">
+                        {{ plate_error }}
+                    </div>
+                    {% endif %}
+                    <div class="text-center mt-3">
+                        <button type="button" id="reprocessPlateButton" class="btn btn-primary">
+                            <i class="fas fa-redo me-2"></i>Procesar Placa Nuevamente
+                        </button>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let originalValues = {};
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        
+        function showLoading() {
+            loadingOverlay.style.display = 'flex';
+        }
+        
+        function hideLoading() {
+            loadingOverlay.style.display = 'none';
+        }
+        
+        function enableEditing() {
+            const inputs = document.querySelectorAll('#dataTable input');
+            inputs.forEach(input => {
+                const row = input.closest('tr');
+                const campo = row.querySelector('td:first-child').textContent;
+                originalValues[campo] = input.value;
+                input.removeAttribute('readonly');
+            });
+            
+            document.getElementById('editButton').classList.add('d-none');
+            document.getElementById('saveButton').classList.remove('d-none');
+            document.getElementById('cancelButton').classList.remove('d-none');
+        }
+        
+        function cancelEditing() {
+            const inputs = document.querySelectorAll('#dataTable input');
+            inputs.forEach(input => {
+                const row = input.closest('tr');
+                const campo = row.querySelector('td:first-child').textContent;
+                input.value = originalValues[campo];
+                input.setAttribute('readonly', '');
+            });
+            
+            document.getElementById('editButton').classList.remove('d-none');
+            document.getElementById('saveButton').classList.add('d-none');
+            document.getElementById('cancelButton').classList.add('d-none');
+        }
+
+        async function submitForm() {
+            try {
+                showLoading();
+                
+                // Primero capturar la tabla
+                try {
+                    console.log('Intentando capturar tabla antes de enviar datos...');
+                    await capturarTabla();
+                    console.log('Captura de tabla completada exitosamente');
+                } catch (captureError) {
+                    console.error('Error en captura de tabla, continuando con el proceso normal:', captureError);
+                    // Continuamos aunque falle la captura para no interrumpir el flujo
+                }
+                
+                const tableData = [];
+                const rows = document.querySelectorAll('#dataTable tbody tr');
+                
+                rows.forEach(row => {
+                    const campo = row.querySelector('td:first-child').textContent;
+                    const original = row.querySelector('td:nth-child(2)').textContent;
+                    const sugerido = row.querySelector('td:nth-child(3) input').value;
+                    
+                    tableData.push({
+                        campo: campo,
+                        original: original,
+                        sugerido: sugerido || original
+                    });
+                });
+
+                const response = await fetch('/update_data', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ table_data: tableData })
+                });
+
+                const data = await response.json();
+                console.log('Respuesta del servidor:', data);
+
+                if (data.status === 'success') {
+                    window.location.href = data.redirect;
+                } else {
+                    hideLoading();
+                    if (data.redirect) {
+                        window.location.href = data.redirect;
+                    } else {
+                        alert(data.message || 'Error al procesar los datos');
+                    }
+                }
+            } catch (error) {
+                hideLoading();
+                console.error('Error:', error);
+                alert('Error al procesar la solicitud');
+            }
+        }
+
+        // Agregar manejadores de eventos cuando el documento esté listo
+        document.addEventListener('DOMContentLoaded', function() {
+            // Manejar el botón de editar
+            const editButton = document.getElementById('editButton');
+            if (editButton) {
+                editButton.addEventListener('click', enableEditing);
+            }
+            
+            // Manejar el botón de cancelar
+            const cancelButton = document.getElementById('cancelButton');
+            if (cancelButton) {
+                cancelButton.addEventListener('click', cancelEditing);
+            }
+            
+            // Manejar el botón de guardar
+            const saveButton = document.getElementById('saveButton');
+            if (saveButton) {
+                saveButton.addEventListener('click', submitForm);
+            }
+
+            // Inicializar los campos sugeridos con los valores originales
+            const rows = document.querySelectorAll('#dataTable tbody tr');
+            rows.forEach(row => {
+                const originalValue = row.querySelector('td:nth-child(2)').textContent;
+                const suggestedInput = row.querySelector('td:nth-child(3) input');
+                if (suggestedInput && !suggestedInput.value) {
+                    suggestedInput.value = originalValue;
+                }
+            });
+        });
+
+        // Agregar manejador para el botón de reprocesar placa
+        const reprocessPlateButton = document.getElementById('reprocessPlateButton');
+        if (reprocessPlateButton) {
+            reprocessPlateButton.addEventListener('click', async function() {
+                try {
+                    showLoading();
+                    const response = await fetch('/reprocess_plate', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            plate_image_filename: '{{ plate_image_filename }}'
+                        })
+                    });
+
+                    const data = await response.json();
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        hideLoading();
+                        alert(data.message || 'Error al procesar la placa');
+                    }
+                } catch (error) {
+                    hideLoading();
+                    console.error('Error:', error);
+                    alert('Error al procesar la placa');
+                }
+            });
+        }
+
+        // Función para capturar la tabla y enviarla al servidor
+        async function capturarTabla() {
+            try {
+                console.log('Iniciando captura de tabla...');
+                const tablaElement = document.getElementById('dataTable');
+                console.log('Elemento tabla encontrado:', tablaElement);
+                
+                const canvas = await html2canvas(tablaElement, {
+                    backgroundColor: '#ffffff',
+                    scale: 2, // Mayor calidad
+                    logging: true
+                });
+                
+                console.log('Canvas generado correctamente');
+                
+                // Convertir el canvas a imagen base64
+                const imagenBase64 = canvas.toDataURL('image/png');
+                console.log('Imagen convertida a base64');
+                
+                // Enviar la imagen al servidor
+                console.log('Enviando imagen al servidor...');
+                const response = await fetch('/guardar_captura_tabla', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ 
+                        imagen: imagenBase64,
+                        timestamp: new Date().toISOString()
+                    })
+                });
+                
+                const result = await response.json();
+                console.log('Respuesta del servidor:', result);
+                return result;
+                
+            } catch (error) {
+                console.error('Error detallado al capturar la tabla:', error);
+                // Continuamos con el flujo normal aunque falle la captura
+                return Promise.resolve({ success: false });
+            }
+        }
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

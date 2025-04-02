@@ -1,0 +1,128 @@
+{% extends "layouts/list_layout.html" %}
+{% import "components/tables/tabla_datos.html" as tablas %}
+
+{% block lista_titulo %}Lista de Entradas Registradas{% endblock %}
+{% block lista_descripcion %}Registros de entrada de racimos{% endblock %}
+
+{% block header_actions %}
+<a href="{{ url_for('entrada.nueva_entrada') }}" class="btn btn-primary">
+    <i class="fas fa-plus me-2"></i>Nueva Entrada
+</a>
+{% endblock %}
+
+{% block filtros %}
+{% set filtros_entrada = [
+    {
+        'id': 'fecha_inicio',
+        'etiqueta': 'Fecha Inicio',
+        'tipo': 'date',
+        'valor': filtros.get('fecha_inicio', '')
+    },
+    {
+        'id': 'fecha_fin',
+        'etiqueta': 'Fecha Fin',
+        'tipo': 'date',
+        'valor': filtros.get('fecha_fin', '')
+    },
+    {
+        'id': 'codigo_guia',
+        'etiqueta': 'Código de Guía',
+        'tipo': 'text',
+        'placeholder': 'Ingrese el código de guía',
+        'valor': filtros.get('codigo_guia', '')
+    },
+    {
+        'id': 'codigo_proveedor',
+        'etiqueta': 'Código Proveedor',
+        'tipo': 'text',
+        'placeholder': 'Código del proveedor',
+        'valor': filtros.get('codigo_proveedor', '')
+    },
+    {
+        'id': 'estado',
+        'etiqueta': 'Estado',
+        'tipo': 'select',
+        'opciones': [
+            {'valor': '', 'texto': 'Todos'},
+            {'valor': 'pendiente', 'texto': 'Pendiente'},
+            {'valor': 'procesado', 'texto': 'Procesado'},
+            {'valor': 'pesado', 'texto': 'Pesado'},
+            {'valor': 'error', 'texto': 'Error'}
+        ],
+        'valor': filtros.get('estado', '')
+    }
+] %}
+
+{{ tablas.filtros_form(
+    filtros_entrada, 
+    url_for('entrada.lista_entradas'), 
+    url_for('entrada.lista_entradas')
+) }}
+{% endblock %}
+
+{% macro render_estado(item) %}
+    {% set estado = item.estado|default('pendiente') %}
+    {% set bg_class = 'warning' %}
+    
+    {% if estado == 'procesado' %}
+        {% set bg_class = 'success' %}
+    {% elif estado == 'pesado' %}
+        {% set bg_class = 'primary' %}
+    {% elif estado == 'error' %}
+        {% set bg_class = 'danger' %}
+    {% endif %}
+    
+    <span class="badge bg-{{ bg_class }}">{{ estado }}</span>
+{% endmacro %}
+
+{% macro render_acciones(item) %}
+    <div class="d-flex flex-wrap gap-1">
+        <a href="{{ url_for('entrada.ver_entrada', codigo_guia=item.codigo_guia) }}" 
+           class="btn btn-sm btn-primary btn-action">
+            <i class="fas fa-eye me-1"></i>Ver
+        </a>
+        
+        <a href="{{ url_for('misc.ver_guia_centralizada', codigo_guia=item.codigo_guia) }}"
+           class="btn btn-sm btn-info btn-action">
+            <i class="fas fa-clipboard-list me-1"></i>Guía
+        </a>
+        
+        {% if item.estado == 'pendiente' %}
+        <a href="{{ url_for('entrada.editar_entrada', codigo_guia=item.codigo_guia) }}" 
+           class="btn btn-sm btn-warning btn-action">
+            <i class="fas fa-edit me-1"></i>Editar
+        </a>
+        
+        <a href="{{ url_for('pesaje.pesaje', codigo=item.codigo_guia) }}" 
+           class="btn btn-sm btn-success btn-action">
+            <i class="fas fa-weight-hanging me-1"></i>Pesaje
+        </a>
+        {% endif %}
+    </div>
+{% endmacro %}
+
+{% block lista %}
+{% set columnas_entrada = [
+    {'titulo': 'Código Guía', 'campo': 'codigo_guia'},
+    {'titulo': 'Código Proveedor', 'campo': 'codigo_proveedor'},
+    {'titulo': 'Nombre Proveedor', 'campo': 'nombre_proveedor'},
+    {'titulo': 'Fecha Registro', 'campo': 'fecha_registro'},
+    {'titulo': 'Cantidad Racimos', 'campo': 'cantidad_racimos'},
+    {
+        'titulo': 'Estado',
+        'render': render_estado
+    },
+    {
+        'titulo': 'Acciones',
+        'render': render_acciones
+    }
+] %}
+
+{{ tablas.tabla_filtrable(
+    'Entradas Registradas',
+    columnas_entrada,
+    entradas,
+    url_for('entrada.lista_entradas'),
+    sin_resultados_mensaje="No se encontraron entradas con los filtros seleccionados."
+) }}
+{% endblock %} 

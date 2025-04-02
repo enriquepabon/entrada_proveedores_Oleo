@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clasificación de Racimos</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+        }
+        .loading-content {
+            text-align: center;
+            color: white;
+        }
+        .spinner-border {
+            width: 3rem;
+            height: 3rem;
+        }
+        .classification-section {
+            margin-bottom: 2rem;
+            padding: 1rem;
+            border: 1px solid #ddd;
+            border-radius: 0.5rem;
+        }
+        .photo-section {
+            margin-bottom: 2rem;
+            padding: 1rem;
+            border: 1px solid #ddd;
+            border-radius: 0.5rem;
+        }
+        .photo-preview {
+            max-width: 300px;
+            margin: 1rem 0;
+        }
+        .photo-status {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        .status-indicator {
+            width: 1rem;
+            height: 1rem;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+        }
+        .status-pending {
+            background-color: #ffc107;
+        }
+        .status-completed {
+            background-color: #28a745;
+        }
+        .manual-section {
+            margin-top: 2rem;
+            padding: 1rem;
+            border: 1px solid #ddd;
+            border-radius: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-content">
+            <div class="spinner-border text-light mb-3" role="status">
+                <span class="visually-hidden">Cargando...</span>
+            </div>
+            <h2>Procesando clasificación...</h2>
+            <p>Por favor espere mientras procesamos la imagen.</p>
+        </div>
+    </div>
+
+    <div class="container mt-4">
+        {% if debug %}
+        <!-- Bloque de depuración -->
+        <div class="card my-3 border-danger">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0">Información de Depuración</h5>
+            </div>
+            <div class="card-body">
+                <h6>Variables disponibles:</h6>
+                <ul>
+                    <li><strong>codigo_guia:</strong> {{ codigo_guia }}</li>
+                    <li><strong>nombre_proveedor:</strong> {{ nombre_proveedor }}</li>
+                    <li><strong>nombre (fallback):</strong> {{ nombre }}</li>
+                    <li><strong>codigo_proveedor:</strong> {{ codigo_proveedor }}</li>
+                    <li><strong>cantidad_racimos:</strong> {{ cantidad_racimos }}</li>
+                </ul>
+                <h6>Datos completos de la guía:</h6>
+                <pre>{{ datos_guia|tojson(indent=2) }}</pre>
+            </div>
+        </div>
+        {% endif %}
+
+        <h2 class="mb-4">Clasificación de Racimos</h2>
+        
+        <!-- Información del proveedor y guía -->
+        <div class="info-section mb-4">
+            <h4>Información General</h4>
+            <div class="row">
+                <div class="col-md-6">
+                    <p><strong>Código Guía:</strong> {{ codigo_guia }}</p>
+                    <p><strong>Código Proveedor:</strong> {{ codigo_proveedor if codigo_proveedor and codigo_proveedor != 'N/A' and codigo_proveedor != 'None' and codigo_proveedor != 'No disponible' else codigo }}</p>
+                    <p><strong>Nombre Proveedor:</strong> {{ nombre_proveedor if nombre_proveedor and nombre_proveedor != 'N/A' and nombre_proveedor != 'None' and nombre_proveedor != 'No disponible' else nombre if nombre and nombre != 'N/A' and nombre != 'None' and nombre != 'No disponible' else "No disponible" }}</p>
+                    <p><strong>Cantidad de Racimos:</strong> <span id="cantidad_racimos">{{ cantidad_racimos if cantidad_racimos and cantidad_racimos != 'N/A' and cantidad_racimos != 'None' and cantidad_racimos != 'No disponible' else "No disponible" }}</span></p>
+                    <p><strong>Peso Bruto:</strong> {{ peso_bruto }} kg</p>
+                    <p><strong>Código Guía Transporte SAP:</strong> {{ guia_transporte if guia_transporte and guia_transporte != 'None' and guia_transporte != 'No disponible' else codigo_guia_transporte_sap if codigo_guia_transporte_sap and codigo_guia_transporte_sap != 'None' and codigo_guia_transporte_sap != 'No disponible' else "No disponible" }}</p>
+                </div>
+                <div class="col-md-6">
+                    <p><strong>Tipo de Pesaje:</strong> {{ tipo_pesaje }}</p>
+                    <p><strong>Fecha de Registro:</strong> {{ fecha_registro }}</p>
+                    <p><strong>Hora de Registro:</strong> {{ hora_registro }}</p>
+                    <p><strong>Fecha de Pesaje:</strong> {{ fecha_pesaje }}</p>
+                    <p><strong>Hora de Pesaje:</strong> {{ hora_pesaje }}</p>
+                </div>
+            </div>
+            <input type="hidden" id="codigo" value="{{ codigo }}">
+            <input type="hidden" id="codigo_guia" value="{{ codigo_guia }}">
+            <input type="hidden" id="cantidad_racimos_hidden" value="{{ cantidad_racimos }}">
+        </div>
+
+        <!-- Selección de tipo de clasificación -->
+        <div class="classification-section mb-4">
+            <h4 class="mb-3">Tipo de Clasificación</h4>
+            <div class="mb-3">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="clasificacionAutomatica" checked>
+                    <label class="form-check-label" for="clasificacionAutomatica">
+                        Clasificación Automática
+                    </label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="clasificacionManual" checked>
+                    <label class="form-check-label" for="clasificacionManual">
+                        Clasificación Manual
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sección de Fotos -->
+        <div class="photo-section">
+            <h4 class="mb-3">Captura de Fotos</h4>
+            <div class="row">
+                {% for i in range(1, 4) %}
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Foto {{ i }}</h5>
+                            <div class="photo-status">
+                                <div class="status-indicator status-pending" id="status-foto-{{ i }}"></div>
+                                <span id="status-text-{{ i }}">Pendiente</span>
+                            </div>
+                            <div class="mb-3">
+                                <button class="btn btn-primary mb-2 w-100" id="btn-camara-{{ i }}">
+                                    <i class="fas fa-camera"></i> Abrir Cámara
+                                </button>
+                                <video id="video-{{ i }}" class="w-100 d-none"></video>
+                                <button class="btn btn-success mb-2 w-100 d-none" id="btn-capturar-{{ i }}">
+                                    <i class="fas fa-camera"></i> Capturar Foto
+                                </button>
+                                <input type="file" class="form-control" id="foto-{{ i }}" 
+                                       accept="image/*">
+                                <small class="text-muted">O seleccione una imagen desde su dispositivo</small>
+                            </div>
+                            <img id="preview-{{ i }}" class="photo-preview d-none">
+                            <button class="btn btn-secondary mt-2 d-none" id="btn-retomar-{{ i }}">
+                                Retomar Foto
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Sección de Clasificación Manual -->
+        <div class="manual-section">
+            <h4 class="mb-3">Clasificación Manual</h4>
+            <form id="form-clasificacion-manual">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Racimos Verdes:</label>
+                        <input type="number" class="form-control" id="verdes" min="0" step="0.01">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Racimos Sobremaduros:</label>
+                        <input type="number" class="form-control" id="sobremaduros" min="0" step="0.01">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Racimos con Daño en Corona:</label>
+                        <input type="number" class="form-control" id="danio-corona" min="0" step="0.01">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Racimos Pendúnculo Largo:</label>
+                        <input type="number" class="form-control" id="pendunculo-largo" min="0" step="0.01">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Racimos Podridos:</label>
+                        <input type="number" class="form-control" id="podridos" min="0" step="0.01">
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- Campo oculto para el nombre del proveedor -->
+        <input type="hidden" id="nombreProveedor" value="{{ nombre }}">
+
+        <!-- Resultados de la clasificación -->
+        <div id="resultadosClasificacion" style="display: none;" class="mt-4">
+            <h4>Resultados de la Clasificación</h4>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <h5 class="card-title">Total de Racimos Detectados</h5>
+                            <p class="h3 text-center" id="totalRacimos">0</p>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Conteo de Racimos</h5>
+                            <ul class="list-group">
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Verdes
+                                    <div>
+                                        <span id="conteoVerde" class="badge bg-success rounded-pill me-2">0</span>
+                                        <span id="porcentajeVerde" class="text-muted">(0%)</span>
+                                    </div>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Sobremaduros
+                                    <div>
+                                        <span id="conteoSobremaduro" class="badge bg-warning rounded-pill me-2">0</span>
+                                        <span id="porcentajeSobremaduro" class="text-muted">(0%)</span>
+                                    </div>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Daño en Corona
+                                    <div>
+                                        <span id="conteoDanioCorona" class="badge bg-danger rounded-pill me-2">0</span>
+                                        <span id="porcentajeDanioCorona" class="text-muted">(0%)</span>
+                                    </div>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Pedúnculo Largo
+                                    <div>
+                                        <span id="conteoPendunculoLargo" class="badge bg-info rounded-pill me-2">0</span>
+                                        <span id="porcentajePendunculoLargo" class="text-muted">(0%)</span>
+                                    </div>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Podridos
+                                    <div>
+                                        <span id="conteoPodrido" class="badge bg-dark rounded-pill me-2">0</span>
+                                        <span id="porcentajePodrido" class="text-muted">(0%)</span>
+                                    </div>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Imágenes Procesadas</h5>
+                            <div id="imagenesClasificacion"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Botón de Guardar -->
+        <div class="text-center mt-4 mb-4">
+            <button id="btn-guardar" class="btn btn-success btn-lg" disabled>
+                Guardar Clasificación
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Variables globales para el estado de las fotos y streams de video
+        const estadoFotos = {
+            foto1: false,
+            foto2: false,
+            foto3: false
+        };
+        
+        const streamsCamara = {
+            foto1: null,
+            foto2: null,
+            foto3: null
+        };
+
+        // Función para detener la cámara
+        function detenerCamara(numero) {
+            if (streamsCamara[`foto${numero}`]) {
+                streamsCamara[`foto${numero}`].getTracks().forEach(track => track.stop());
+                streamsCamara[`foto${numero}`] = null;
+            }
+        }
+
+        // Función para actualizar el estado visual de las fotos
+        function actualizarEstadoFoto(numero, completada = false) {
+            const indicador = document.getElementById(`status-foto-${numero}`);
+            const texto = document.getElementById(`status-text-${numero}`);
+            
+            if (completada) {
+                indicador.classList.remove('status-pending');
+                indicador.classList.add('status-completed');
+                texto.textContent = 'Completada';
+                estadoFotos[`foto${numero}`] = true;
+            } else {
+                indicador.classList.remove('status-completed');
+                indicador.classList.add('status-pending');
+                texto.textContent = 'Pendiente';
+                estadoFotos[`foto${numero}`] = false;
+            }
+            
+            verificarEstado();
+        }
+
+        // Verificar estado general y habilitar/deshabilitar botón de guardar
+        function verificarEstado() {
+            const todasFotosProcesadas = Object.values(estadoFotos).every(estado => estado === true);
+            const btnGuardar = document.getElementById('btn-guardar');
+            btnGuardar.disabled = !todasFotosProcesadas;
+        }
+
+        // Función para procesar la foto
+        function procesarFoto(numero, file) {
+            const preview = document.getElementById(`preview-${numero}`);
+            const btnRetomar = document.getElementById(`btn-retomar-${numero}`);
+            const video = document.getElementById(`video-${numero}`);
+            const btnCapturar = document.getElementById(`btn-capturar-${numero}`);
+
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    preview.src = e.target.result;
+                    preview.classList.remove('d-none');
+                    btnRetomar.classList.remove('d-none');
+                    video.classList.add('d-none');
+                    btnCapturar.classList.add('d-none');
+                    actualizarEstadoFoto(numero, true);
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        // Función para manejar la captura de fotos
+        function inicializarCaptura(numero) {
+            const btnCamara = document.getElementById(`btn-camara-${numero}`);
+            const btnCapturar = document.getElementById(`btn-capturar-${numero}`);
+            const inputFoto = document.getElementById(`foto-${numero}`);
+            const btnRetomar = document.getElementById(`btn-retomar-${numero}`);
+            const preview = document.getElementById(`preview-${numero}`);
+            const video = document.getElementById(`video-${numero}`);
+
+            // Manejar apertura de cámara
+            btnCamara.addEventListener('click', async () => {
+                try {
+                    // Detener cualquier stream anterior
+                    detenerCamara(numero);
+
+                    const stream = await navigator.mediaDevices.getUserMedia({ 
+                        video: { facingMode: 'environment' } 
+                    });
+                    video.srcObject = stream;
+                    streamsCamara[`foto${numero}`] = stream;
+                    
+                    // Mostrar vista previa y botón de captura
+                    video.classList.remove('d-none');
+                    btnCapturar.classList.remove('d-none');
+                    preview.classList.add('d-none');
+                    
+                    // Iniciar reproducción del video
+                    await video.play();
+                } catch (error) {
+                    console.error('Error al acceder a la cámara:', error);
+                    alert('Error al acceder a la cámara. Por favor, intente subir una foto.');
+                }
+            });
+
+            // Manejar captura de foto
+            btnCapturar.addEventListener('click', () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                canvas.getContext('2d').drawImage(video, 0, 0);
+
+                canvas.toBlob((blob) => {
+                    const file = new File([blob], `foto${numero}.jpg`, { type: 'image/jpeg' });
+                    procesarFoto(numero, file);
+                    
+                    // Detener la cámara después de capturar
+                    detenerCamara(numero);
+                    video.classList.add('d-none');
+                    btnCapturar.classList.add('d-none');
+                }, 'image/jpeg');
+            });
+
+            // Manejar subida de archivo
+            inputFoto.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    procesarFoto(numero, file);
+                }
+            });
+
+            // Manejar retomar foto
+            btnRetomar.addEventListener('click', () => {
+                inputFoto.value = '';
+                preview.classList.add('d-none');
+                btnRetomar.classList.add('d-none');
+                actualizarEstadoFoto(numero, false);
+                detenerCamara(numero);
+                video.classList.add('d-none');
+                btnCapturar.classList.add('d-none');
+            });
+        }
+
+        // Función para guardar la clasificación
+        async function guardarClasificacion() {
+            try {
+                // Mostrar overlay de carga
+                document.getElementById('loadingOverlay').style.display = 'flex';
+                
+                // 1. Guardar las fotos
+                const formData = new FormData();
+                const codigoGuia = document.getElementById('codigo').value;
+                
+                // Añadir el código de guía al FormData
+                formData.append('codigo_guia', codigoGuia);
+                formData.append('codigo_proveedor', document.getElementById('codigo').value);
+                formData.append('nombre_proveedor', document.getElementById('nombreProveedor').value);
+                formData.append('fecha_clasificacion', new Date().toLocaleDateString('es-ES'));
+                
+                // Agregar fotos con nombres específicos
+                for (let i = 1; i <= 3; i++) {
+                    const input = document.getElementById(`foto-${i}`);
+                    if (input.files[0]) {
+                        const extension = input.files[0].name.split('.').pop();
+                        formData.append(
+                            `foto${i}`, 
+                            input.files[0], 
+                            `foto${i}_${codigoGuia}.${extension}`
+                        );
+                    }
+                }
+
+                // 2. Preparar datos de clasificación manual
+                const cantidadRacimos = parseInt(document.getElementById('cantidad_racimos_hidden').value) || 0;
+                const clasificacionManual = {
+                    verdes: parseFloat(document.getElementById('verdes').value) || 0,
+                    sobremaduros: parseFloat(document.getElementById('sobremaduros').value) || 0,
+                    danio_corona: parseFloat(document.getElementById('danio-corona').value) || 0,
+                    pendunculo_largo: parseFloat(document.getElementById('pendunculo-largo').value) || 0,
+                    podridos: parseFloat(document.getElementById('podridos').value) || 0
+                };
+
+                // Determinar el divisor para el cálculo de porcentajes según la cantidad de racimos
+                const divisorPorcentaje = cantidadRacimos >= 1000 ? 100 : 28;
+                
+                // Añadir la clasificación manual al FormData
+                formData.append('clasificacion_0_nombre', 'verdes');
+                formData.append('clasificacion_0_porcentaje', ((clasificacionManual.verdes / divisorPorcentaje) * 100).toFixed(2));
+                formData.append('clasificacion_0_peso', clasificacionManual.verdes);
+                
+                formData.append('clasificacion_1_nombre', 'sobremaduros');
+                formData.append('clasificacion_1_porcentaje', ((clasificacionManual.sobremaduros / divisorPorcentaje) * 100).toFixed(2));
+                formData.append('clasificacion_1_peso', clasificacionManual.sobremaduros);
+                
+                formData.append('clasificacion_2_nombre', 'danio_corona');
+                formData.append('clasificacion_2_porcentaje', ((clasificacionManual.danio_corona / divisorPorcentaje) * 100).toFixed(2));
+                formData.append('clasificacion_2_peso', clasificacionManual.danio_corona);
+                
+                formData.append('clasificacion_3_nombre', 'pendunculo_largo');
+                formData.append('clasificacion_3_porcentaje', ((clasificacionManual.pendunculo_largo / divisorPorcentaje) * 100).toFixed(2));
+                formData.append('clasificacion_3_peso', clasificacionManual.pendunculo_largo);
+                
+                formData.append('clasificacion_4_nombre', 'podridos');
+                formData.append('clasificacion_4_porcentaje', ((clasificacionManual.podridos / divisorPorcentaje) * 100).toFixed(2));
+                formData.append('clasificacion_4_peso', clasificacionManual.podridos);
+
+                // 3. Preparar datos para el webhook
+                const now = new Date();
+                const webhookData = {
+                    url_guia: window.location.href,
+                    codigo_proveedor: codigoGuia,
+                    fecha_clasificacion: now.toLocaleDateString('es-ES'),
+                    hora_clasificacion: now.toLocaleTimeString('es-ES'),
+                    tipo_clasificacion: "manual",
+                    cantidad_racimos_manual: cantidadRacimos,
+                    codigo_guia: codigoGuia,
+                    nombre_proveedor: document.getElementById('nombreProveedor').value,
+                    clasificacion: clasificacionManual
+                };
+
+                formData.append('webhookData', JSON.stringify(webhookData));
+
+                // 4. Enviar datos al servidor
+                const response = await fetch('/registrar_clasificacion', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+                console.log('Respuesta del servidor:', data);
+                
+                if (data.success) {
+                    // 5. Enviar datos al webhook si es necesario
+                    try {
+                        const webhookResponse = await fetch('https://hook.us2.make.com/ydtogfd3mln2ixbcuam0xrd2m9odfgna', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(webhookData)
+                        });
+                    } catch (webhookError) {
+                        console.error('Error en webhook:', webhookError);
+                        // Continuamos incluso si hay error en el webhook
+                    }
+
+                    // 6. Redirigir a la página especificada
+                    alert('Clasificación registrada correctamente');
+                    console.log('Redirigiendo a:', data.redirect_url || '/home');
+                    
+                    // Pequeña pausa antes de redireccionar
+                    setTimeout(() => {
+                        window.location.href = data.redirect_url || '/home';
+                    }, 500);
+                } else {
+                    throw new Error(data.message || 'Error al guardar la clasificación');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error al guardar la clasificación: ' + error.message);
+            } finally {
+                // Ocultar overlay de carga
+                document.getElementById('loadingOverlay').style.display = 'none';
+            }
+        }
+
+        // Inicialización
+        document.addEventListener('DOMContentLoaded', () => {
+            // Inicializar captura para cada foto
+            for (let i = 1; i <= 3; i++) {
+                inicializarCaptura(i);
+            }
+
+            // Manejar guardado
+            document.getElementById('btn-guardar').addEventListener('click', guardarClasificacion);
+        });
+    </script>
+
+    <script src="{{ url_for('static', filename='js/clasificacion.js') }}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

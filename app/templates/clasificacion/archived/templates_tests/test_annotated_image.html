@@ -1,0 +1,165 @@
+{% extends "layouts/base.html" %}
+
+{% block head_extra %}
+<style>
+    .img-container {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 10px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .img-container img {
+        width: 100%;
+        border-radius: 4px;
+    }
+    .detection-item {
+        margin-bottom: 8px;
+        padding: 10px;
+        border-radius: 4px;
+        border-left: 4px solid #007bff;
+    }
+    .detection-item.verde { border-left-color: #28a745; }
+    .detection-item.maduro { border-left-color: #fd7e14; }
+    .detection-item.sobremaduro { border-left-color: #dc3545; }
+    .detection-item.danio_corona { border-left-color: #6f42c1; }
+    .detection-item.pendunculo_largo { border-left-color: #17a2b8; }
+    .detection-item.podrido { border-left-color: #343a40; }
+    
+    .category-circle {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        margin-right: 8px;
+    }
+    
+    .bg-verde { background-color: #28a745; }
+    .bg-maduro { background-color: #fd7e14; }
+    .bg-sobremaduro { background-color: #dc3545; }
+    .bg-danio_corona { background-color: #6f42c1; }
+    .bg-pendunculo_largo { background-color: #17a2b8; }
+    .bg-podrido { background-color: #343a40; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-3">Prueba de Imagen Anotada</h1>
+    <h5 class="text-muted mb-4">Guía: {{ guia }}</h5>
+    
+    <div class="alert alert-info">
+        <i class="fas fa-info-circle me-2"></i>
+        Esta es una imagen de prueba con detecciones generadas aleatoriamente para verificar el correcto funcionamiento del sistema de anotación.
+    </div>
+    
+    <div class="row">
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="card-title mb-0">Imagen Original</h5>
+                </div>
+                <div class="card-body">
+                    <div class="img-container">
+                        <img src="{{ original_image }}" alt="Imagen Original" class="img-fluid">
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="card-title mb-0">Imagen Anotada</h5>
+                </div>
+                <div class="card-body">
+                    <div class="img-container">
+                        <img src="{{ annotated_image }}" alt="Imagen Anotada" class="img-fluid">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card mb-4">
+        <div class="card-header bg-info text-white">
+            <h5 class="card-title mb-0">Detecciones Simuladas ({{ num_detections }})</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <h6 class="mb-3">Detalle de Detecciones</h6>
+                    <div style="max-height: 400px; overflow-y: auto;">
+                        {% for detection in detections %}
+                        <div class="detection-item {{ detection.class }} bg-light">
+                            <h6>
+                                <span class="category-circle bg-{{ detection.class }}"></span>
+                                {{ detection.class|title|replace('_', ' ') }}
+                            </h6>
+                            <div class="row">
+                                <div class="col-6">
+                                    <strong>Confianza:</strong> {{ (detection.confidence * 100)|round(1) }}%
+                                </div>
+                                <div class="col-6">
+                                    <strong>Posición:</strong> ({{ (detection.x * 100)|round }}%, {{ (detection.y * 100)|round }}%)
+                                </div>
+                            </div>
+                            <div>
+                                <strong>Dimensiones:</strong> {{ (detection.width * 100)|round }}% x {{ (detection.height * 100)|round }}%
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <h6 class="mb-3">Estadísticas por Categoría</h6>
+                    {% set categorias = {'verde': 0, 'maduro': 0, 'sobremaduro': 0, 'danio_corona': 0, 'pendunculo_largo': 0, 'podrido': 0} %}
+                    
+                    {% for detection in detections %}
+                        {% set _ = categorias.update({detection.class: categorias[detection.class] + 1}) %}
+                    {% endfor %}
+                    
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Categoría</th>
+                                <th>Cantidad</th>
+                                <th>Porcentaje</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for cat, count in categorias.items() %}
+                                {% if count > 0 %}
+                                <tr>
+                                    <td>
+                                        <span class="category-circle bg-{{ cat }}"></span>
+                                        {{ cat|title|replace('_', ' ') }}
+                                    </td>
+                                    <td>{{ count }}</td>
+                                    <td>{{ ((count / num_detections) * 100)|round(1) }}%</td>
+                                </tr>
+                                {% endif %}
+                            {% endfor %}
+                            <tr class="table-light">
+                                <td><strong>Total</strong></td>
+                                <td><strong>{{ num_detections }}</strong></td>
+                                <td><strong>100%</strong></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="d-flex gap-2 mb-4">
+        <a href="{{ url_for('clasificacion.test_annotated_image', url_guia=guia) }}" class="btn btn-primary">
+            <i class="fas fa-sync-alt me-2"></i>Generar Nueva Imagen
+        </a>
+        <a href="{{ url_for('clasificacion.ver_detalles_clasificacion', url_guia=guia) }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left me-2"></i>Volver a Detalles
+        </a>
+    </div>
+</div>
+{% endblock %} 

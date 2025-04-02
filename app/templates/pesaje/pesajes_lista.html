@@ -1,0 +1,102 @@
+{% extends "layouts/list_layout.html" %}
+{% import "components/tables/tabla_datos.html" as tablas %}
+
+{% block lista_titulo %}Lista de Pesajes{% endblock %}
+{% block lista_descripcion %}Filtre y busque registros de pesajes{% endblock %}
+
+{% block filtros %}
+{% set filtros_pesaje = [
+    {
+        'id': 'fecha_desde',
+        'etiqueta': 'Fecha Desde',
+        'tipo': 'date',
+        'valor': filtros.fecha_desde
+    },
+    {
+        'id': 'fecha_hasta',
+        'etiqueta': 'Fecha Hasta',
+        'tipo': 'date',
+        'valor': filtros.fecha_hasta
+    },
+    {
+        'id': 'codigo_proveedor',
+        'etiqueta': 'Código Proveedor',
+        'tipo': 'text',
+        'placeholder': 'Ej: 0103241',
+        'valor': filtros.codigo_proveedor
+    },
+    {
+        'id': 'nombre_proveedor',
+        'etiqueta': 'Nombre Proveedor',
+        'tipo': 'text',
+        'placeholder': 'Nombre del proveedor',
+        'valor': filtros.nombre_proveedor
+    },
+    {
+        'id': 'tipo_pesaje',
+        'etiqueta': 'Tipo de Pesaje',
+        'tipo': 'select',
+        'valor': filtros.tipo_pesaje,
+        'opciones': [
+            {'valor': 'directo', 'texto': 'Pesaje Soporte Foto'},
+            {'valor': 'virtual', 'texto': 'Pesaje Manual'},
+            {'valor': 'bascula', 'texto': 'Pesaje Directo'}
+        ]
+    }
+] %}
+
+{{ tablas.filtros_form(
+    filtros_pesaje, 
+    url_for('pesaje.lista_pesajes'), 
+    url_for('pesaje.lista_pesajes')
+) }}
+{% endblock %}
+
+{% block lista %}
+{% set columnas_pesaje = [
+    {'titulo': 'Guía', 'campo': 'codigo_guia', 'class': 'col-guia'},
+    {
+        'titulo': 'Proveedor', 
+        'class': 'col-proveedor',
+        'render': lambda item: '<strong>' + item.codigo_proveedor + '</strong><br><span class="text-muted">' + 
+                               (item.nombre_proveedor if item.nombre_proveedor and item.nombre_proveedor != 'None' and item.nombre_proveedor != 'No disponible' else "No disponible") + '</span>'
+    },
+    {'titulo': 'Fecha Entrada', 'campo': 'fecha_registro', 'class': 'col-fecha'},
+    {'titulo': 'Hora Registro', 'campo': 'hora_registro', 'class': 'col-hora'},
+    {
+        'titulo': 'Transportista',
+        'class': 'col-transportista',
+        'render': lambda item: item.transportador if item.transportador and item.transportador != 'None' and item.transportador != 'No disponible' else '<span class="text-muted">No disponible</span>'
+    },
+    {'titulo': 'Fecha Pesaje', 'campo': 'fecha_pesaje', 'class': 'col-fecha'},
+    {'titulo': 'Hora Pesaje', 'campo': 'hora_pesaje', 'class': 'col-hora'},
+    {'titulo': 'Se Cargó', 'campo': 'cargo'},
+    {'titulo': 'Se Acarreó', 'campo': 'acarreo'},
+    {
+        'titulo': 'Tipo Pesaje',
+        'render': lambda item: '<span class="badge bg-' + ('success' if item.tipo_pesaje == 'directo' else ('primary' if item.tipo_pesaje == 'bascula' else 'info')) + '">' +
+                               ('Soporte Foto' if item.tipo_pesaje == 'directo' else ('Manual' if item.tipo_pesaje == 'virtual' else ('Directo' if item.tipo_pesaje == 'bascula' else item.tipo_pesaje|title))) + '</span>'
+    },
+    {'titulo': 'Peso Bruto (kg)', 'render': lambda item: '<strong>' + item.peso_bruto|string + '</strong>', 'class': 'col-peso'},
+    {
+        'titulo': 'Guía Transporte SAP',
+        'render': lambda item: item.codigo_guia_transporte_sap if item.codigo_guia_transporte_sap and item.codigo_guia_transporte_sap != 'None' and item.codigo_guia_transporte_sap != 'No disponible' else 'No disponible'
+    },
+    {
+        'titulo': 'Acciones',
+        'render': lambda item: tablas.acciones_botones([
+            {'url': url_for('pesaje.ver_resultados_pesaje', codigo_guia=item.codigo_guia), 'texto': 'Ver', 'tipo': 'primary', 'icono': 'eye'},
+            {'url': url_for('pesaje.generar_pdf_pesaje', codigo_guia=item.codigo_guia), 'texto': 'PDF', 'tipo': 'success', 'icono': 'file-pdf'},
+            {'url': url_for('misc.ver_guia_centralizada', codigo_guia=item.codigo_guia), 'texto': 'Guía', 'tipo': 'info', 'icono': 'clipboard-list'},
+            {'url': url_for('clasificacion.clasificacion', codigo=item.codigo_guia), 'texto': 'Clasificar', 'tipo': 'info', 'icono': 'list-check'} if item.estado_actual == 'pesaje_completado' else None
+        ] | reject('none'))
+    }
+] %}
+
+{{ tablas.tabla_filtrable(
+    'Resultados',
+    columnas_pesaje,
+    pesajes,
+    url_for('pesaje.lista_pesajes')
+) }}
+{% endblock %} 

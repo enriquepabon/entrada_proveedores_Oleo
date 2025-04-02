@@ -1,0 +1,324 @@
+<!-- templates/resultados_pesaje.html -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resultados del Pesaje - {{ codigo_guia }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .main-container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+        .header-section {
+            background: white;
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        .results-section {
+            background: white;
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        .actions-section {
+            background: white;
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        .action-button {
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+        }
+        .action-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .back-link {
+            margin-bottom: 1.5rem;
+            display: inline-block;
+        }
+        .code-badge {
+            font-size: 1.1rem;
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
+        }
+        .info-card {
+            border-radius: 10px;
+            margin-bottom: 1.5rem;
+            border: none;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .info-label {
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+            color: #6c757d;
+        }
+        .info-value {
+            font-size: 1.1rem;
+        }
+        .weight-value {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #198754;
+        }
+        .weight-image {
+            max-width: 100%;
+            border-radius: 10px;
+            margin: 1rem 0;
+        }
+        /* Para la impresión */
+        @media print {
+            body {
+                background-color: white;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .main-container {
+                margin: 0;
+                padding: 0;
+                width: 100%;
+            }
+            .header-section, .results-section, .actions-section, .info-card {
+                box-shadow: none;
+                border: 1px solid #dee2e6;
+                margin-bottom: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <div class="header-section">
+            <a href="{{ url_for('misc.upload_file') }}" class="back-link no-print">
+                <i class="fas fa-arrow-left me-2"></i>Volver al inicio
+            </a>
+            <h2 class="mb-0">Resultados del Pesaje</h2>
+            <p class="text-muted">Guía: <span class="badge bg-primary code-badge">{{ codigo_guia }}</span></p>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="results-section">
+                    <h4 class="mb-4">Datos del Proveedor</h4>
+                    <div class="card info-card">
+                        <div class="card-body">
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <div class="info-label">Código</div>
+                                    <div class="info-value">{{ codigo_proveedor if codigo_proveedor and codigo_proveedor != 'None' and codigo_proveedor != 'No disponible' else 'N/A' }}</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="info-label">Nombre</div>
+                                    <div class="info-value">{{ nombre_proveedor if nombre_proveedor and nombre_proveedor != 'None' and nombre_proveedor != 'No disponible' else 'N/A' }}</div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="info-label">Transportador</div>
+                                    <div class="info-value">{{ transportador if transportador and transportador != 'None' and transportador != 'No disponible' else 'No disponible' }}</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="info-label">Placa</div>
+                                    <div class="info-value">{{ placa if placa and placa != 'None' and placa != 'No disponible' else 'No disponible' }}</div>
+                                </div>
+                            </div>
+                            <div class="row mt-3">
+                                <div class="col-md-6">
+                                    <div class="info-label">Código Guía Transporte SAP</div>
+                                    <div class="info-value">{{ codigo_guia_transporte_sap if codigo_guia_transporte_sap else 'N/A' }}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h4 class="mb-4 mt-4">Información del Pesaje</h4>
+                    <div class="card info-card">
+                        <div class="card-body">
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <div class="info-label">Peso Bruto</div>
+                                    <div class="weight-value">{{ peso_bruto if peso_bruto and peso_bruto != 'N/A' and peso_bruto != 'No disponible' else '0' }} kg</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="info-label">Tipo de Pesaje</div>
+                                    <div class="info-value">
+                                        <span class="badge bg-{{ 'success' if tipo_pesaje == 'directo' else ('primary' if tipo_pesaje == 'bascula' else 'info') }}">
+                                            {% if tipo_pesaje == 'directo' %}
+                                                Soporte Foto
+                                            {% elif tipo_pesaje == 'virtual' %}
+                                                Manual
+                                            {% elif tipo_pesaje == 'bascula' %}
+                                                Directo
+                                            {% else %}
+                                                {{ tipo_pesaje|title }}
+                                            {% endif %}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="info-label">Fecha</div>
+                                    <div class="info-value">{{ fecha_pesaje if fecha_pesaje and fecha_pesaje != 'N/A' and fecha_pesaje != 'No disponible' else 'No registrada' }}</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="info-label">Hora</div>
+                                    <div class="info-value">{{ hora_pesaje if hora_pesaje and hora_pesaje != 'N/A' and hora_pesaje != 'No disponible' else 'No registrada' }}</div>
+                                </div>
+                            </div>
+                            <div class="row mt-3">
+                                <div class="col-md-6">
+                                    <div class="info-label">Racimos</div>
+                                    <div class="info-value">{{ racimos if racimos and racimos != 'No disponible' else 'No registrados' }}</div>
+                                </div>
+                            </div>
+                            
+                            <!-- Verificación de Placa -->
+                            {% if verificacion_placa %}
+                            <div class="row mt-3">
+                                <div class="col-12">
+                                    <hr>
+                                    <h6 class="mb-2">Verificación de Placa</h6>
+                                    <div class="d-flex align-items-center">
+                                        <div class="me-3"><strong>Placa registrada:</strong> {{ placa }}</div>
+                                        <div class="me-3"><strong>Placa detectada:</strong> {{ placa_detectada }}</div>
+                                        {% if placa_coincide %}
+                                            <span class="badge bg-success">Verificada <i class="fas fa-check-circle ms-1"></i></span>
+                                        {% else %}
+                                            <span class="badge bg-danger">No coincide <i class="fas fa-exclamation-circle ms-1"></i></span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    {% if imagen_pesaje %}
+                    <h4 class="mb-4 mt-4">Imagen del Pesaje</h4>
+                    <div class="text-center">
+                        <img src="{{ imagen_pesaje }}" alt="Imagen del pesaje" class="weight-image">
+                    </div>
+                    {% endif %}
+
+                    <!-- Información de Peso -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5>Información de Peso</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <p><strong>Peso Bruto:</strong> {{ peso_bruto if peso_bruto and peso_bruto != 'N/A' and peso_bruto != 'No disponible' else '0' }} kg</p>
+                                </div>
+                                <div class="col-md-6">
+                                    <p><strong>Tipo de Pesaje:</strong> 
+                                        {% if tipo_pesaje == 'virtual' %}
+                                            <span class="badge rounded-pill text-bg-primary">Pesaje Manual</span>
+                                        {% elif tipo_pesaje == 'foto' %}
+                                            <span class="badge rounded-pill text-bg-success">Pesaje Soporte Foto</span>
+                                        {% elif tipo_pesaje == 'directo' %}
+                                            <span class="badge rounded-pill text-bg-info">Pesaje Directo</span>
+                                        {% else %}
+                                            <span class="badge rounded-pill text-bg-secondary">{{ tipo_pesaje }}</span>
+                                        {% endif %}
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <p><strong>Fecha de Pesaje:</strong> {{ fecha_pesaje if fecha_pesaje and fecha_pesaje != 'N/A' and fecha_pesaje != 'No disponible' else 'No registrada' }}</p>
+                                </div>
+                                <div class="col-md-6">
+                                    <p><strong>Hora de Pesaje:</strong> {{ hora_pesaje if hora_pesaje and hora_pesaje != 'N/A' and hora_pesaje != 'No disponible' else 'No registrada' }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="actions-section no-print">
+                    <h4 class="mb-4">Acciones Disponibles</h4>
+                    
+                    <!-- Botón para imprimir la página -->
+                    <a href="#" onclick="window.print();" class="btn btn-success w-100 action-button d-flex align-items-center justify-content-center mb-4">
+                        <i class="fas fa-file-pdf me-2"></i>
+                        <div>
+                            <div>Generar PDF</div>
+                            <small>Crear un PDF con los detalles del pesaje</small>
+                        </div>
+                    </a>
+                    
+                    <a href="{{ url_for('entrada.home') }}" class="btn btn-secondary w-100 action-button d-flex align-items-center justify-content-center mb-4">
+                        <i class="fas fa-home me-2"></i>
+                        <div>
+                            <div>Página Principal</div>
+                            <small>Volver al inicio de la aplicación</small>
+                        </div>
+                    </a>
+                    
+                    <a href="{{ url_for('pesaje.lista_pesajes') }}" class="btn btn-primary w-100 action-button d-flex align-items-center justify-content-center mb-4">
+                        <i class="fas fa-list me-2"></i>
+                        <div>
+                            <div>Ver Lista de Pesajes</div>
+                            <small>Explorar todos los pesajes registrados</small>
+                        </div>
+                    </a>
+                    
+                    <a href="{{ url_for('pesaje.pesaje', codigo=codigo_guia) }}" class="btn btn-info w-100 action-button d-flex align-items-center justify-content-center">
+                        <i class="fas fa-weight-hanging me-2"></i>
+                        <div>
+                            <div>Escanear Nuevo QR</div>
+                            <small>Registrar un nuevo pesaje</small>
+                        </div>
+                    </a>
+                    
+                    {% if not tiene_clasificacion %}
+                    <a href="{{ url_for('clasificacion.clasificacion', codigo=codigo_guia) }}" class="btn btn-warning w-100 action-button d-flex align-items-center justify-content-center mt-4">
+                        <i class="fas fa-tags me-2"></i>
+                        <div>
+                            <div>Continuar a Clasificación</div>
+                            <small>Realizar la clasificación de racimos</small>
+                        </div>
+                    </a>
+                    {% endif %}
+                </div>
+                
+                <!-- Adicional: Fotos del pesaje si existen -->
+                {% if fotos_pesaje and fotos_pesaje|length > 0 %}
+                <div class="results-section">
+                    <h4 class="mb-4">Fotos Adicionales del Pesaje</h4>
+                    <div class="row">
+                        {% for foto in fotos_pesaje %}
+                        <div class="col-md-6 mb-3">
+                            <img src="{{ url_for('static', filename=foto.replace('static/', '')) }}" 
+                                 alt="Foto de pesaje" class="img-fluid rounded">
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> 

@@ -1,0 +1,503 @@
+{% extends "base.html" %}
+
+{% block title %}Proceso Completado - {{ datos.codigo_guia }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .main-container {
+        max-width: 1200px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+    }
+    .header-section {
+        background: white;
+        border-radius: 15px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+    .results-section {
+        background: white;
+        border-radius: 15px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+    .code-badge {
+        font-size: 1.1em;
+        padding: 0.3em 0.6em;
+    }
+    .completion-message {
+        background-color: #d4edda;
+        color: #155724;
+        border-left: 5px solid #28a745;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+    }
+    .timeline {
+        position: relative;
+        margin: 20px 0;
+        padding-left: 30px;
+    }
+    .timeline::before {
+        content: '';
+        position: absolute;
+        left: 15px;
+        top: 0;
+        height: 100%;
+        width: 2px;
+        background-color: #0d6efd;
+    }
+    .timeline-item {
+        position: relative;
+        margin-bottom: 25px;
+        padding-bottom: 10px;
+    }
+    .timeline-item.completed .status-icon {
+        color: #28a745;
+    }
+    .timeline-item.pending .status-icon {
+        color: #6c757d;
+    }
+    .status-icon {
+        position: absolute;
+        left: -30px;
+        font-size: 20px;
+        background-color: white;
+        border-radius: 50%;
+    }
+    .timeline-content {
+        background-color: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        border-left: 3px solid #28a745;
+    }
+    .timeline-item.pending .timeline-content {
+        border-left-color: #6c757d;
+    }
+    .signature-container {
+        margin-top: 20px;
+        padding: 15px;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        background-color: #f8f9fa;
+        text-align: center;
+    }
+    .signature-image {
+        max-width: 300px;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        padding: 10px;
+        background-color: white;
+    }
+    .weight-summary {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 20px;
+    }
+    .weight-summary th {
+        background-color: #f8f9fa;
+        padding: 10px;
+        border: 1px solid #dee2e6;
+        text-align: left;
+    }
+    .weight-summary td {
+        padding: 10px;
+        border: 1px solid #dee2e6;
+    }
+    .action-button {
+        display: flex;
+        align-items: center;
+        margin-bottom: 15px;
+        padding: 15px;
+        text-align: left;
+    }
+    .action-icon {
+        font-size: 24px;
+        margin-right: 15px;
+        width: 40px;
+        text-align: center;
+    }
+    .action-text {
+        flex-grow: 1;
+    }
+    .action-title {
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+    .action-description {
+        font-size: 0.9em;
+        color: #6c757d;
+    }
+    .photo-container {
+        margin-bottom: 20px;
+    }
+    .photo-container img {
+        max-width: 100%;
+        border-radius: 8px;
+        border: 1px solid #dee2e6;
+    }
+    .photo-label {
+        margin-top: 10px;
+        font-size: 0.9em;
+        color: #6c757d;
+    }
+    
+    /* Estilos para PDF */
+    .pdf-mode {
+        font-size: 12px;
+    }
+    .pdf-mode .main-container {
+        margin: 0;
+        padding: 0;
+        max-width: 100%;
+    }
+    .pdf-mode .header-section, 
+    .pdf-mode .results-section {
+        box-shadow: none;
+        border: 1px solid #dee2e6;
+        margin-bottom: 15px;
+        padding: 15px;
+    }
+    .pdf-mode .action-buttons-container {
+        display: none;
+    }
+    .pdf-mode .print-button {
+        display: none;
+    }
+    .pdf-mode .timeline::before {
+        left: 10px;
+    }
+    .pdf-mode .timeline-item {
+        margin-bottom: 15px;
+    }
+    .pdf-mode .status-icon {
+        left: -20px;
+        font-size: 16px;
+    }
+    .pdf-mode .timeline-content {
+        padding: 10px;
+    }
+    
+    /* Estilos específicos para impresión */
+    @media print {
+        body {
+            font-size: 12pt;
+            background: white;
+        }
+        .navbar, 
+        .footer, 
+        .no-print,
+        .action-buttons-container {
+            display: none !important;
+        }
+        .main-container {
+            margin: 0;
+            padding: 0;
+            max-width: 100%;
+        }
+        .header-section, 
+        .results-section {
+            box-shadow: none;
+            border: 1px solid #dee2e6;
+            margin-bottom: 15px;
+            padding: 15px;
+            page-break-inside: avoid;
+        }
+        .timeline::before {
+            left: 10px;
+        }
+        .timeline-item {
+            margin-bottom: 15px;
+            page-break-inside: avoid;
+        }
+        .status-icon {
+            left: -20px;
+            font-size: 16px;
+        }
+        .timeline-content {
+            padding: 10px;
+        }
+        .photo-container {
+            page-break-inside: avoid;
+        }
+        .weight-summary {
+            page-break-inside: avoid;
+        }
+        .document-info {
+            display: block !important;
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+        }
+        a[href]:after {
+            content: none !important;
+        }
+    }
+    
+    /* Ocultar información del documento por defecto */
+    .document-info {
+        display: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="main-container">
+    <div class="header-section">
+        <div class="row">
+            <div class="col-md-8">
+                <h2>Proceso Completado</h2>
+                <div class="completion-message">
+                    <i class="fas fa-check-circle me-2"></i> El proceso para la guía <strong>{{ datos.codigo_guia }}</strong> ha sido completado exitosamente.
+                </div>
+                <h4>Información del Proveedor</h4>
+                <div class="row mb-2">
+                    <div class="col-md-4 fw-bold">Código:</div>
+                    <div class="col-md-8">{{ datos.codigo_proveedor }}</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 fw-bold">Nombre:</div>
+                    <div class="col-md-8">{{ datos.nombre_proveedor }}</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 fw-bold">Guía:</div>
+                    <div class="col-md-8"><span class="badge bg-primary code-badge">{{ datos.codigo_guia }}</span></div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 fw-bold">Placa:</div>
+                    <div class="col-md-8">{{ datos.placa }}</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 fw-bold">Transportador:</div>
+                    <div class="col-md-8">{{ datos.transportador }}</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 fw-bold">Racimos:</div>
+                    <div class="col-md-8">{{ datos.cantidad_racimos }}</div>
+                </div>
+            </div>
+            <div class="col-md-4 text-center">
+                {% if datos.qr_filename %}
+                <img src="{{ url_for('static', filename='qr/' + datos.qr_filename) }}" alt="QR Code" class="img-fluid mb-2" style="max-width: 150px;">
+                <p class="small text-muted">Escanea para ver detalles</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-6">
+            <div class="results-section">
+                <h4 class="mb-4">Resumen del Proceso</h4>
+                
+                <div class="timeline">
+                    <div class="timeline-item completed">
+                        <div class="status-icon">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <div class="timeline-content">
+                            <h5>Registro de Entrada</h5>
+                            <p>Fecha: {{ datos.fecha_registro }}<br>
+                            Hora: {{ datos.hora_registro }}</p>
+                        </div>
+                    </div>
+                    
+                    <div class="timeline-item completed">
+                        <div class="status-icon">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <div class="timeline-content">
+                            <h5>Pesaje Bruto</h5>
+                            <p>Fecha: {{ datos.fecha_pesaje }}<br>
+                            Hora: {{ datos.hora_pesaje }}<br>
+                            Peso: <strong>{{ datos.peso_bruto }} kg</strong></p>
+                        </div>
+                    </div>
+                    
+                    {% if datos.peso_neto %}
+                    <div class="timeline-item completed">
+                        <div class="status-icon">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <div class="timeline-content">
+                            <h5>Pesaje Neto (Tara)</h5>
+                            <p>Fecha: {{ datos.fecha_pesaje_neto }}<br>
+                            Hora: {{ datos.hora_pesaje_neto }}<br>
+                            Peso Neto: <strong>{{ datos.peso_neto }} kg</strong><br>
+                            Peso Producto: <strong>{{ datos.peso_producto }} kg</strong></p>
+                            
+                            <table class="weight-summary">
+                                <thead>
+                                    <tr>
+                                        <th>Tipo de Peso</th>
+                                        <th>Valor (kg)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>Peso Bruto</td>
+                                        <td>{{ datos.peso_bruto }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Peso Neto (Tara)</td>
+                                        <td>{{ datos.peso_neto }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Peso Producto</td>
+                                        <td>{{ datos.peso_producto }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="timeline-item completed">
+                        <div class="status-icon">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <div class="timeline-content">
+                            <h5>Registro de Salida</h5>
+                            <p>Fecha: {{ datos.fecha_salida }}<br>
+                            Hora: {{ datos.hora_salida }}</p>
+                            
+                            {% if datos.comentarios_salida %}
+                            <div class="mt-3">
+                                <h6>Comentarios:</h6>
+                                <p>{{ datos.comentarios_salida }}</p>
+                            </div>
+                            {% endif %}
+                            
+                            {% if datos.firma_salida %}
+                            <div class="signature-container">
+                                <h6>Firma de Conformidad:</h6>
+                                <img src="{{ url_for('static', filename='firmas/' + datos.firma_salida) }}" alt="Firma" class="signature-image">
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            {% if datos.imagen_peso or datos.imagen_peso_neto %}
+            <div class="results-section">
+                <h4 class="mb-4">Evidencia Fotográfica</h4>
+                
+                <div class="row">
+                    {% if datos.imagen_peso %}
+                    <div class="col-md-6">
+                        <div class="photo-container">
+                            <img src="{{ url_for('static', filename='images/' + datos.imagen_peso) }}" alt="Foto Pesaje Bruto" class="img-fluid">
+                            <div class="photo-label">Pesaje Bruto</div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if datos.imagen_peso_neto %}
+                    <div class="col-md-6">
+                        <div class="photo-container">
+                            <img src="{{ url_for('static', filename='images/' + datos.imagen_peso_neto) }}" alt="Foto Pesaje Neto" class="img-fluid">
+                            <div class="photo-label">Pesaje Neto</div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        
+        <div class="col-md-6">
+            <div class="results-section action-buttons-container">
+                <h4 class="mb-4">Acciones Disponibles</h4>
+                
+                <button onclick="window.print()" class="btn btn-primary w-100 action-button">
+                    <div class="action-icon">
+                        <i class="fas fa-print"></i>
+                    </div>
+                    <div class="action-text">
+                        <div class="action-title">Imprimir Resultados</div>
+                        <div class="action-description">Imprimir esta página como reporte completo</div>
+                    </div>
+                </button>
+                
+                <a href="{{ url_for('entrada.index') }}" class="btn btn-secondary w-100 action-button">
+                    <div class="action-icon">
+                        <i class="fas fa-home"></i>
+                    </div>
+                    <div class="action-text">
+                        <div class="action-title">Volver al Inicio</div>
+                        <div class="action-description">Regresar a la página principal</div>
+                    </div>
+                </a>
+                
+                <a href="{{ url_for('lista_guias') }}" class="btn btn-info w-100 action-button">
+                    <div class="action-icon">
+                        <i class="fas fa-list"></i>
+                    </div>
+                    <div class="action-text">
+                        <div class="action-title">Ver Lista de Guías</div>
+                        <div class="action-description">Ver todas las guías registradas</div>
+                    </div>
+                </a>
+            </div>
+            
+            <div class="results-section document-info">
+                <h4 class="mb-4">Información del Documento</h4>
+                <div class="row mb-2">
+                    <div class="col-md-4 fw-bold">Fecha de Generación:</div>
+                    <div class="col-md-8">{{ now().strftime('%d/%m/%Y') }}</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 fw-bold">Hora de Generación:</div>
+                    <div class="col-md-8">{{ now().strftime('%H:%M:%S') }}</div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-4 fw-bold">Documento:</div>
+                    <div class="col-md-8">Reporte Completo de Proceso</div>
+                </div>
+            </div>
+            
+            {% if datos.verificacion_placa %}
+            <div class="results-section">
+                <h4 class="mb-4">Verificación de Placa</h4>
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="photo-container">
+                            <img src="{{ url_for('static', filename='images/' + datos.verificacion_placa) }}" alt="Verificación de Placa" class="img-fluid">
+                            <div class="photo-label">Placa del Vehículo: {{ datos.placa }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="results-section d-print-none">
+        <div class="row">
+            <div class="col-12 text-center">
+                <p class="text-muted">© {{ now().year }} Extractora María La Baja - Todos los derechos reservados</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Función para obtener la fecha y hora actual
+    function now() {
+        return new Date();
+    }
+    
+    // Añadir la fecha y hora actual al pie de página al imprimir
+    window.onbeforeprint = function() {
+        document.querySelector('.document-info').style.display = 'block';
+    };
+    
+    window.onafterprint = function() {
+        document.querySelector('.document-info').style.display = 'none';
+    };
+</script>
+{% endblock %} 

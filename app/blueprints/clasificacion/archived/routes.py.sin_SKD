@@ -1,0 +1,1199 @@
+from flask import render_template, request, redirect, url_for, session, jsonify, flash, send_file, make_response, current_app
+import os
+import glob
+import logging
+import traceback
+import base64
+from datetime import datetime
+import json
+import time
+import threading
+import re
+import shutil
+import random
+from pathlib import Path
+import requests  # Asegurarse de que requests está importado
+from werkzeug.utils import secure_filename
+from . import bp
+from app.utils.common import CommonUtils as Utils
+import fnmatch
+from PIL import Image
+from urllib.parse import unquote
+
+# Configurar logging
+logger = logging.getLogger(__name__)
+
+# Se elimina la importación del SDK de Roboflow para usar únicamente la llamada directa vía HTTP.
+# Anteriormente se intentaba importar InferenceHTTPClient, ahora se elimina esa lógica.
+
+# Definir una clase para usar directamente la API de Roboflow vía HTTP
+class DirectRoboflowClient:
+    """Cliente que usa requests directamente para comunicarse con la API de Roboflow"""
+    
+    def __init__(self, api_url, api_key):
+        self.api_url = api_url
+        self.api_key = api_key
+        self.session = requests.Session()
+        logger.info(f"Inicializado cliente directo de Roboflow para {api_url}")
+        
+    def run_workflow(self, workspace_name, workflow_id, images, use_cache=True):
+        """
+        Ejecuta un workflow de Roboflow usando solicitudes HTTP directas.
+        Compatible con la interfaz esperada.
+        """
+        image_path = images.get("image")
+        logger.info(f"Ejecutando workflow {workflow_id} con imagen {image_path}")
+        
+        workflow_url = f"https://detect.roboflow.com/infer/workflows/{workspace_name}/{workflow_id}"
+        
+        # Si la imagen es un archivo local, primero vamos a verificar su tamaño
+        if os.path.exists(image_path):
+            try:
+                with Image.open(image_path) as img:
+                    width, height = img.size
+                    logger.info(f"Imagen original: {width}x{height} pixels")
+                    
+                    # Tamaño máximo permitido por Roboflow
+                    max_width = 1152
+                    max_height = 2048
+                    
+                    if width > max_width or height > max_height:
+                        logger.info("La imagen excede el tamaño máximo permitido por Roboflow. Redimensionando...")
+                        ratio = min(max_width/width, max_height/height)
+                        new_size = (int(width * ratio), int(height * ratio))
+                        
+                        resized_image_path = image_path.replace('.jpg', '_resized.jpg')
+                        if not resized_image_path.endswith('.jpg'):
+                            resized_image_path += '_resized.jpg'
+                        
+                        resized_img = img.resize(new_size, Image.LANCZOS)
+                        resized_img.save(resized_image_path, "JPEG", quality=95)
+                        logger.info(f"Imagen redimensionada guardada en: {resized_image_path}")
+                        
+                        image_path = resized_image_path
+            except Exception as e:
+                logger.error(f"Error al procesar la imagen: {str(e)}")
+                logger.error(traceback.format_exc())
+            
+            with open(image_path, "rb") as image_file:
+                image_data = base64.b64encode(image_file.read()).decode("utf-8")
+                
+            payload = {
+                "api_key": self.api_key,
+                "inputs": {
+                    "image": {"type": "base64", "value": image_data}
+                }
+            }
+        else:
+            payload = {
+                "api_key": self.api_key,
+                "inputs": {
+                    "image": {"type": "url", "value": image_path}
+                }
+            }
+        
+        headers = {
+            "Content-Type": "application/json"
+        }
+        
+        try:
+            logger.info(f"Enviando solicitud HTTP a {workflow_url}")
+            response = self.session.post(
+                workflow_url, 
+                headers=headers,
+                json=payload
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                logger.info("Respuesta recibida correctamente de Roboflow")
+                return result
+            else:
+                logger.error(f"Error en la respuesta de Roboflow: {response.status_code} - {response.text}")
+                if response.status_code == 401 or response.status_code == 403:
+                    logger.error("Error de autenticación - Verificar API key de Roboflow")
+                    return {"error": f"Error de autenticación ({response.status_code}): {response.text}", "auth_error": True}
+                elif response.status_code == 404:
+                    logger.error("Workflow o workspace no encontrado - Verificar IDs")
+                    return {"error": f"Workflow o workspace no encontrado: {response.text}", "not_found": True}
+                elif response.status_code >= 500:
+                    logger.error("Error del servidor de Roboflow - Puede ser un problema temporal")
+                    return {"error": f"Error del servidor de Roboflow ({response.status_code}): {response.text}", "server_error": True}
+                else:
+                    return {"error": f"Error {response.status_code}: {response.text}"}
+        except Exception as e:
+            logger.error(f"Error en solicitud a Roboflow: {str(e)}")
+            logger.error(traceback.format_exc())
+            return {"error": str(e)}
+
+# Dictionary to store processing status
+processing_status = {}
+
+# Configuración para Roboflow
+WORKSPACE_NAME = os.environ.get('ROBOFLOW_WORKSPACE', 'enrique-p-workspace')
+WORKFLOW_ID = os.environ.get('ROBOFLOW_WORKFLOW_ID', 'clasificacion-racimos-3')
+ROBOFLOW_API_KEY = os.environ.get('ROBOFLOW_API_KEY', 'huyFoCQs7090vfjDhfgK')
+
+def get_utils_instance():
+    return Utils(current_app)
+
+def es_archivo_imagen(filename):
+    return re.search(r'\.(jpg|jpeg|png|gif|bmp)$', filename.lower()) is not None
+
+def decode_image_data(data):
+    try:
+        if not data:
+            return None
+        if isinstance(data, dict):
+            if 'value' in data:
+                data = data['value']
+            elif 'image' in data:
+                data = data['image']
+            elif 'base64' in data:
+                data = data['base64']
+        if isinstance(data, str):
+            if data.startswith('data:image'):
+                data = data.split(',', 1)[1]
+            return base64.b64decode(data)
+        return None
+    except Exception as e:
+        logger.error(f"Error decodificando imagen: {str(e)}")
+        return None
+
+@bp.route('/<codigo>', methods=['GET'])
+def clasificacion(codigo):
+    try:
+        logger.info(f"Iniciando vista de clasificación para código: {codigo}")
+        peso_bruto_session = session.get('peso_bruto')
+        estado_actual_session = session.get('estado_actual')
+        logger.info(f"Datos de sesión: peso_bruto={peso_bruto_session}, estado_actual={estado_actual_session}")
+        
+        codigo_base = codigo.split('_')[0] if '_' in codigo else codigo
+        guias_folder = current_app.config.get('GUIAS_DIR', 'guias')
+        guias_files_json = glob.glob(os.path.join(guias_folder, f'guia_{codigo_base}_*.json'))
+        
+        if guias_files_json:
+            guias_files_json.sort(key=os.path.getmtime, reverse=True)
+            latest_guia_json = os.path.basename(guias_files_json[0])
+            codigo_guia_json = latest_guia_json[5:-5]
+            logger.info(f"Código guía más reciente encontrado en JSON: {codigo_guia_json}")
+            if codigo != codigo_guia_json:
+                logger.info(f"Redirigiendo a URL con código guía completo: {codigo_guia_json}")
+                return redirect(url_for('clasificacion.clasificacion', codigo=codigo_guia_json))
+        else:
+            codigo_guia_json = codigo
+            logger.info(f"No se encontraron archivos JSON para el código base, usando código original: {codigo_guia_json}")
+                
+        reclasificar = request.args.get('reclasificar', 'false').lower() == 'true'
+        logger.info(f"Parámetro reclasificar: {reclasificar}")
+        
+        clasificaciones_dir = os.path.join(current_app.static_folder, 'clasificaciones')
+        os.makedirs(clasificaciones_dir, exist_ok=True)
+        
+        codigo_guia_completo = codigo_guia_json
+        archivo_clasificacion_exacto = os.path.join(clasificaciones_dir, f"clasificacion_{codigo_guia_completo}.json")
+        
+        fotos_racimos_dir = os.path.join(current_app.static_folder, 'fotos_racimos_temp')
+        os.makedirs(fotos_racimos_dir, exist_ok=True)
+        archivo_clasificacion_alt = os.path.join(fotos_racimos_dir, f"clasificacion_{codigo_guia_completo}.json")
+        
+        clasificacion_existe = os.path.exists(archivo_clasificacion_exacto) or os.path.exists(archivo_clasificacion_alt)
+        logger.info(f"Verificación de clasificación: existe = {clasificacion_existe}, reclasificar = {reclasificar}")
+        
+        referrer = request.referrer or ""
+        desde_guia_centralizada = 'guia-centralizada' in referrer
+        
+        if clasificacion_existe and not reclasificar and not desde_guia_centralizada:
+            logger.info(f"Se encontró un archivo de clasificación para la guía actual: {codigo_guia_completo}")
+            flash("Esta guía ya ha sido clasificada anteriormente. Puedes ver los resultados o hacer clic en 'Reclasificar' para realizar una nueva clasificación.", "info")
+            return redirect(url_for('clasificacion.ver_resultados_clasificacion', url_guia=codigo_guia_completo))
+        elif clasificacion_existe and (reclasificar or desde_guia_centralizada):
+            logger.info(f"Se encontró un archivo de clasificación, pero se procederá con la reclasificación: {codigo_guia_completo}")
+            flash("Atención: Esta guía ya ha sido clasificada. Estás realizando una nueva clasificación que reemplazará la anterior.", "warning")
+
+        utils_instance = get_utils_instance()
+        datos_guia = utils_instance.get_datos_guia(codigo_guia_completo)
+        logger.info(f"Datos de guía obtenidos: {json.dumps(datos_guia)}")
+        
+        if not datos_guia:
+            logger.error(f"No se encontraron datos para la guía: {codigo_guia_completo}")
+            return render_template('error.html', message="Guía no encontrada"), 404
+            
+        if datos_guia.get('estado_actual') in ['clasificacion_completada', 'pesaje_tara_completado', 'registro_completado'] and not reclasificar:
+            flash("Esta guía ya ha sido clasificada. Puedes usar el botón 'Reclasificar' para hacer una nueva clasificación.", "warning")
+            return redirect(url_for('clasificacion.ver_resultados_clasificacion', url_guia=codigo_guia_completo))
+
+        tiene_peso_en_sesion = peso_bruto_session is not None
+        tiene_peso_en_guia = datos_guia.get('peso_bruto') is not None
+        logger.info(f"Verificación de pesaje completado: {tiene_peso_en_sesion or tiene_peso_en_guia} (peso en guía: {tiene_peso_en_guia}, peso en sesión: {tiene_peso_en_sesion})")
+        
+        if not (tiene_peso_en_sesion or tiene_peso_en_guia):
+            flash("Necesitas completar el pesaje antes de clasificar los racimos.", "warning")
+            return redirect(url_for('pesaje.pesaje', codigo=codigo_guia_completo))
+        
+        codigo_proveedor = None
+        nombre_proveedor = None
+        cantidad_racimos = None
+        
+        if '_' in codigo_guia_completo:
+            codigo_proveedor = codigo_guia_completo.split('_')[0]
+            if re.match(r'\d+[aA]?$', codigo_proveedor):
+                if codigo_proveedor.endswith('a'):
+                    codigo_proveedor = codigo_proveedor[:-1] + 'A'
+                elif not codigo_proveedor.endswith('A'):
+                    codigo_proveedor = codigo_proveedor + 'A'
+        else:
+            codigo_proveedor = codigo_guia_completo
+        
+        logger.info(f"Código de proveedor extraído: {codigo_proveedor}")
+        
+        try:
+            from db_utils import get_entry_record_by_guide_code
+            registro_entrada = get_entry_record_by_guide_code(codigo_guia_completo)
+            
+            if registro_entrada:
+                logger.info(f"Encontrado registro de entrada para guía {codigo_guia_completo}")
+                nombre_proveedor = registro_entrada.get('nombre_proveedor')
+                cantidad_racimos = registro_entrada.get('cantidad_racimos') or registro_entrada.get('racimos')
+            else:
+                logger.warning(f"No se encontró registro de entrada para guía {codigo_guia_completo}")
+                from db_operations import get_provider_by_code
+                datos_proveedor = get_provider_by_code(codigo_proveedor)
+                
+                if datos_proveedor:
+                    logger.info(f"Encontrado proveedor por código: {codigo_proveedor}")
+                    nombre_proveedor = datos_proveedor.get('nombre')
+        except Exception as e:
+            logger.error(f"Error buscando información del proveedor: {str(e)}")
+            logger.error(traceback.format_exc())
+        
+        codigo_proveedor_final = datos_guia.get('codigo_proveedor') or codigo_proveedor
+        nombre_proveedor_final = (
+            nombre_proveedor or
+            datos_guia.get('nombre_proveedor') or 
+            datos_guia.get('nombre_agricultor') or 
+            datos_guia.get('nombre') or 
+            'Proveedor no identificado'
+        )
+        cantidad_racimos_final = (
+            cantidad_racimos or
+            datos_guia.get('cantidad_racimos') or 
+            datos_guia.get('racimos') or 
+            'N/A'
+        )
+        
+        logger.info(f"Información final para template - Nombre: {nombre_proveedor_final}, Racimos: {cantidad_racimos_final}")
+        
+        template_data = {
+            'codigo_guia': codigo_guia_completo,
+            'codigo_proveedor': codigo_proveedor_final,
+            'nombre_proveedor': nombre_proveedor_final,
+            'peso_bruto': datos_guia.get('peso_bruto') or peso_bruto_session,
+            'cantidad_racimos': cantidad_racimos_final,
+            'en_reclasificacion': reclasificar,
+            'tipo_pesaje': datos_guia.get('tipo_pesaje', 'No especificado'),
+            'fecha_pesaje': datos_guia.get('fecha_pesaje', 'N/A'),
+            'hora_pesaje': datos_guia.get('hora_pesaje', ''),
+            'codigo_guia_transporte_sap': datos_guia.get('codigo_guia_transporte_sap', 'No disponible')
+        }
+        
+        logger.info(f"Renderizando plantilla de clasificación con datos: {template_data}")
+        return render_template('clasificacion/clasificacion_form.html', **template_data)
+        
+    except Exception as e:
+        logger.error(f"Error al mostrar vista de clasificación: {str(e)}")
+        logger.error(traceback.format_exc())
+        flash(f"Error al cargar la vista de clasificación: {str(e)}", "danger")
+        return render_template('error.html', message=f"Error al cargar la vista de clasificación: {str(e)}"), 500
+
+@bp.route('/prueba-clasificacion/<codigo>')
+def prueba_clasificacion(codigo):
+    try:
+        logger.info(f"Prueba de clasificación para código: {codigo}")
+        codigo_base = codigo.split('_')[0] if '_' in codigo else codigo
+        guias_folder = current_app.config['GUIAS_FOLDER']
+        guias_files = glob.glob(os.path.join(guias_folder, f'guia_{codigo_base}_*.html'))
+        
+        if guias_files:
+            guias_files.sort(key=os.path.getmtime, reverse=True)
+            latest_guia = os.path.basename(guias_files[0])
+            codigo_guia_completo = latest_guia[5:-5]
+            logger.info(f"Código guía completo obtenido del archivo HTML: {codigo_guia_completo}")
+        else:
+            codigo_guia_completo = codigo
+            logger.info(f"No se encontró archivo HTML, usando código original: {codigo_guia_completo}")
+        
+        utils_instance = get_utils_instance()
+        datos_guia = utils_instance.get_datos_guia(codigo_guia_completo)
+        if not datos_guia:
+            return jsonify({"error": "Guía no encontrada"}), 404
+            
+        return jsonify({
+            "datos_guia_completos": datos_guia,
+            "nombre_variables_disponibles": list(datos_guia.keys()),
+            "nombre_proveedor": datos_guia.get('nombre_proveedor') or datos_guia.get('nombre') or datos_guia.get('nombre_agricultor', 'No disponible'),
+            "codigo_proveedor": datos_guia.get('codigo_proveedor') or datos_guia.get('codigo', 'No disponible'),
+            "cantidad_racimos": datos_guia.get('cantidad_racimos') or datos_guia.get('racimos', 'No disponible'),
+            "peso_bruto": datos_guia.get('peso_bruto'),
+            "estado_actual": datos_guia.get('estado_actual'),
+        })
+    
+    except Exception as e:
+        logger.error(f"Error en prueba de clasificación: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
+
+@bp.route('/registrar_clasificacion', methods=['POST'])
+def registrar_clasificacion():
+    try:
+        logger.info("=== INICIO PROCESAMIENTO DE CLASIFICACIÓN ===")
+        logger.info(f"Formulario recibido: {request.form}")
+        logger.info(f"Archivos recibidos: {list(request.files.keys())}")
+        logger.info(f"Headers: {request.headers}")
+        logger.info(f"Content-Type: {request.content_type}")
+        
+        codigo_guia = request.form.get('codigo_guia')
+        logger.info(f"Código guía extraído del formulario: {codigo_guia}")
+        
+        if not codigo_guia:
+            logger.error("No se proporcionó un código de guía")
+            flash("Error: No se proporcionó un código de guía", "danger")
+            return redirect(url_for('pesaje.lista_pesajes'))
+        
+        fotos_temp_dir = os.path.join(current_app.static_folder, 'fotos_racimos_temp')
+        clasificaciones_dir = os.path.join(current_app.static_folder, 'clasificaciones')
+        temp_clasificacion_dir = os.path.join(current_app.static_folder, 'uploads', 'temp_clasificacion')
+        os.makedirs(fotos_temp_dir, exist_ok=True)
+        os.makedirs(clasificaciones_dir, exist_ok=True)
+        os.makedirs(temp_clasificacion_dir, exist_ok=True)
+        logger.info(f"Directorios creados o verificados: {fotos_temp_dir}, {clasificaciones_dir}, {temp_clasificacion_dir}")
+        
+        utils_instance = get_utils_instance()
+        datos_guia = utils_instance.get_datos_guia(codigo_guia)
+        if not datos_guia:
+            logger.warning(f"No se encontraron datos para la guía: {codigo_guia}")
+            flash("Error: No se encontraron datos para la guía especificada", "danger")
+            return redirect(url_for('pesaje.lista_pesajes'))
+        
+        clasificacion_manual = {
+            'verdes': float(request.form.get('verdes', 0) or 0),
+            'maduros': float(request.form.get('maduros', 0) or 0),
+            'sobremaduros': float(request.form.get('sobremaduros', 0) or 0),
+            'danio_corona': float(request.form.get('dano_corona', 0) or 0),
+            'pendunculo_largo': float(request.form.get('pedunculo_largo', 0) or 0),
+            'podridos': float(request.form.get('podridos', 0) or 0)
+        }
+        
+        logger.info(f"Datos de clasificación manual: {clasificacion_manual}")
+        logger.info(f"Form data recibido: {request.form}")
+        
+        fotos_paths = []
+        timestamp = int(time.time())
+        logger.info("Revisando archivos de fotos enviados...")
+        logger.info(f"Claves de archivos: {list(request.files.keys())}")
+        
+        for i in range(1, 4):
+            key = f'foto-{i}'
+            if key in request.files:
+                file = request.files[key]
+                logger.info(f"Encontrado archivo para {key}: {file.filename}")
+                
+                if file and file.filename:
+                    filename = secure_filename(file.filename)
+                    base, ext = os.path.splitext(filename)
+                    new_filename = f"temp_clasificacion_{codigo_guia}_{i}_{timestamp}{ext}"
+                    filepath = os.path.join(temp_clasificacion_dir, new_filename)
+                    logger.info(f"Guardando archivo {key} como: {new_filename}")
+                    file.save(filepath)
+                    fotos_paths.append(filepath)
+                    logger.info(f"Imagen {i} guardada en: {filepath}")
+                else:
+                    logger.info(f"El archivo {key} no tiene nombre de archivo o está vacío")
+            else:
+                logger.info(f"No se encontró el archivo {key} en la solicitud")
+        
+        if not fotos_paths:
+            logger.warning(f"No se encontraron fotos para procesar en la solicitud para la guía {codigo_guia}")
+        
+        observaciones = request.form.get('observaciones', '')
+        now = datetime.now()
+        fecha_clasificacion = now.strftime('%d/%m/%Y')
+        hora_clasificacion = now.strftime('%H:%M:%S')
+        
+        clasificacion_data = {
+            'id': f"Clasificacion_{codigo_guia}",
+            'codigo_guia': codigo_guia,
+            'codigo_proveedor': datos_guia.get('codigo_proveedor') or datos_guia.get('codigo'),
+            'nombre_proveedor': datos_guia.get('nombre_proveedor') or datos_guia.get('nombre') or datos_guia.get('nombre_agricultor'),
+            'fecha_registro': fecha_clasificacion,
+            'hora_registro': hora_clasificacion,
+            'fecha_clasificacion': fecha_clasificacion,
+            'hora_clasificacion': hora_clasificacion,
+            'clasificacion_manual': clasificacion_manual,
+            'clasificaciones': clasificacion_manual,
+            'observaciones': observaciones,
+            'estado': 'completado',
+            'total_racimos_detectados': sum(clasificacion_manual.values()),
+            'fotos': fotos_paths
+        }
+        
+        usar_clasificacion_automatica = request.form.get('usar_clasificacion_automatica') is not None
+        if usar_clasificacion_automatica and 'clasificacion_automatica' in datos_guia:
+            clasificacion_data['clasificacion_automatica'] = datos_guia['clasificacion_automatica']
+        else:
+            clasificacion_data['clasificacion_automatica'] = {}
+        
+        json_filename = f"clasificacion_{codigo_guia}.json"
+        json_path = os.path.join(clasificaciones_dir, json_filename)
+        
+        with open(json_path, 'w') as f:
+            json.dump(clasificacion_data, f, indent=4)
+        
+        logger.info(f"Clasificación guardada en archivo: {json_path}")
+        logger.info(f"Datos guardados en JSON: {clasificacion_data}")
+            
+        try:
+            from db_operations import store_clasificacion
+            db_result = store_clasificacion({
+                'codigo_guia': codigo_guia,
+                'codigo_proveedor': clasificacion_data['codigo_proveedor'],
+                'nombre_proveedor': clasificacion_data['nombre_proveedor'],
+                'fecha_clasificacion': fecha_clasificacion,
+                'hora_clasificacion': hora_clasificacion,
+                'clasificaciones': json.dumps(clasificacion_manual),
+                'observaciones': observaciones,
+                'estado': 'activo'
+            })
+            
+            if db_result:
+                logger.info(f"Clasificación guardada en base de datos para código_guia: {codigo_guia}")
+            else:
+                logger.warning(f"No se pudo guardar la clasificación en base de datos para código_guia: {codigo_guia}")
+        except Exception as db_error:
+            logger.error(f"Error al guardar en base de datos: {str(db_error)}")
+        
+        datos_guia.update({
+            'clasificacion_completa': True,
+            'fecha_clasificacion': fecha_clasificacion,
+            'hora_clasificacion': hora_clasificacion,
+            'tipo_clasificacion': 'manual',
+            'clasificacion_manual': clasificacion_manual,
+            'estado_actual': 'clasificacion_completada'
+        })
+        
+        html_content = render_template(
+            'guia_template.html',
+            **datos_guia
+        )
+        
+        guia_path = os.path.join(current_app.config['GUIAS_FOLDER'], f'guia_{codigo_guia}.html')
+        with open(guia_path, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+        
+        flash("Clasificación guardada exitosamente", "success")
+        logger.info(f"Redireccionando a: clasificacion.ver_resultados_clasificacion con url_guia={codigo_guia}")
+        try:
+            return redirect(url_for('clasificacion.ver_resultados_clasificacion', url_guia=codigo_guia))
+        except Exception as redirect_error:
+            logger.error(f"Error en redirección: {str(redirect_error)}")
+            return redirect(f"/clasificacion/ver_resultados_clasificacion/{codigo_guia}")
+        
+    except Exception as e:
+        logger.error(f"Error al procesar clasificación: {str(e)}")
+        logger.error(traceback.format_exc())
+        flash(f"Error al procesar la clasificación: {str(e)}", "danger")
+        return redirect(url_for('clasificacion.clasificacion', codigo=codigo_guia))
+
+@bp.route('/registrar_clasificacion_api', methods=['POST'])
+def registrar_clasificacion_api():
+    try:
+        logger.info("Iniciando registro de clasificación")
+        
+        if 'codigo_guia' not in request.form:
+            logger.error("No se proporcionó el código de guía")
+            return jsonify({'success': False, 'message': 'No se proporcionó el código de guía'}), 400
+        
+        codigo_guia = request.form['codigo_guia']
+        logger.info(f"Registrando clasificación para guía: {codigo_guia}")
+        
+        verdes = request.form.get('verdes', '0')
+        sobremaduros = request.form.get('sobremaduros', '0')
+        dano_corona = request.form.get('dano_corona', '0')
+        pedunculo_largo = request.form.get('pedunculo_largo', '0')
+        podridos = request.form.get('podridos', '0')
+        
+        clasificaciones_dir = os.path.join(current_app.static_folder, 'clasificaciones')
+        imagenes_dir = os.path.join(current_app.static_folder, 'uploads', 'clasificacion')
+        os.makedirs(clasificaciones_dir, exist_ok=True)
+        os.makedirs(imagenes_dir, exist_ok=True)
+        
+        imagenes = []
+        for i in range(1, 4):
+            key = f'foto-{i}'
+            if key in request.files and request.files[key].filename:
+                file = request.files[key]
+                filename = f"clasificacion_{codigo_guia}_{i}.jpg"
+                filepath = os.path.join(imagenes_dir, filename)
+                file.save(filepath)
+                imagenes.append(filepath)
+                logger.info(f"Imagen {i} guardada permanentemente: {filepath}")
+        
+        utils_instance = get_utils_instance()
+        datos_guia = utils_instance.get_datos_guia(codigo_guia)
+        
+        if not datos_guia:
+            logger.error(f"No se encontraron datos de guía para clasificación: {codigo_guia}")
+            return jsonify({'success': False, 'message': 'No se encontraron datos de la guía'}), 404
+        
+        clasificacion_data = {
+            'codigo_guia': codigo_guia,
+            'codigo_proveedor': datos_guia.get('codigo_proveedor') or datos_guia.get('codigo'),
+            'nombre_proveedor': datos_guia.get('nombre_proveedor') or datos_guia.get('nombre'),
+            'cantidad_racimos': datos_guia.get('cantidad_racimos') or datos_guia.get('racimos'),
+            'peso_bruto': datos_guia.get('peso_bruto'),
+            'fecha_registro': datetime.now().strftime('%d/%m/%Y'),
+            'hora_registro': datetime.now().strftime('%H:%M:%S'),
+            'fecha_clasificacion': datetime.now().strftime('%d/%m/%Y'),
+            'hora_clasificacion': datetime.now().strftime('%H:%M:%S'),
+            'verdes': float(verdes),
+            'sobremaduros': float(sobremaduros),
+            'dano_corona': float(dano_corona),
+            'pedunculo_largo': float(pedunculo_largo),
+            'podridos': float(podridos),
+            'imagenes': [os.path.basename(img) for img in imagenes],
+            'estado': 'clasificacion_completada'
+        }
+        
+        clasificacion_file = os.path.join(clasificaciones_dir, f"clasificacion_{codigo_guia}.json")
+        with open(clasificacion_file, 'w', encoding='utf-8') as f:
+            json.dump(clasificacion_data, f, indent=4, ensure_ascii=False)
+        
+        logger.info(f"Datos de clasificación guardados en: {clasificacion_file}")
+        
+        try:
+            redirect_url = url_for('clasificacion.ver_resultados_clasificacion', url_guia=codigo_guia)
+        except Exception as url_error:
+            logger.error(f"Error generando URL con url_for: {str(url_error)}")
+            redirect_url = f"/clasificacion/ver_resultados_clasificacion/{codigo_guia}"
+            
+        direct_url = f"/clasificacion/ver_resultados_clasificacion/{codigo_guia}"
+        
+        return jsonify({
+            'success': True,
+            'message': 'Clasificación registrada exitosamente',
+            'redirect_url': redirect_url,
+            'direct_url': direct_url,
+            'codigo_guia': codigo_guia
+        })
+    
+    except Exception as e:
+        logger.error(f"Error al registrar clasificación: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({'success': False, 'message': f'Error: {str(e)}'}), 500
+
+def process_images_with_roboflow(codigo_guia, fotos_paths, guia_fotos_dir, json_path):
+    try:
+        DEFAULT_API_KEY = ROBOFLOW_API_KEY
+        DEFAULT_WORKSPACE_NAME = WORKSPACE_NAME
+        DEFAULT_WORKFLOW_ID = WORKFLOW_ID
+        
+        modelo_utilizado = "No especificado"
+        
+        logger.info(f"Iniciando procesamiento de imágenes para guía: {codigo_guia}")
+        logger.info(f"Directorio de fotos: {guia_fotos_dir}")
+        logger.info(f"Archivo JSON para resultados: {json_path}")
+        
+        if not os.path.exists(guia_fotos_dir):
+            logger.info(f"Creando directorio para fotos: {guia_fotos_dir}")
+            os.makedirs(guia_fotos_dir, exist_ok=True)
+        
+        clasificaciones_dir = os.path.dirname(json_path)
+        if not os.path.exists(clasificaciones_dir):
+            logger.info(f"Creando directorio para clasificaciones: {clasificaciones_dir}")
+            os.makedirs(clasificaciones_dir, exist_ok=True)
+        
+        if os.path.exists(json_path):
+            try:
+                logger.info(f"Eliminando archivo JSON existente para reinicio completo: {json_path}")
+                os.remove(json_path)
+                logger.info("Archivo JSON eliminado correctamente. Iniciando con datos limpios.")
+            except Exception as e:
+                logger.error(f"Error al eliminar archivo JSON existente: {str(e)}")
+                try:
+                    backup_path = f"{json_path}.bak.{int(time.time())}"
+                    os.rename(json_path, backup_path)
+                    logger.info(f"Archivo JSON renombrado como backup: {backup_path}")
+                except Exception as e2:
+                    logger.error(f"No se pudo renombrar el archivo JSON: {str(e2)}")
+        
+        clasificacion_data = {
+            'id': f"Clasificacion_{codigo_guia}",
+            'fecha_registro': datetime.now().strftime('%d/%m/%Y'),
+            'hora_registro': datetime.now().strftime('%H:%M:%S'),
+            'fotos': fotos_paths,
+            'estado': 'en_proceso',
+            'clasificacion_manual': {},
+            'clasificacion_automatica': {
+                'verdes': {'cantidad': 0, 'porcentaje': 0},
+                'maduros': {'cantidad': 0, 'porcentaje': 0},
+                'sobremaduros': {'cantidad': 0, 'porcentaje': 0},
+                'podridos': {'cantidad': 0, 'porcentaje': 0},
+                'danio_corona': {'cantidad': 0, 'porcentaje': 0},
+                'pendunculo_largo': {'cantidad': 0, 'porcentaje': 0}
+            },
+            'resultados_por_foto': {}
+        }
+        
+        clasificacion_automatica = clasificacion_data['clasificacion_automatica']
+        resultados_por_foto = clasificacion_data['resultados_por_foto']
+        
+        tiempo_inicio = time.time()
+        
+        roboflow_api_key = current_app.config.get('ROBOFLOW_API_KEY', DEFAULT_API_KEY)
+        workspace_name = current_app.config.get('ROBOFLOW_WORKSPACE', DEFAULT_WORKSPACE_NAME)
+        workflow_id = current_app.config.get('ROBOFLOW_WORKFLOW_ID', DEFAULT_WORKFLOW_ID)
+        
+        if not all([roboflow_api_key, workspace_name, workflow_id]):
+            logger.error("Falta configuración de Roboflow.")
+            logger.error(f"API Key configurada: {'Sí' if roboflow_api_key else 'No'}")
+            logger.error(f"Workspace configurado: {'Sí' if workspace_name else 'No'}")
+            logger.error(f"Workflow ID configurado: {'Sí' if workflow_id else 'No'}")
+            logger.error("Usando simulación como alternativa.")
+            use_simulation = False
+        else:
+            use_simulation = False
+            client = DirectRoboflowClient(
+                api_url="https://detect.roboflow.com",
+                api_key=roboflow_api_key
+            )
+            logger.info("Cliente directo HTTP de Roboflow inicializado correctamente.")
+        
+        if not use_simulation and len(fotos_paths) > 3:
+            logger.info(f"Limitando a 3 fotos para procesamiento con Roboflow (originalmente {len(fotos_paths)})")
+            fotos_paths = fotos_paths[:3]
+        
+        for idx, foto_path in enumerate(fotos_paths, 1):
+            logger.info(f"Procesando imagen {idx}/{len(fotos_paths)}: {foto_path}")
+            
+            global processing_status
+            if codigo_guia in processing_status:
+                processing_status[codigo_guia] = {
+                    'status': 'processing',
+                    'progress': int(5 + (idx-1) * 90 / len(fotos_paths)),
+                    'step': 2,
+                    'message': f'Procesando imagen {idx}/{len(fotos_paths)}...',
+                    'processed_images': idx - 1,
+                    'total_images': len(fotos_paths)
+                }
+            
+            if not os.path.exists(foto_path):
+                logger.error(f"La imagen no existe: {foto_path}")
+                if codigo_guia in processing_status:
+                    processing_status[codigo_guia]['message'] = f'Error: La imagen {idx} no existe'
+                    processing_status[codigo_guia]['status'] = 'error'
+                continue
+            
+            try:
+                if use_simulation:
+                    logger.info(f"Simulando procesamiento para imagen {idx}: {foto_path}")
+                    time.sleep(1)
+                    import random
+                    num_detecciones = random.randint(5, 15)
+                    detecciones = []
+                    
+                    for _ in range(num_detecciones):
+                        clase = random.choice(['verde', 'maduro', 'sobremaduro', 'podrido', 'danio_corona', 'pendunculo_largo'])
+                        detecciones.append({
+                            'class': clase,
+                            'confidence': random.uniform(0.6, 0.95),
+                            'x': random.randint(100, 500),
+                            'y': random.randint(100, 500),
+                            'width': random.randint(50, 150),
+                            'height': random.randint(50, 150)
+                        })
+                    
+                    result = {
+                        'predictions': detecciones,
+                        'time': random.uniform(0.5, 2.0),
+                        'image': {
+                            'width': 800,
+                            'height': 600
+                        }
+                    }
+                    
+                    processed_img_path = os.path.join(guia_fotos_dir, f"foto_{idx}_procesada.jpg")
+                    shutil.copy(foto_path, processed_img_path)
+                    
+                    logger.info(f"Simulación completa para imagen {idx}. Generadas {len(detecciones)} detecciones.")
+                    modelo_utilizado = "SIMULACIÓN (versión mejorada)"
+                else:
+                    logger.info(f"Enviando imagen {idx} a Roboflow API: {foto_path}")
+                    result = client.run_workflow(
+                        workspace_name=workspace_name,
+                        workflow_id=workflow_id,
+                        images={"image": foto_path},
+                        use_cache=True
+                    )
+                    
+                    logger.info(f"Respuesta de Roboflow recibida: {result}")
+                    
+                    if "error" in result:
+                        error_msg = result.get("error", "Error desconocido")
+                        logger.error(f"Error en la respuesta de Roboflow: {error_msg}")
+                        
+                        if codigo_guia in processing_status:
+                            processing_status[codigo_guia]['message'] = f'Error: {error_msg}'
+                            if result.get('auth_error'):
+                                processing_status[codigo_guia]['message'] = 'Error de autenticación con Roboflow. Verifique su API key.'
+                            elif result.get('not_found'):
+                                processing_status[codigo_guia]['message'] = 'Workflow o workspace no encontrado. Verifique configuración.'
+                            elif result.get('server_error'):
+                                processing_status[codigo_guia]['message'] = 'Error del servidor de Roboflow. Intente nuevamente más tarde.'
+                            processing_status[codigo_guia]['status'] = 'error'
+                        
+                        detecciones = []
+                        modelo_utilizado = f"Error en Roboflow: {error_msg}"
+                    else:
+                        if "predictions" in result:
+                            detecciones = result["predictions"]
+                            logger.info(f"Detecciones encontradas (predictions): {len(detecciones)}")
+                        else:
+                            detecciones = []
+                            categorias_mapeo = {
+                                "Racimos verdes": "verde",
+                                "racimo verde": "verde",
+                                "racimo maduro": "maduro", 
+                                "racimo sobremaduro": "sobremaduro",
+                                "racimo daño en corona": "danio_corona",
+                                "racimo pedunculo largo": "pendunculo_largo",
+                                "racimo podrido": "podrido"
+                            }
+                            
+                            try:
+                                logger.info(f"Analizando respuesta de Roboflow para buscar categorías específicas. Formato de respuesta: {type(result)}")
+                                logger.info(f"Claves disponibles en la respuesta: {result.keys() if isinstance(result, dict) else 'No es un diccionario'}")
+                                
+                                if isinstance(result, dict):
+                                    for key, value in result.items():
+                                        logger.info(f"Key '{key}' has type {type(value)}")
+                                        if key == 'outputs' and isinstance(value, list) and len(value) > 0:
+                                            logger.info(f"First output has keys: {value[0].keys() if isinstance(value[0], dict) else 'Not a dict'}")
+                                            
+                                            for output_idx, output in enumerate(value):
+                                                if isinstance(output, dict):
+                                                    logger.info(f"Procesando output[{output_idx}]")
+                                                    
+                                                    for categoria_key, categoria_value in categorias_mapeo.items():
+                                                        if categoria_key in output:
+                                                            cantidad = output.get(categoria_key, 0)
+                                                            logger.info(f"Encontrada categoría {categoria_key} en output[{output_idx}]: {cantidad}")
+                                                            
+                                                            if isinstance(cantidad, int) and cantidad > 0:
+                                                                for i in range(cantidad):
+                                                                    detecciones.append({
+                                                                        'class': categoria_value,
+                                                                        'confidence': 0.95,
+                                                                        'x': 100 + (i * 10),
+                                                                        'y': 100 + (i * 10),
+                                                                        'width': 50,
+                                                                        'height': 50
+                                                                    })
+                                                    
+                                                    if 'Racimos verdes' in output:
+                                                        cantidad = output.get('Racimos verdes', 0)
+                                                        logger.info(f"Encontrada categoría 'Racimos verdes' en output[{output_idx}]: {cantidad}")
+                                                        
+                                                        if isinstance(cantidad, int) and cantidad > 0:
+                                                            for i in range(cantidad):
+                                                                detecciones.append({
+                                                                    'class': 'verde',
+                                                                    'confidence': 0.95,
+                                                                    'x': 100 + (i * 10),
+                                                                    'y': 100 + (i * 10),
+                                                                    'width': 50,
+                                                                    'height': 50
+                                                                })
+                                    
+                                    for categoria_key, categoria_value in categorias_mapeo.items():
+                                        try:
+                                            if categoria_key in result:
+                                                cantidad = result.get(categoria_key, 0)
+                                                logger.info(f"Encontrada categoría {categoria_key}: {cantidad}")
+                                                
+                                                if isinstance(cantidad, int) and cantidad > 0:
+                                                    for i in range(cantidad):
+                                                        detecciones.append({
+                                                            'class': categoria_value,
+                                                            'confidence': 0.95,
+                                                            'x': 100 + (i * 10),
+                                                            'y': 100 + (i * 10),
+                                                            'width': 50,
+                                                            'height': 50
+                                                        })
+                                        except Exception as e:
+                                            logger.error(f"Error procesando categoría {categoria_key}: {str(e)}")
+                                
+                                try:
+                                    if "data" in result and isinstance(result["data"], dict) and "raw_results" in result["data"]:
+                                        raw_results = result["data"]["raw_results"]
+                                        logger.info(f"Encontrado campo data.raw_results: {type(raw_results)}")
+                                        
+                                        if isinstance(raw_results, list):
+                                            for idx, raw_result in enumerate(raw_results):
+                                                for categoria_key, categoria_value in categorias_mapeo.items():
+                                                    if isinstance(raw_result, dict) and categoria_key in raw_result:
+                                                        cantidad = raw_result.get(categoria_key, 0)
+                                                        logger.info(f"Encontrada categoría {categoria_key} en raw_result[{idx}]: {cantidad}")
+                                                        
+                                                        if isinstance(cantidad, int) and cantidad > 0:
+                                                            for i in range(cantidad):
+                                                                detecciones.append({
+                                                                    'class': categoria_value,
+                                                                    'confidence': 0.95,
+                                                                    'x': 100 + (i * 10),
+                                                                    'y': 100 + (i * 10),
+                                                                    'width': 50,
+                                                                    'height': 50
+                                                                })
+                                except Exception as e:
+                                    logger.error(f"Error procesando data.raw_results: {str(e)}")
+                                
+                                logger.info(f"Detecciones derivadas: {len(detecciones)}")
+                                
+                                if len(detecciones) == 0 and "potholes_detected" in result and isinstance(result["potholes_detected"], (int, float)) and result["potholes_detected"] > 0:
+                                    total_potholes = result["potholes_detected"]
+                                    logger.info(f"Usando potholes_detected para crear detecciones genéricas: {total_potholes}")
+                                    
+                                    for i in range(int(total_potholes)):
+                                        detecciones.append({
+                                            'class': 'verde',
+                                            'confidence': 0.90,
+                                            'x': 100 + (i % 10) * 20,
+                                            'y': 100 + (i // 10) * 20,
+                                            'width': 50,
+                                            'height': 50
+                                        })
+                                    
+                                    logger.info(f"Creadas {len(detecciones)} detecciones genéricas")
+                                    
+                                if len(detecciones) > 0:
+                                    conteo_categorias = {
+                                        'verdes': 0,
+                                        'maduros': 0,
+                                        'sobremadros': 0,
+                                        'podridos': 0,
+                                        'danio_corona': 0,
+                                        'pendunculo_largo': 0
+                                    }
+                                    
+                                    for deteccion in detecciones:
+                                        clase = deteccion.get('class', '')
+                                        if clase == 'verde':
+                                            conteo_categorias['verdes'] += 1
+                                        elif clase == 'maduro':
+                                            conteo_categorias['maduros'] += 1
+                                        elif clase == 'sobremaduro':
+                                            conteo_categorias['sobremadros'] += 1
+                                        elif clase == 'podrido':
+                                            conteo_categorias['podridos'] += 1
+                                        elif clase == 'danio_corona':
+                                            conteo_categorias['danio_corona'] += 1
+                                        elif clase == 'pendunculo_largo':
+                                            conteo_categorias['pendunculo_largo'] += 1
+                                    
+                                    for categoria, cantidad in conteo_categorias.items():
+                                        if categoria in clasificacion_automatica:
+                                            clasificacion_automatica[categoria]['cantidad'] = cantidad
+                                    
+                                    logger.info(f"Actualizado clasificacion_automatica directamente de detecciones: {conteo_categorias}")
+                            except Exception as e:
+                                logger.error(f"Error procesando respuesta de Roboflow: {str(e)}")
+                                logger.error(traceback.format_exc())
+                        
+                        modelo_utilizado = f"Roboflow Workflow: {workflow_id}"
+                        
+                        try:
+                            annotated_image = None
+                            for field_name in ['annotated_image', 'visualization', 'image_with_boxes', 'output_image']:
+                                if field_name in result:
+                                    logger.info(f"Encontrado campo {field_name} para imagen procesada")
+                                    try:
+                                        if isinstance(result[field_name], str):
+                                            img_data = decode_image_data(result[field_name])
+                                            if img_data:
+                                                img_path = os.path.join(guia_fotos_dir, f"foto_{idx}_procesada.jpg")
+                                                with open(img_path, 'wb') as f:
+                                                    f.write(img_data)
+                                                logger.info(f"Imagen procesada guardada desde campo '{field_name}'")
+                                                break
+                                    except Exception as e:
+                                        logger.error(f"Error al guardar imagen procesada: {str(e)}")
+                        except Exception as e:
+                            logger.error(f"Error general al procesar imagen: {str(e)}")
+                        logger.error(traceback.format_exc())
+                
+                str_idx = str(idx)
+                resultados_por_foto[str_idx] = {
+                    'detecciones': detecciones,
+                    'total_detecciones': len(detecciones),
+                    'raw_result': result
+                }
+                
+                for deteccion in detecciones:
+                    clase = deteccion.get('class', '').lower()
+                    
+                    if 'verde' in clase:
+                        clasificacion_automatica['verdes']['cantidad'] += 1
+                    elif 'maduro' in clase and 'sobre' not in clase:
+                        clasificacion_automatica['maduros']['cantidad'] += 1
+                    elif 'sobremaduro' in clase or 'sobre_maduro' in clase:
+                        clasificacion_automatica['sobremaduros']['cantidad'] += 1
+                    elif 'podrido' in clase:
+                        clasificacion_automatica['podridos']['cantidad'] += 1
+                    elif 'corona' in clase or 'danio_corona' in clase or 'daño_corona' in clase:
+                        clasificacion_automatica['danio_corona']['cantidad'] += 1
+                    elif 'pendunculo' in clase or 'pedunculo' in clase:
+                        clasificacion_automatica['pendunculo_largo']['cantidad'] += 1
+                
+                clasificacion_data['clasificacion_automatica'] = clasificacion_automatica
+                clasificacion_data['resultados_por_foto'] = resultados_por_foto
+                clasificacion_data['estado'] = 'en_proceso'
+                
+                logger.info(f"Guardando resultados parciales en: {json_path}")
+                with open(json_path, 'w', encoding='utf-8') as f:
+                    json.dump(clasificacion_data, f, indent=4, ensure_ascii=False)
+                
+            except Exception as e:
+                logger.error(f"Error procesando imagen {idx}: {str(e)}")
+                logger.error(traceback.format_exc())
+                resultados_por_foto[str(idx)] = {'error': str(e)}
+        
+        logger.info("Procesamiento de imágenes completado. Preparando resultados finales.")
+        
+        try:
+            categorias_validas = {k: v for k, v in clasificacion_automatica.items() if isinstance(v, dict) and 'cantidad' in v}
+            total_racimos = sum(cat['cantidad'] for cat in categorias_validas.values())
+            logger.info(f"Total de racimos detectados: {total_racimos}")
+            
+            if total_racimos > 0:
+                for categoria, datos in clasificacion_automatica.items():
+                    if isinstance(datos, dict) and 'cantidad' in datos:
+                        try:
+                            datos['porcentaje'] = round(
+                                (datos['cantidad'] / total_racimos) * 100, 1
+                            )
+                        except Exception as e:
+                            logger.error(f"Error calculando porcentaje para {categoria}: {str(e)}")
+                            datos['porcentaje'] = 0
+            
+            clasificacion_data['total_racimos_detectados'] = total_racimos
+            clasificacion_data['clasificacion_automatica'] = clasificacion_automatica
+            clasificacion_data['resultados_por_foto'] = resultados_por_foto
+            clasificacion_data['estado'] = 'completado' 
+            clasificacion_data['tiempo_procesamiento'] = f"{round(time.time() - tiempo_inicio, 2)} segundos"
+            clasificacion_data['modelo_utilizado'] = modelo_utilizado if 'modelo_utilizado' in locals() else "Modelo no especificado"
+            
+            logger.info(f"Guardando resultados finales en: {json_path}")
+            with open(json_path, 'w', encoding='utf-8') as f:
+                json.dump(clasificacion_data, f, indent=4, ensure_ascii=False)
+            
+            if codigo_guia in processing_status:
+                processing_status[codigo_guia]['status'] = 'completado'
+                processing_status[codigo_guia]['progress'] = 100
+                processing_status[codigo_guia]['message'] = f'Procesamiento completado. {total_racimos} racimos detectados.'
+                
+            logger.info(f"Procesamiento completado para guía {codigo_guia}. Tiempo: {round(time.time() - tiempo_inicio, 2)} segundos")
+            
+            if total_racimos == 0:
+                logger.warning(f"Procesamiento completado pero sin detecciones para {codigo_guia}")
+            
+        except Exception as e:
+            logger.error(f"Error calculando porcentajes: {str(e)}")
+            logger.error(traceback.format_exc())
+            clasificacion_data['estado'] = 'error'
+            clasificacion_data['error_message'] = str(e)
+            with open(json_path, 'w', encoding='utf-8') as f:
+                json.dump(clasificacion_data, f, indent=4, ensure_ascii=False)
+            
+            if codigo_guia in processing_status:
+                processing_status[codigo_guia]['status'] = 'error'
+                processing_status[codigo_guia]['message'] = f'Error en procesamiento: {str(e)}'
+        
+        fotos_procesadas = []
+        
+        for idx, foto_path in enumerate(fotos_paths, 1):
+            str_idx = str(idx)
+            if str_idx in resultados_por_foto:
+                resultado_foto = resultados_por_foto[str_idx]
+                
+                ruta_foto_original = None
+                foto_original_path = os.path.join(guia_fotos_dir, f"foto_{idx}.jpg")
+                if os.path.exists(foto_original_path):
+                    path_parts = foto_original_path.split(os.sep)
+                    try:
+                        static_index = path_parts.index('static')
+                        ruta_foto_original = os.sep.join(path_parts[static_index+1:])
+                    except ValueError:
+                        ruta_foto_original = foto_original_path
+                
+                ruta_foto_procesada = None
+                foto_procesada_path = os.path.join(guia_fotos_dir, f"foto_{idx}_procesada.jpg")
+                if os.path.exists(foto_procesada_path):
+                    path_parts = foto_procesada_path.split(os.sep)
+                    try:
+                        static_index = path_parts.index('static')
+                        ruta_foto_procesada = os.sep.join(path_parts[static_index+1:])
+                    except ValueError:
+                        ruta_foto_procesada = foto_procesada_path
+                
+                annotated_image = None
+                label_visualization = None
+                
+                result_for_foto = resultado_foto.get('raw_result', {})
+                
+                if not use_simulation and 'annotated_image' in result_for_foto:
+                    try:
+                        img_data = decode_image_data(result_for_foto.get('annotated_image'))
+                        if img_data:
+                            annotated_path = os.path.join(guia_fotos_dir, f"foto_{idx}_annotated.jpg")
+                            with open(annotated_path, 'wb') as img_file:
+                                img_file.write(img_data)
+                            path_parts = annotated_path.split(os.sep)
+                            try:
+                                static_index = path_parts.index('static')
+                                annotated_image = os.sep.join(path_parts[static_index+1:])
+                            except ValueError:
+                                annotated_image = annotated_path
+                    except Exception as e:
+                        logger.error(f"Error guardando imagen anotada: {str(e)}")
+                
+                if not use_simulation and 'label_visualization_1' in result_for_foto:
+                    try:
+                        img_data = decode_image_data(result_for_foto.get('label_visualization_1'))
+                        if img_data:
+                            label_path = os.path.join(guia_fotos_dir, f"foto_{idx}_labels.jpg")
+                            with open(label_path, 'wb') as img_file:
+                                img_file.write(img_data)
+                            path_parts = label_path.split(os.sep)
+                            try:
+                                static_index = path_parts.index('static')
+                                label_visualization = os.sep.join(path_parts[static_index+1:])
+                            except ValueError:
+                                label_visualization = label_path
+                    except Exception as e:
+                        logger.error(f"Error guardando visualización de etiquetas: {str(e)}")
+                
+                total_racimos = result_for_foto.get('potholes_detected', 0)
+                if not total_racimos and 'predictions' in result_for_foto:
+                    total_racimos = len(result_for_foto['predictions'])
+                
+                if not total_racimos:
+                    total_racimos = resultado_foto.get('total_detecciones', 0)
+                
+                resultados_categorias = {}
+                for deteccion in resultado_foto.get('detecciones', []):
+                    clase = deteccion.get('class', '').lower()
+                    if clase not in resultados_categorias:
+                        resultados_categorias[clase] = 0
+                    resultados_categorias[clase] += 1
+                
+                fotos_procesadas.append({
+                    'original': ruta_foto_original or foto_path,
+                    'procesada': ruta_foto_procesada,
+                    'annotated': annotated_image,
+                    'labels': label_visualization,
+                    'total_racimos': total_racimos,
+                    'resultados': resultados_categorias
+                })
+        
+        tiempo_fin = time.time()
+        tiempo_procesamiento = round(tiempo_fin - tiempo_inicio, 2)
+        
+        clasificacion_data['fotos_procesadas'] = fotos_procesadas
+        
+        if 'tiempo_procesamiento' not in clasificacion_data:
+            clasificacion_data['tiempo_procesamiento'] = f"{tiempo_procesamiento} segundos"
+        
+        if clasificacion_data.get('estado') != 'completado' and clasificacion_data.get('estado') != 'error':
+            logger.info(f"Guardando resultados finales (segunda fase) en: {json_path}")
+            with open(json_path, 'w', encoding='utf-8') as f:
+                json.dump(clasificacion_data, f, indent=4, ensure_ascii=False)
+        
+        logger.info(f"Procesamiento completado para guía {codigo_guia}. Tiempo: {tiempo_procesamiento} segundos")
+        return clasificacion_data
+        
+    except Exception as e:
+        logger.error(f"Error en process_images_with_roboflow: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise
+
+@bp.route('/clasificaciones')
+def listar_clasificaciones():
+    return redirect('/clasificaciones/lista')
+
+@bp.route('/clasificaciones/lista')
+def listar_clasificaciones_filtradas():
+    try:
+        fecha_desde = request.args.get('fecha_desde', '')
+        fecha_hasta = request.args.get('fecha_hasta', '')
+        codigo_proveedor = request.args.get('codigo_proveedor', '')
+        nombre_proveedor = request.args.get('nombre_proveedor', '')
+        estado = request.args.get('estado', '')
+        
+        clasificaciones = []
+        clasificaciones_dir = os.path.join(current_app.static_folder, 'clasificaciones')
+        os.makedirs(clasificaciones_dir, exist_ok=True)
+        
+        from db_utils import get_entry_record_by_guide_code
+        codigos_base_procesados = {}
+        
+        for filename in os.listdir(clasificaciones_dir):
+            if filename.startswith('clasificacion_') and filename.endswith('.json'):
+                try:
+                    with open(os.path.join(clasificaciones_dir, filename), 'r') as f:
+                        clasificacion_data = json.load(f)
+                    
+                    codigo_guia = filename.replace('clasificacion_', '').replace('.json', '')
+                    codigo_base = codigo_guia.split('_')[0] if '_' in codigo_guia else codigo_guia
+                    
+                    if codigo_base in codigos_base_procesados:
+                        if '_' in codigo_guia and '_' in codigos_base_procesados[codigo_base]:
+                            timestamp_actual = codigo_guia.split('_')[1] if len(codigo_guia.split('_')) > 1 else ''
+                            timestamp_previo = codigos_base_procesados[codigo_base].split('_')[1] if len(codigos_base_procesados[codigo_base].split('_')) > 1 else ''
+                            
+                            if timestamp_actual < timestamp_previo:
+                                logger.info(f"Omitiendo clasificación duplicada anterior: {codigo_guia}, ya existe una más reciente: {codigos_base_procesados[codigo_base]}")
+                                continue
+                    
+                    codigos_base_procesados[codigo_base] = codigo_guia
+                    
+                    nombre_proveedor_actual = 'No disponible'
+                    codigo_proveedor_actual = ''
+                    cantidad_racimos = 'No disponible'
+                    
+                    entry_record = get_entry_record_by_guide_code(codigo_guia)
+                    
+                    if entry_record:
+                        nombre_proveedor_actual = entry_record.get('nombre_proveedor', 'No disponible')
+                        codigo_proveedor_actual = entry_record.get('codigo_proveedor', '')
+                        cantidad_racimos = entry_record.get('cantidad_racimos', 'No disponible')
+                        logger.info(f"Datos de DB para {codigo_guia}: Proveedor={nombre_proveedor_actual}, Racimos={cantidad_racimos}")
+                    else:
+                        pass  # Se puede agregar lógica adicional si se requiere
+                    
+                    clasificaciones.append({
+                        'codigo_guia': codigo_guia,
+                        'nombre_proveedor': nombre_proveedor_actual,
+                        'codigo_proveedor': codigo_proveedor_actual,
+                        'cantidad_racimos': cantidad_racimos,
+                        'fecha_registro': clasificacion_data.get('fecha_registro', ''),
+                        'estado': clasificacion_data.get('estado', '')
+                    })
+                except Exception as e:
+                    logger.error(f"Error procesando archivo {filename}: {str(e)}")
+        
+        return render_template('clasificacion/lista_clasificaciones.html', clasificaciones=clasificaciones)
+    except Exception as e:
+        logger.error(f"Error en listar_clasificaciones_filtradas: {str(e)}")
+        logger.error(traceback.format_exc())
+        return render_template('error.html', message=f"Error al listar clasificaciones: {str(e)}"), 500

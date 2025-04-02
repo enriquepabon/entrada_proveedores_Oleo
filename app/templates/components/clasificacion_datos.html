@@ -1,0 +1,46 @@
+{% macro datos_clasificacion_manual(clasificacion_manual) %}
+<div class="info-section">
+    <div class="section-title">Resultados de Clasificación Manual</div>
+    {% if clasificacion_manual %}
+        {% for categoria, valor in clasificacion_manual.items() %}
+        <div class="clasificacion-item">
+            <div class="clasificacion-titulo">{{ categoria|title }}</div>
+            <div class="clasificacion-valor">{{ valor }}</div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <p>No hay datos de clasificación manual registrados.</p>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{% macro datos_clasificacion_automatica(clasificacion_automatica) %}
+{% if clasificacion_automatica and clasificacion_automatica.items()|list|length > 0 %}
+<div class="info-section">
+    <div class="section-title">Resultados de Clasificación Automática</div>
+    {% for categoria, datos in clasificacion_automatica.items() %}
+        {% if datos.cantidad and datos.cantidad > 0 %}
+        <div class="clasificacion-item">
+            <div class="clasificacion-titulo">{{ categoria|title }}</div>
+            <div class="clasificacion-valor">
+                {{ datos.cantidad }} ({{ datos.porcentaje|round(2) }}%)
+            </div>
+        </div>
+        {% endif %}
+    {% endfor %}
+</div>
+{% endif %}
+{% endmacro %}
+
+{% macro imagenes_clasificacion(fotos, url_for_static=true) %}
+{% if fotos and fotos|length > 0 %}
+<div class="info-section">
+    <div class="section-title">Imágenes de Clasificación</div>
+    {% for foto in fotos %}
+    <img src="{% if url_for_static %}{{ url_for('static', filename=foto) }}{% else %}{{ foto }}{% endif %}" 
+         alt="Imagen de clasificación {{ loop.index }}" 
+         class="clasificacion-image">
+    {% endfor %}
+</div>
+{% endif %}
+{% endmacro %}

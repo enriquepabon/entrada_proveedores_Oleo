@@ -1,0 +1,693 @@
+{% extends "guia_base.html" %}
+{% import "components/cards/stat_cards.html" as cards %}
+
+{% block title %}Vista Centralizada de Guía: {{ codigo_guia }}{% endblock %}
+
+{% block styles %}
+<style>
+    /* DEBUG VERSION: 1.0.1 */
+    /* Estilos mejorados para la barra de progreso */
+    .progress {
+        height: 25px;
+        margin-top: 20px;
+        margin-bottom: 20px;
+    }
+    .progress-bar {
+        font-size: 1rem;
+        font-weight: bold;
+    }
+    /* Estilos para imágenes */
+    .thumbnail {
+        max-height: 120px;
+        object-fit: cover;
+        border-radius: 4px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .badge {
+        font-size: 0.85rem;
+    }
+    .qr-container {
+        text-align: center;
+        margin: 10px auto;
+        padding: 10px;
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        width: 200px;
+        height: 250px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .qr-container img {
+        max-width: 170px;
+        max-height: 170px;
+        margin: 0 auto;
+        border: 3px solid #fff;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        object-fit: contain;
+    }
+    .tiquete-miniatura {
+        max-width: 100%;
+        max-height: 120px;
+        margin-bottom: 10px;
+        border-radius: 4px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    /* Estilos para fechas y horas */
+    .fecha-hora {
+        display: flex;
+        flex-direction: column;
+    }
+    .fecha-hora .fecha {
+        font-weight: bold;
+    }
+    .fecha-hora .hora {
+        font-size: 0.85rem;
+        color: #6c757d;
+    }
+    /* Contenedor de acceso rápido */
+    .quick-access-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+    /* Proceso timeline - ESTILOS MEJORADOS */
+    .process-timeline {
+        display: flex;
+        justify-content: space-between;
+        margin: 30px 0;
+        position: relative;
+        padding: 0 15px;
+    }
+    .process-timeline::before {
+        content: '';
+        position: absolute;
+        top: 25px;
+        left: 50px;
+        right: 50px;
+        height: 6px;
+        background-color: #e9ecef;
+        z-index: 1;
+        border-radius: 3px;
+    }
+    .process-step {
+        position: relative;
+        z-index: 2;
+        text-align: center;
+        width: 20%;
+    }
+    .step-circle {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        background-color: #f8f9fa;
+        border: 5px solid #e9ecef;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin: 0 auto 15px;
+        transition: all 0.3s ease;
+        font-size: 1.4rem;
+    }
+    .step-circle.active {
+        background-color: #007bff;
+        border-color: #0056b3;
+        color: white;
+        transform: scale(1.1);
+        box-shadow: 0 0 10px rgba(0, 123, 255, 0.5);
+    }
+    .step-circle.completed {
+        background-color: #28a745;
+        border-color: #1e7e34;
+        color: white;
+    }
+    .step-label {
+        font-weight: bold;
+        margin-bottom: 5px;
+        font-size: 0.9rem;
+    }
+    .step-date {
+        font-size: 0.75rem;
+        font-weight: bold;
+        color: #495057;
+    }
+    .step-time {
+        font-size: 0.7rem;
+        color: #6c757d;
+    }
+    /* Contenedor de imágenes */
+    .image-container {
+        display: flex;
+        justify-content: center;
+        gap: 25px;
+        margin: 25px 0;
+        flex-wrap: wrap;
+    }
+    .image-container .text-center {
+        background-color: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        min-width: 150px;
+        width: 200px;
+        height: 250px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        align-items: center;
+        overflow: hidden;
+    }
+    /* Estilos específicos para la imagen del tiquete */
+    .image-container .tiquete-img {
+        max-width: 100%;
+        height: auto;
+        object-fit: contain;
+        border-radius: 4px;
+        border: 2px solid #fff;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .image-container .qr-img {
+        max-width: 170px;
+        max-height: 170px;
+        object-fit: contain;
+        border-radius: 4px;
+        border: 2px solid #fff;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .no-image {
+        width: 100%;
+        height: 200px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background-color: #f8f9fa;
+        border-radius: 4px;
+        border: 2px dashed #dee2e6;
+    }
+    /* Mejoras para las tarjetas */
+    .card {
+        border-radius: 8px;
+        overflow: hidden;
+        margin-bottom: 25px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        border: none;
+    }
+    .card-header {
+        padding: 15px 20px;
+        font-weight: bold;
+    }
+    .list-group-item {
+        padding: 12px 20px;
+    }
+    /* Botones de acción */
+    .btn {
+        border-radius: 5px;
+        padding: 8px 16px;
+        margin: 5px;
+        font-weight: 500;
+        transition: all 0.2s ease;
+    }
+    .btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 10px rgba(0,0,0,0.1);
+    }
+    .alert-info {
+        color: #0c5460;
+        background-color: #d1ecf1;
+        border-color: #bee5eb;
+    }
+
+    .alert {
+        position: relative;
+        padding: 0.75rem 1.25rem;
+        margin-bottom: 1rem;
+        border: 1px solid transparent;
+        border-radius: 0.25rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Content starts directly without debugging info -->
+<div class="container mt-4">
+    <!-- Timeline de progreso -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h2>Información de Guía: {{ codigo_guia }}</h2>
+        </div>
+        <div class="card-body">
+            <!-- Timeline de proceso -->
+            <div class="process-timeline">
+                <div class="process-step">
+                    <div class="step-circle {% if 'entrada' in estado_info.pasos_completados %}completed{% elif estado_info.siguiente_paso == 'entrada' %}active{% endif %}">
+                        <i class="fas fa-clipboard-check"></i>
+                    </div>
+                    <div class="step-label">Registro</div>
+                    <div class="step-date">{{ datos_guia.fecha_registro|default('--/--/----') }}</div>
+                    <div class="step-time">{{ datos_guia.hora_registro|default('--:--') }}</div>
+                </div>
+                <div class="process-step">
+                    <div class="step-circle {% if 'pesaje' in estado_info.pasos_completados %}completed{% elif estado_info.siguiente_paso == 'pesaje' %}active{% endif %}">
+                        <i class="fas fa-weight"></i>
+                    </div>
+                    <div class="step-label">Pesaje</div>
+                    <div class="step-date">{{ datos_guia.fecha_pesaje|default('--/--/----') }}</div>
+                    <div class="step-time">{{ datos_guia.hora_pesaje|default('--:--') }}</div>
+                </div>
+                <div class="process-step">
+                    <div class="step-circle {% if 'clasificacion' in estado_info.pasos_completados or datos_guia.clasificacion_completada or 'clasificacion' in datos_guia.pasos_completados %}completed{% elif estado_info.siguiente_paso == 'clasificacion' %}active{% endif %}">
+                        <i class="fas fa-tasks"></i>
+                    </div>
+                    <div class="step-label">Clasificación</div>
+                    <div class="step-date">{{ datos_guia.fecha_clasificacion|default('--/--/----') }}</div>
+                    <div class="step-time">{{ datos_guia.hora_clasificacion|default('--:--') }}</div>
+                </div>
+                <div class="process-step">
+                    <div class="step-circle {% if 'pesaje_neto' in estado_info.pasos_completados or datos_guia.pesaje_neto_completado or (datos_guia.peso_neto and datos_guia.peso_neto != 'Pendiente' and datos_guia.peso_neto != 'N/A') %}completed{% elif estado_info.siguiente_paso == 'pesaje_neto' %}active{% endif %}">
+                        <i class="fas fa-balance-scale"></i>
+                    </div>
+                    <div class="step-label">Pesaje Neto</div>
+                    <div class="step-date">{{ datos_guia.fecha_pesaje_neto|default('--/--/----') }}</div>
+                    <div class="step-time">{{ datos_guia.hora_pesaje_neto|default('--:--') }}</div>
+                </div>
+                <div class="process-step">
+                    <div class="step-circle {% if 'salida' in estado_info.pasos_completados or (datos_guia.fecha_salida and datos_guia.hora_salida) %}completed{% elif estado_info.siguiente_paso == 'salida' %}active{% endif %}">
+                        <i class="fas fa-truck"></i>
+                    </div>
+                    <div class="step-label">Salida</div>
+                    <div class="step-date">{{ datos_guia.fecha_salida|default('--/--/----') }}</div>
+                    <div class="step-time">{{ datos_guia.hora_salida|default('--:--') }}</div>
+                </div>
+            </div>
+            
+            <!-- Progreso numérico y estado actual -->
+            <div class="progress w-100 mb-2">
+                {% set porcentaje_actualizado = estado_info.porcentaje_avance %}
+                {% if datos_guia.clasificacion_completada and porcentaje_actualizado < 60 %}
+                    {% set porcentaje_actualizado = 60 %}
+                {% endif %}
+                {% if datos_guia.pesaje_neto_completado or (datos_guia.peso_neto and datos_guia.peso_neto != 'Pendiente' and datos_guia.peso_neto != 'N/A') %}
+                    {% set porcentaje_actualizado = 80 %}
+                {% endif %}
+                {% if datos_guia.fecha_salida and datos_guia.hora_salida %}
+                    {% set porcentaje_actualizado = 100 %}
+                {% endif %}
+                <div class="progress-bar {% if porcentaje_actualizado < 30 %}bg-primary{% elif porcentaje_actualizado < 60 %}bg-info{% elif porcentaje_actualizado < 80 %}bg-warning{% elif porcentaje_actualizado < 100 %}bg-secondary{% else %}bg-success{% endif %}" 
+                     role="progressbar" 
+                     style="width: {{ porcentaje_actualizado }}%;" 
+                     aria-valuenow="{{ porcentaje_actualizado }}" 
+                     aria-valuemin="0" 
+                     aria-valuemax="100">
+                    {{ porcentaje_actualizado }}%
+                </div>
+            </div>
+            
+            <div class="alert alert-info text-center">
+                {% if datos_guia.fecha_salida and datos_guia.hora_salida %}
+                    <strong>Estado actual:</strong> Proceso completado
+                {% elif datos_guia.pesaje_neto_completado or (datos_guia.peso_neto and datos_guia.peso_neto != 'Pendiente' and datos_guia.peso_neto != 'N/A') %}
+                    <strong>Estado actual:</strong> Pesaje neto completado
+                {% elif datos_guia.clasificacion_completada and estado_info.descripcion == 'Pesaje completado' %}
+                    <strong>Estado actual:</strong> Clasificación completada
+                {% else %}
+                    <strong>Estado actual:</strong> {{ estado_info.descripcion }}
+                {% endif %}
+            </div>
+            
+            <!-- Imágenes del Tiquete y QR -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="d-flex justify-content-center align-items-start gap-4">
+                        <!-- Imagen del Tiquete -->
+                        <div class="image-container" style="min-width: 300px;">
+                            {% if datos_guia.image_filename and datos_guia.image_filename != 'None' %}
+                            <img src="{{ url_for('static', filename='uploads/' + datos_guia.image_filename) }}?v={{ now_timestamp }}" 
+                                 alt="Imagen del tiquete" 
+                                 class="tiquete-img"
+                                 style="max-height: 400px;">
+                            {% else %}
+                            <div class="no-image">
+                                <i class="fas fa-image fa-5x text-muted"></i>
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Código QR -->
+                        <div class="image-container">
+                            {% if qr_url %}
+                            <img src="{{ qr_url }}" alt="Código QR" class="qr-img">
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Datos del Proveedor/Registro de Entrada (Moved to top) -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card mb-3">
+                        <div class="card-header {% if datos_guia.fecha_registro %}bg-success{% else %}bg-primary{% endif %} text-white">
+                            <h4>Registro Entrada</h4>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <ul class="list-group">
+                                        <li class="list-group-item"><strong>Código:</strong> {{ datos_guia.codigo_proveedor|default(datos_guia.codigo, true)|default('N/A') }}</li>
+                                        <li class="list-group-item"><strong>Nombre:</strong> {{ datos_guia.nombre_agricultor|default(datos_guia.nombre_proveedor, true)|default(datos_guia.nombre, true)|default('N/A') }}</li>
+                                        <li class="list-group-item"><strong>Cantidad de Racimos:</strong> {{ datos_guia.racimos|default(datos_guia.cantidad_racimos, true)|default('N/A') }}</li>
+                                        <li class="list-group-item"><strong>Placa:</strong> {% if datos_guia.placa and datos_guia.placa != 'N/A' and datos_guia.placa != 'None' %}{{ datos_guia.placa }}{% else %}N/A{% endif %}</li>
+                                    </ul>
+                                </div>
+                                <div class="col-md-6">
+                                    <ul class="list-group">
+                                        <li class="list-group-item"><strong>Transportista:</strong> {{ datos_guia.transportador|default(datos_guia.transportista, true)|default('N/A') }}</li>
+                                        <li class="list-group-item"><strong>Código Transportista:</strong> {{ datos_guia.codigo_transportista|default('N/A') }}</li>
+                                        <li class="list-group-item"><strong>Se Acarreó:</strong> {{ datos_guia.acarreo|default('N/A') }}</li>
+                                        <li class="list-group-item"><strong>Se Cargó:</strong> {{ datos_guia.cargo|default('N/A') }}</li>
+                                    </ul>
+                                </div>
+                            </div>
+                            
+                            <div class="row mt-3">
+                                <div class="col-12">
+                                    <ul class="list-group">
+                                        <li class="list-group-item">
+                                            <div class="fecha-hora">
+                                                <span class="fecha"><strong>Fecha Registro:</strong> {{ datos_guia.fecha_registro|default('N/A') }}</span>
+                                                <span class="hora"><strong>Hora:</strong> {{ datos_guia.hora_registro|default('N/A') }}</span>
+                                            </div>
+                                        </li>
+                                        <li class="list-group-item"><strong>Código Guía:</strong> {{ codigo_guia }}</li>
+                                        {% if datos_guia.observaciones %}
+                                        <li class="list-group-item"><strong>Observaciones:</strong> {{ datos_guia.observaciones }}</li>
+                                        {% endif %}
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Sección Pesajes -->
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <div class="card mb-3">
+                        <div class="card-header {% if datos_guia.peso_bruto and datos_guia.peso_bruto != 'Pendiente' and datos_guia.peso_bruto != 'N/A' %}bg-success{% else %}bg-primary{% endif %} text-white">
+                            <h4>Datos de Pesaje Bruto</h4>
+                        </div>
+                        <div class="card-body">
+                            <ul class="list-group">
+                                <li class="list-group-item"><strong>Peso Bruto:</strong> {{ datos_guia.peso_bruto|default('Pendiente') }}</li>
+                                {% if datos_guia.fecha_pesaje %}
+                                <li class="list-group-item">
+                                    <div class="fecha-hora">
+                                        <span class="fecha"><strong>Fecha:</strong> {{ datos_guia.fecha_pesaje }}</span>
+                                        <span class="hora"><strong>Hora:</strong> {{ datos_guia.hora_pesaje|default('N/A') }}</span>
+                                    </div>
+                                </li>
+                                {% endif %}
+                                {% if datos_guia.tipo_pesaje %}
+                                <li class="list-group-item"><strong>Tipo de Pesaje:</strong> {{ datos_guia.tipo_pesaje }}</li>
+                                {% endif %}
+                            </ul>
+                            
+                            {% if not datos_guia.peso_bruto or datos_guia.peso_bruto == 'Pendiente' or datos_guia.peso_bruto == 'N/A' %}
+                            <div class="mt-3 text-center">
+                                <a href="{{ url_for('pesaje.pesaje', codigo=codigo_guia) }}" class="btn btn-primary">
+                                    <i class="fas fa-weight"></i> Registrar Pesaje
+                                </a>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <div class="card mb-3">
+                        <div class="card-header {% if datos_guia.peso_neto and datos_guia.peso_neto != 'Pendiente' and datos_guia.peso_neto != 'N/A' %}bg-success{% else %}bg-primary{% endif %} text-white">
+                            <h4>Datos de Pesaje Neto</h4>
+                        </div>
+                        <div class="card-body">
+                            <ul class="list-group">
+                                <li class="list-group-item"><strong>Peso Neto:</strong> {{ datos_guia.peso_neto|default('Pendiente') }}</li>
+                                {% if datos_guia.fecha_pesaje_neto %}
+                                <li class="list-group-item">
+                                    <div class="fecha-hora">
+                                        <span class="fecha"><strong>Fecha:</strong> {{ datos_guia.fecha_pesaje_neto }}</span>
+                                        <span class="hora"><strong>Hora:</strong> {{ datos_guia.hora_pesaje_neto|default('N/A') }}</span>
+                                    </div>
+                                </li>
+                                {% endif %}
+                                {% if datos_guia.tipo_pesaje_neto %}
+                                <li class="list-group-item"><strong>Tipo de Pesaje:</strong> {{ datos_guia.tipo_pesaje_neto }}</li>
+                                {% endif %}
+                                {% if datos_guia.peso_neto and datos_guia.peso_neto != 'Pendiente' and datos_guia.peso_neto != 'N/A' %}
+                                <li class="list-group-item">
+                                    <a href="{{ url_for('pesaje_neto.ver_resultados_pesaje_neto', codigo_guia=codigo_guia) }}" class="btn btn-success btn-sm w-100">
+                                        <i class="fas fa-eye"></i> Ver Resultados de Pesaje Neto
+                                    </a>
+                                </li>
+                                
+                                <!-- Botón para continuar a registro salida si el pesaje neto está completado -->
+                                <li class="list-group-item">
+                                    <a href="{{ url_for('salida.registro_salida', codigo_guia=codigo_guia) }}" class="btn btn-primary btn-sm w-100">
+                                        <i class="fas fa-truck"></i> Continuar a Registro de Salida
+                                    </a>
+                                </li>
+                                {% endif %}
+                            </ul>
+                            
+                            {% if (datos_guia.estado_clasificacion and datos_guia.estado_clasificacion != 'Pendiente') and (not datos_guia.peso_neto or datos_guia.peso_neto == 'Pendiente' or datos_guia.peso_neto == 'N/A') %}
+                            <div class="mt-3 text-center">
+                                <a href="{{ url_for('pesaje.pesaje_neto', codigo=codigo_guia) }}" class="btn btn-primary">
+                                    <i class="fas fa-balance-scale"></i> Registrar Pesaje Neto
+                                </a>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Sección de clasificación -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card mb-3">
+                        <!-- Verificación directa de si la clasificación está completada -->
+                        {% set clasificacion_completada = datos_guia.clasificacion_completada or 
+                                               (datos_guia.estado_clasificacion == 'completado') or
+                                               ('clasificacion' in datos_guia.pasos_completados if datos_guia.pasos_completados else False) %}
+                        
+                        <div class="card-header {{ 'bg-success text-white' if clasificacion_completada else 'bg-secondary text-white' }}">
+                            <div class="d-flex align-items-center">
+                                <span class="me-2">
+                                    {% if clasificacion_completada %}
+                                    <i class="fas fa-check-circle"></i>
+                                    {% else %}
+                                    <i class="fas fa-list-check"></i>
+                                    {% endif %}
+                                </span>
+                                <h5 class="card-title mb-0">
+                                    {% if clasificacion_completada %}
+                                    Clasificación Completada
+                                    {% else %}
+                                    Clasificación
+                                    {% endif %}
+                                </h5>
+                            </div>
+                        </div>
+                        
+                        <div class="card-body">
+                            <ul class="list-group list-group-flush mb-3">
+                                <!-- Si la clasificación está completada, mostrar los detalles -->
+                                {% if clasificacion_completada %}
+                                    <li class="list-group-item bg-light">
+                                        <div class="d-flex justify-content-between">
+                                            <div><strong>Fecha de clasificación:</strong></div>
+                                            <div>{{ datos_guia.fecha_clasificacion }}</div>
+                                        </div>
+                                    </li>
+                                    <li class="list-group-item">
+                                        <div class="d-flex justify-content-between">
+                                            <div><strong>Hora de clasificación:</strong></div>
+                                            <div>{{ datos_guia.hora_clasificacion }}</div>
+                                        </div>
+                                    </li>
+                                    <li class="list-group-item bg-light">
+                                        <div class="d-flex justify-content-between">
+                                            <div><strong>Estado:</strong></div>
+                                            <div>
+                                                <span class="badge bg-success">Completado</span>
+                                            </div>
+                                        </div>
+                                    </li>
+                                {% else %}
+                                    <li class="list-group-item">
+                                        <div class="alert alert-info mb-0">
+                                            <i class="fas fa-info-circle me-2"></i>
+                                            La clasificación aún no ha sido registrada.
+                                        </div>
+                                    </li>
+                                {% endif %}
+                            </ul>
+                            
+                            <div class="d-grid gap-2">
+                                {% if clasificacion_completada %}
+                                    <a href="{{ url_for('clasificacion.ver_resultados_clasificacion', url_guia=codigo_guia) }}" class="btn btn-primary">
+                                        <i class="fas fa-eye me-2"></i>Ver Resultados de Clasificación
+                                    </a>
+                                    <!-- Mostrar botón para pesaje neto solo si la clasificación está completada -->
+                                    <a href="{{ url_for('pesaje.pesaje_neto', codigo=codigo_guia) }}" class="btn btn-success">
+                                        <i class="fas fa-weight me-2"></i>Continuar a Pesaje Neto
+                                    </a>
+                                {% else %}
+                                    <a href="{{ url_for('clasificacion.clasificacion', codigo=codigo_guia, respetar_codigo=true) }}" class="btn btn-primary">
+                                        <i class="fas fa-list-check me-2"></i>Registrar Clasificación
+                                    </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Sección Pesaje Neto -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card mb-3">
+                        {% set clasificacion_completada = datos_guia.clasificacion_completada or datos_guia.estado_clasificacion == 'completado' or datos_guia.estado_actual == 'clasificacion_completada' or 'clasificacion' in datos_guia.pasos_completados if datos_guia.pasos_completados is defined else false %}
+                        {% set peso_neto_completado = datos_guia.peso_neto and datos_guia.peso_neto != 'Pendiente' and datos_guia.peso_neto != 'N/A' %}
+                        <div class="card-header {% if peso_neto_completado %}bg-success{% elif clasificacion_completada %}bg-primary{% else %}bg-secondary{% endif %} text-white">
+                            <h4>Datos de Pesaje Neto</h4>
+                        </div>
+                        <div class="card-body">
+                            <ul class="list-group">
+                                <li class="list-group-item"><strong>Peso Neto:</strong> {{ datos_guia.peso_neto|default('Pendiente') }}</li>
+                                {% if datos_guia.fecha_pesaje_neto %}
+                                <li class="list-group-item">
+                                    <div class="fecha-hora">
+                                        <span class="fecha"><strong>Fecha:</strong> {{ datos_guia.fecha_pesaje_neto }}</span>
+                                        <span class="hora"><strong>Hora:</strong> {{ datos_guia.hora_pesaje_neto|default('N/A') }}</span>
+                                    </div>
+                                </li>
+                                {% endif %}
+                                {% if datos_guia.tipo_pesaje_neto %}
+                                <li class="list-group-item"><strong>Tipo de Pesaje:</strong> {{ datos_guia.tipo_pesaje_neto }}</li>
+                                {% endif %}
+                                {% if peso_neto_completado %}
+                                <li class="list-group-item">
+                                    <a href="{{ url_for('pesaje_neto.ver_resultados_pesaje_neto', codigo_guia=codigo_guia) }}" class="btn btn-success btn-sm w-100">
+                                        <i class="fas fa-eye"></i> Ver Resultados de Pesaje Neto
+                                    </a>
+                                </li>
+                                
+                                <!-- Botón para continuar a registro salida si el pesaje neto está completado -->
+                                <li class="list-group-item">
+                                    <a href="{{ url_for('salida.registro_salida', codigo_guia=codigo_guia) }}" class="btn btn-primary btn-sm w-100">
+                                        <i class="fas fa-truck"></i> Continuar a Registro de Salida
+                                    </a>
+                                </li>
+                                {% endif %}
+                            </ul>
+                            
+                            {% if clasificacion_completada and not peso_neto_completado %}
+                            <div class="mt-3 text-center">
+                                <a href="{{ url_for('pesaje.pesaje_neto', codigo=codigo_guia) }}" class="btn btn-primary">
+                                    <i class="fas fa-balance-scale"></i> Registrar Pesaje Neto
+                                </a>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Sección Registro de Salida -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card mb-3">
+                        <div class="card-header {% if datos_guia.estado_salida and datos_guia.estado_salida != 'Pendiente' %}bg-success{% else %}bg-primary{% endif %} text-white">
+                            <h4>Registro de Salida</h4>
+                        </div>
+                        <div class="card-body">
+                            <ul class="list-group">
+                                <li class="list-group-item"><strong>Estado de Salida:</strong> {{ datos_guia.estado_salida|default('Pendiente') }}</li>
+                                {% if datos_guia.fecha_salida %}
+                                <li class="list-group-item">
+                                    <div class="fecha-hora">
+                                        <span class="fecha"><strong>Fecha:</strong> {{ datos_guia.fecha_salida }}</span>
+                                        <span class="hora"><strong>Hora:</strong> {{ datos_guia.hora_salida|default('N/A') }}</span>
+                                    </div>
+                                </li>
+                                {% endif %}
+                            </ul>
+                            
+                            {% if (datos_guia.peso_neto and datos_guia.peso_neto != 'Pendiente' and datos_guia.peso_neto != 'N/A') and (not datos_guia.estado_salida or datos_guia.estado_salida == 'Pendiente') %}
+                            <div class="mt-3 text-center">
+                                <a href="{{ url_for('salida.registro_salida', codigo_guia=codigo_guia) }}" class="btn btn-primary">
+                                    <i class="fas fa-truck"></i> Registrar Salida
+                                </a>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card mb-4">
+        <div class="card-header bg-secondary text-white">
+            <h4>Acciones Disponibles</h4>
+        </div>
+        <div class="card-body">
+            <div class="d-flex flex-wrap justify-content-center">
+                {% set tiene_pesaje_neto = datos_guia.pesaje_neto_completado or (datos_guia.peso_neto and datos_guia.peso_neto != 'Pendiente' and datos_guia.peso_neto != 'N/A') %}
+                
+                {% if tiene_pesaje_neto %}
+                    <a href="{{ url_for('misc.ver_detalle_proveedor', codigo_guia=codigo_guia) }}" 
+                       class="btn btn-success m-1" target="_blank">
+                        <i class="fas fa-file-alt me-2"></i>Ver Detalle para Proveedor
+                    </a>
+                {% endif %}
+                <a href="{{ url_for('entrada.detalles_registro', codigo_guia=codigo_guia) }}" class="btn btn-primary m-1">Ver Registro de Entrada</a>
+                
+                {% if datos_guia.peso_bruto and datos_guia.peso_bruto != 'N/A' %}
+                    <a href="{{ url_for('pesaje.ver_resultados_pesaje', codigo_guia=codigo_guia) }}" class="btn btn-primary m-1">Ver Resultados de Pesaje</a>
+                    {% if 'clasificacion' not in estado_info.datos_disponibles %}
+                        <a href="{{ url_for('clasificacion.clasificacion', codigo=codigo_guia) }}" class="btn btn-primary m-1">Ir a Clasificación</a>
+                    {% endif %}
+                {% else %}
+                    <a href="{{ url_for('pesaje.pesaje', codigo=codigo_guia) }}" class="btn btn-primary m-1">Ir a Pesaje</a>
+                {% endif %}
+                
+                {% if 'clasificacion' in estado_info.datos_disponibles %}
+                    <a href="{{ url_for('clasificacion.ver_resultados_clasificacion', url_guia=codigo_guia) }}" class="btn btn-primary m-1">Ver Resultados de Clasificación</a>
+                    {% if 'pesaje_neto' not in estado_info.datos_disponibles %}
+                        <a href="{{ url_for('pesaje.pesaje_neto', codigo=codigo_guia) }}" class="btn btn-primary m-1">Ir a Pesaje Neto</a>
+                    {% endif %}
+                {% endif %}
+                
+                {% if 'pesaje_neto' in estado_info.datos_disponibles %}
+                    <a href="{{ url_for('pesaje_neto.ver_resultados_pesaje_neto', codigo_guia=codigo_guia) }}" class="btn btn-primary m-1">Ver Resultados de Pesaje Neto</a>
+                    {% if 'salida' not in estado_info.datos_disponibles %}
+                        <a href="{{ url_for('salida.registro_salida', codigo_guia=codigo_guia) }}" class="btn btn-primary m-1">Ir a Registro de Salida</a>
+                    {% endif %}
+                {% endif %}
+                
+                {% if 'salida' in estado_info.datos_disponibles %}
+                    <a href="{{ url_for('salida.ver_resultados_salida', codigo_guia=codigo_guia) }}" class="btn btn-primary m-1">Ver Resultados de Salida</a>
+                    {% if estado_info.porcentaje_avance == 100 %}
+                        <a href="{{ url_for('misc.generar_pdf_registro', codigo_guia=codigo_guia) }}" class="btn btn-success m-1">
+                            <i class="fas fa-file-pdf me-2"></i>Generar Reporte
+                        </a>
+                    {% endif %}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

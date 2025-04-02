@@ -1,0 +1,121 @@
+{% macro base_styles() %}
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        color: #333;
+        font-size: 12px;
+    }
+    .main-container {
+        max-width: 100%;
+        margin: 0 auto;
+        padding: 10px;
+    }
+    .header-section {
+        text-align: center;
+        margin-bottom: 20px;
+        border-bottom: 2px solid #333;
+        padding-bottom: 15px;
+    }
+    .header-logo {
+        max-width: 150px;
+        margin-bottom: 10px;
+    }
+    .content-row {
+        display: flex;
+        justify-content: space-between;
+    }
+    .info-column {
+        width: 48%;
+    }
+    .info-section {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 15px;
+    }
+    .section-title {
+        font-size: 16px;
+        font-weight: bold;
+        margin-bottom: 10px;
+        border-bottom: 1px solid #dee2e6;
+        padding-bottom: 5px;
+    }
+    .info-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+    }
+    .info-item {
+        margin-bottom: 5px;
+    }
+    .info-label {
+        font-weight: bold;
+        color: #6c757d;
+        font-size: 11px;
+    }
+    .info-value {
+        font-size: 13px;
+    }
+    .weight-value {
+        font-size: 16px;
+        font-weight: bold;
+        color: #198754;
+    }
+    .weight-image {
+        max-width: 100%;
+        max-height: 200px;
+        border-radius: 5px;
+        margin: 10px 0;
+    }
+    .qr-section {
+        text-align: center;
+        margin-top: 15px;
+    }
+    .qr-code {
+        max-width: 100px;
+        margin: 0 auto;
+    }
+    .footer {
+        text-align: center;
+        margin-top: 20px;
+        font-size: 10px;
+        color: #6c757d;
+        border-top: 1px solid #dee2e6;
+        padding-top: 10px;
+    }
+</style>
+{% endmacro %}
+
+{% macro print_styles() %}
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 20px;
+        color: #333;
+    }
+    .main-container {
+        max-width: 800px;
+        margin: 0 auto;
+    }
+    .actions {
+        text-align: center;
+        margin: 20px 0;
+    }
+    @media print {
+        .no-print {
+            display: none !important;
+        }
+        body {
+            padding: 0;
+            margin: 0;
+        }
+        .main-container {
+            max-width: 100%;
+        }
+    }
+</style>
+{% endmacro %} 

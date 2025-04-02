@@ -1,0 +1,1063 @@
+{% extends "guia_base.html" %}
+{% import "components/forms/form_elements.html" as forms %}
+{% import "components/clasificacion_styles.html" as clasificacion_styles %}
+
+{% block title %}Clasificación de Racimos - {{ codigo_guia }}{% endblock %}
+
+{% block styles %}
+{{ super() }}
+{{ clasificacion_styles.clasificacion_styles() }}
+<style>
+    /* Estilos mejorados específicos para clasificación */
+    .loading-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.7);
+        z-index: 9999;
+        justify-content: center;
+        align-items: center;
+    }
+    .loading-content {
+        text-align: center;
+        color: white;
+        padding: 2rem;
+    }
+    .spinner-border {
+        width: 3rem;
+        height: 3rem;
+    }
+    .info-section {
+        background: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .photo-section {
+        background: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .classification-section {
+        background: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .photo-preview {
+        max-width: 100%;
+        height: auto;
+        border-radius: 8px;
+        margin: 1rem 0;
+        border: 1px solid #dee2e6;
+    }
+    .photo-status {
+        display: flex;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+    .status-indicator {
+        width: 1rem;
+        height: 1rem;
+        border-radius: 50%;
+        margin-right: 0.5rem;
+    }
+    .status-pending {
+        background-color: #ffc107;
+    }
+    .status-completed {
+        background-color: #28a745;
+    }
+    .info-row {
+        margin-bottom: 0.75rem;
+        display: flex;
+        flex-wrap: wrap;
+    }
+    .info-label {
+        font-weight: 600;
+        width: 180px;
+        color: #6c757d;
+    }
+    .info-value {
+        flex: 1;
+        font-size: 1rem;
+    }
+    .weight-value {
+        font-weight: 600;
+        color: #198754;
+    }
+    .card-header {
+        background-color: #f8f9fa;
+        border-bottom: 1px solid #dee2e6;
+        padding: 0.75rem 1rem;
+    }
+    .code-badge {
+        font-size: 1rem;
+        padding: 0.4rem 0.8rem;
+        border-radius: 50px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row mb-3">
+        <div class="col-12">
+            <a href="{{ url_for('pesaje.lista_pesajes') }}" class="btn btn-outline-primary">
+                <i class="fas fa-arrow-left me-2"></i>Volver a Pesajes
+            </a>
+            <h2 class="mt-3">Clasificación de Racimos</h2>
+            <p class="text-muted">Información de clasificación para la guía</p>
+        </div>
+    </div>
+
+    <!-- DEBUG: Datos pasados al formulario -->
+    <div id="debug-data-passed" style="display:none; background-color: #f5f5f5; padding: 10px; border-radius: 5px; margin-top: 15px;">
+        <h6>DEBUG - Datos pasados al formulario:</h6>
+        {% if nombre_proveedor is defined %}
+        <p><strong>Nombre del proveedor:</strong> {{ nombre_proveedor }}</p>
+        {% endif %}
+        {% if cantidad_racimos is defined %}
+        <p><strong>Cantidad de racimos:</strong> {{ cantidad_racimos }}</p>
+        {% endif %}
+        {% if codigo_proveedor is defined %}
+        <p><strong>Código del proveedor:</strong> {{ codigo_proveedor }}</p>
+        {% endif %}
+    </div>
+    <script>
+        // Activar solo en desarrollo
+        document.getElementById('debug-data-passed').style.display = 'block';
+    </script>
+
+    <form id="main-form" method="POST" action="{{ url_for('clasificacion.registrar_clasificacion') }}" enctype="multipart/form-data" class="needs-validation" novalidate>
+        <!-- Loading Overlay -->
+        <div id="loadingOverlay" class="loading-overlay">
+            <div class="loading-content">
+                <div class="spinner-border text-light mb-3" role="status">
+                    <span class="visually-hidden">Cargando...</span>
+                </div>
+                <h2>Procesando clasificación...</h2>
+                <p>Por favor espere mientras procesamos las imágenes.</p>
+            </div>
+        </div>
+
+        <!-- Información del proveedor y guía -->
+        <div class="info-section">
+            <h5 class="card-header mb-3">Información General</h5>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="info-row">
+                        <div class="info-label">Código Guía:</div>
+                        <div class="info-value"><span class="badge bg-primary code-badge">{{ codigo_guia }}</span></div>
+                    </div>
+                    <div class="info-row">
+                        <div class="info-label">Código Proveedor:</div>
+                        <div class="info-value">{{ codigo_proveedor }}</div>
+                    </div>
+                    <div class="info-row">
+                        <div class="info-label">Nombre Proveedor:</div>
+                        <div class="info-value">{{ nombre_proveedor }}</div>
+                    </div>
+                    <div class="info-row">
+                        <div class="info-label">Cantidad de Racimos:</div>
+                        <div class="info-value">{{ cantidad_racimos }}</div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="info-row">
+                        <div class="info-label">Peso Bruto:</div>
+                        <div class="info-value weight-value">{{ peso_bruto }} kg</div>
+                    </div>
+                    <div class="info-row">
+                        <div class="info-label">Tipo de Clasificación:</div>
+                        <div class="info-value">
+                            <span class="badge bg-{{ 'warning' if en_reclasificacion else 'primary' }}">
+                                {{ 'Reclasificación' if en_reclasificacion else 'Primera clasificación' }}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="info-row">
+                        <div class="info-label">Tipo de Pesaje:</div>
+                        <div class="info-value">
+                            <span class="badge bg-{{ 'success' if tipo_pesaje == 'directo' else ('primary' if tipo_pesaje == 'bascula' else 'info') }}">
+                                {% if tipo_pesaje == 'directo' %}
+                                    Soporte Foto
+                                {% elif tipo_pesaje == 'virtual' %}
+                                    Manual
+                                {% elif tipo_pesaje == 'bascula' %}
+                                    Directo
+                                {% else %}
+                                    {{ tipo_pesaje|title if tipo_pesaje else 'No especificado' }}
+                                {% endif %}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="info-row">
+                        <div class="info-label">Código Guía SAP:</div>
+                        <div class="info-value">{{ codigo_guia_transporte_sap if codigo_guia_transporte_sap else 'No disponible' }}</div>
+                    </div>
+                    <div class="info-row">
+                        <div class="info-label">Fecha/Hora Pesaje:</div>
+                        <div class="info-value">{{ fecha_pesaje if fecha_pesaje else 'N/A' }} {{ hora_pesaje if hora_pesaje else '' }}</div>
+                    </div>
+                </div>
+            </div>
+            <!-- Contenedores para los resultados y acciones -->
+            <div class="d-none">
+                <input type="hidden" id="codigo" value="{{ codigo_proveedor }}">
+                <input type="hidden" id="codigo_guia" name="codigo_guia" value="{{ codigo_guia }}">
+                <input type="hidden" id="cantidad_racimos_hidden" value="{{ cantidad_racimos }}">
+                <input type="hidden" id="nombreProveedor" value="{{ nombre_proveedor }}">
+            </div>
+        </div>
+
+        <!-- Selección de tipo de clasificación -->
+        <div class="classification-section">
+            <h5 class="card-header mb-3">Tipo de Clasificación</h5>
+            <div class="mb-3">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="clasificacionAutomatica" checked>
+                    <label class="form-check-label" for="clasificacionAutomatica">
+                        Clasificación Automática
+                    </label>
+                    <small class="form-text text-muted">Las fotos se almacenarán para su posterior procesamiento</small>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="clasificacionManual" checked>
+                    <label class="form-check-label" for="clasificacionManual">
+                        Clasificación Manual
+                    </label>
+                    <small class="form-text text-muted">
+                        <span id="muestreoInfo">
+                            {% if cantidad_racimos|int > 1000 %}
+                            Clasificación basada en muestra de 100 racimos
+                            {% else %}
+                            Clasificación basada en muestra de 28 racimos
+                            {% endif %}
+                        </span>
+                    </small>
+                </div>
+            </div>
+            <div class="alert alert-warning d-none" id="clasificacionAlerta">
+                Debe seleccionar al menos un tipo de clasificación
+            </div>
+        </div>
+
+        <!-- Sección de Fotos -->
+        <div class="photo-section" id="seccionFotos">
+            <h5 class="card-header mb-3">Captura de Fotos</h5>
+            <div class="row">
+                {% for i in range(1, 4) %}
+                <div class="col-md-4">
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <h5 class="card-title">Foto {{ i }}</h5>
+                            <div class="photo-status">
+                                <div class="status-indicator status-pending" id="status-foto-{{ i }}"></div>
+                                <span id="status-text-{{ i }}">Pendiente</span>
+                            </div>
+                            <div class="mb-3">
+                                <button class="btn btn-primary mb-2 w-100" id="btn-camara-{{ i }}">
+                                    <i class="fas fa-camera"></i> Abrir Cámara
+                                </button>
+                                <video id="video-{{ i }}" class="w-100 d-none"></video>
+                                <button class="btn btn-success mb-2 w-100 d-none" id="btn-capturar-{{ i }}">
+                                    <i class="fas fa-camera"></i> Capturar Foto
+                                </button>
+                                <input type="file" class="form-control" id="foto-{{ i }}" accept="image/*">
+                                <small class="text-muted">O seleccione una imagen desde su dispositivo</small>
+                            </div>
+                            <img id="preview-{{ i }}" class="photo-preview d-none">
+                            <button class="btn btn-secondary mt-2 d-none" id="btn-retomar-{{ i }}">
+                                Retomar Foto
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Sección de Clasificación Manual -->
+        <div class="classification-section" id="seccionClasificacionManual">
+            <h5 class="card-header mb-3">Clasificación Manual</h5>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Racimos Verdes:</label>
+                    <input type="number" class="form-control" id="verdes" name="verdes" min="0" step="0.01">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Racimos Sobremaduros:</label>
+                    <input type="number" class="form-control" id="sobremaduros" name="sobremaduros" min="0" step="0.01">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Racimos con Daño en Corona:</label>
+                    <input type="number" class="form-control" id="dano_corona" name="dano_corona" min="0" step="0.01">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Racimos con Pedúnculo Largo:</label>
+                    <input type="number" class="form-control" id="pedunculo_largo" name="pedunculo_largo" min="0" step="0.01">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Racimos Podridos:</label>
+                    <input type="number" class="form-control" id="podridos" name="podridos" min="0" step="0.01">
+                </div>
+            </div>
+        </div>
+
+        <!-- Sección de Resultados -->
+        <div class="classification-section">
+            <h5 class="card-header mb-3">Resultados</h5>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h6 class="mb-0">Resultados Automáticos</h6>
+                        </div>
+                        <div class="card-body">
+                            <div id="resultados-automaticos">
+                                <p>Los resultados se mostrarán aquí después de procesar las imágenes.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h6 class="mb-0">Resultados Manuales</h6>
+                        </div>
+                        <div class="card-body">
+                            <div id="resultados-manuales">
+                                <p>Los resultados se mostrarán aquí después de ingresar datos.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Botones de acción -->
+        <div class="classification-section">
+            <div class="d-flex justify-content-end gap-2 mt-3">
+                <button type="button" id="btn-cancelar" class="btn btn-secondary me-2">Cancelar</button>
+                <button type="submit" id="btn-guardar" class="btn btn-success">Procesar Clasificación</button>
+                <!-- Botón de prueba para depuración -->
+                <button type="button" id="btn-debug" class="btn btn-info">Test Redirect</button>
+                
+                <!-- Formulario alternativo para envío directo -->
+                <form id="direct-form" action="{{ url_for('clasificacion.registrar_clasificacion_api') }}" method="post" enctype="multipart/form-data" class="d-none">
+                    <input type="hidden" name="codigo_guia" value="{{ codigo_guia }}">
+                    <input type="hidden" id="direct-verdes" name="verdes" value="0">
+                    <input type="hidden" id="direct-sobremaduros" name="sobremaduros" value="0"> 
+                    <input type="hidden" id="direct-dano_corona" name="dano_corona" value="0">
+                    <input type="hidden" id="direct-pedunculo_largo" name="pedunculo_largo" value="0">
+                    <input type="hidden" id="direct-podridos" name="podridos" value="0">
+                    <button type="submit" id="direct-submit" class="btn btn-primary">Enviar Directo</button>
+                </form>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Utility function to show/hide loading indicator - defined at the top level
+    function mostrarCarga(mostrar) {
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        if (loadingOverlay) {
+            loadingOverlay.style.display = mostrar ? 'flex' : 'none';
+        } else {
+            console.log('Loading overlay element not found');
+        }
+    }
+
+    document.addEventListener("DOMContentLoaded", function() {
+        // Referencias a elementos
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const btnProcesar = document.getElementById('btn-procesar');
+        const btnGuardar = document.getElementById('btn-guardar');
+        const btnCancelar = document.getElementById('btn-cancelar');
+        const checkAutomatica = document.getElementById('clasificacionAutomatica');
+        const checkManual = document.getElementById('clasificacionManual');
+        
+        // Botones y elementos de cámara para cada foto
+        for (let i = 1; i <= 3; i++) {
+            const btnCamara = document.getElementById(`btn-camara-${i}`);
+            const btnCapturar = document.getElementById(`btn-capturar-${i}`);
+            const btnRetomar = document.getElementById(`btn-retomar-${i}`);
+            const video = document.getElementById(`video-${i}`);
+            const preview = document.getElementById(`preview-${i}`);
+            const fileInput = document.getElementById(`foto-${i}`);
+            const statusIndicator = document.getElementById(`status-foto-${i}`);
+            const statusText = document.getElementById(`status-text-${i}`);
+            
+            let stream = null;
+            
+            // Evento para abrir la cámara
+            btnCamara.addEventListener('click', async () => {
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                    video.srcObject = stream;
+                    video.classList.remove('d-none');
+                    btnCapturar.classList.remove('d-none');
+                    btnCamara.classList.add('d-none');
+                    video.play();
+                } catch (err) {
+                    console.error("Error al acceder a la cámara:", err);
+                    alert("No se pudo acceder a la cámara. Por favor, usa la opción de cargar archivo.");
+                }
+            });
+            
+            // Evento para capturar foto
+            btnCapturar.addEventListener('click', () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                
+                // Convertir a imagen y mostrar preview
+                preview.src = canvas.toDataURL('image/jpeg');
+                preview.classList.remove('d-none');
+                
+                // Detener cámara y ocultar elementos
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                }
+                video.classList.add('d-none');
+                btnCapturar.classList.add('d-none');
+                btnRetomar.classList.remove('d-none');
+                
+                // Actualizar estado
+                statusIndicator.classList.remove('status-pending');
+                statusIndicator.classList.add('status-completed');
+                statusText.textContent = 'Completada';
+                
+                // Crear archivo desde el canvas
+                canvas.toBlob(blob => {
+                    const file = new File([blob], `foto-${i}.jpg`, { type: 'image/jpeg' });
+                    const dataTransfer = new DataTransfer();
+                    dataTransfer.items.add(file);
+                    fileInput.files = dataTransfer.files;
+                    
+                    // Disparar evento change para que otros scripts detecten el cambio
+                    const event = new Event('change', { bubbles: true });
+                    fileInput.dispatchEvent(event);
+                }, 'image/jpeg');
+            });
+            
+            // Evento para retomar foto
+            btnRetomar.addEventListener('click', () => {
+                preview.classList.add('d-none');
+                btnRetomar.classList.add('d-none');
+                btnCamara.classList.remove('d-none');
+                
+                // Reiniciar estado
+                statusIndicator.classList.remove('status-completed');
+                statusIndicator.classList.add('status-pending');
+                statusText.textContent = 'Pendiente';
+                
+                // Limpiar el input de archivo
+                fileInput.value = '';
+            });
+            
+            // Evento para cuando se selecciona un archivo
+            fileInput.addEventListener('change', (e) => {
+                if (fileInput.files && fileInput.files[0]) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        preview.src = e.target.result;
+                        preview.classList.remove('d-none');
+                        btnRetomar.classList.remove('d-none');
+                        
+                        // Actualizar estado
+                        statusIndicator.classList.remove('status-pending');
+                        statusIndicator.classList.add('status-completed');
+                        statusText.textContent = 'Completada';
+                    };
+                    reader.readAsDataURL(fileInput.files[0]);
+                }
+            });
+        }
+        
+        // Procesar imágenes (clasificación automática)
+        btnProcesar.addEventListener('click', () => {
+            const fotos = [];
+            let fotosValidas = true;
+            
+            for (let i = 1; i <= 3; i++) {
+                const fileInput = document.getElementById(`foto-${i}`);
+                if (fileInput.files && fileInput.files[0]) {
+                    fotos.push(fileInput.files[0]);
+                } else {
+                    fotosValidas = false;
+                    break;
+                }
+            }
+            
+            if (!fotosValidas) {
+                alert("Por favor, capture o seleccione todas las fotos antes de procesar.");
+                return;
+            }
+            
+            // Mostrar overlay de carga
+            loadingOverlay.style.display = 'flex';
+            
+            // Preparar formulario para envío
+            const formData = new FormData();
+            formData.append('codigo_guia', document.getElementById('codigo_guia').value);
+            
+            fotos.forEach((foto, index) => {
+                formData.append(`foto-${index + 1}`, foto);
+            });
+            
+            // Enviar al servidor para procesamiento
+            fetch('/clasificacion/procesar_automatico', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Ocultar overlay
+                loadingOverlay.style.display = 'none';
+                
+                if (data.success) {
+                    // Mostrar resultados
+                    document.getElementById('resultados-automaticos').innerHTML = `
+                        <p><strong>Verdes:</strong> ${data.resultados.verdes || '0'}</p>
+                        <p><strong>Sobremaduros:</strong> ${data.resultados.sobremaduros || '0'}</p>
+                        <p><strong>Daño Corona:</strong> ${data.resultados.dano_corona || '0'}</p>
+                        <p><strong>Pedúnculo Largo:</strong> ${data.resultados.pedunculo_largo || '0'}</p>
+                    `;
+                    
+                    // Opcionalmente, llenar los campos manuales con estos valores
+                    document.getElementById('verdes').value = data.resultados.verdes || '';
+                    document.getElementById('sobremaduros').value = data.resultados.sobremaduros || '';
+                    document.getElementById('dano_corona').value = data.resultados.dano_corona || '';
+                    document.getElementById('pedunculo_largo').value = data.resultados.pedunculo_largo || '';
+                } else {
+                    alert("Error en la clasificación automática: " + (data.message || "Error desconocido"));
+                }
+            })
+            .catch(error => {
+                loadingOverlay.style.display = 'none';
+                console.error('Error:', error);
+                alert("Error en la clasificación automática. Por favor, intente de nuevo.");
+            });
+        });
+        
+        // Guardar clasificación
+        btnGuardar.addEventListener('click', () => {
+            const codigoGuia = document.getElementById('codigo_guia').value;
+            const verdes = document.getElementById('verdes').value;
+            const sobremaduros = document.getElementById('sobremaduros').value;
+            const danoCorona = document.getElementById('dano_corona').value;
+            const pedunculoLargo = document.getElementById('pedunculo_largo').value;
+            const podridos = document.getElementById('podridos').value;
+            
+            if (!verdes && !sobremaduros) {
+                alert("Por favor, ingrese al menos los valores de racimos verdes y sobremaduros.");
+                return;
+            }
+            
+            // Mostrar overlay de carga
+            loadingOverlay.style.display = 'flex';
+            
+            // Preparar datos para envío
+            const formData = new FormData();
+            formData.append('codigo_guia', codigoGuia);
+            formData.append('verdes', verdes || '0');
+            formData.append('sobremaduros', sobremaduros || '0');
+            formData.append('dano_corona', danoCorona || '0');
+            formData.append('pedunculo_largo', pedunculoLargo || '0');
+            formData.append('podridos', podridos || '0');
+            
+            // Verificar y añadir las fotos
+            let hayFotos = false;
+            for (let i = 1; i <= 3; i++) {
+                const fileInput = document.getElementById(`foto-${i}`);
+                console.log(`Verificando foto ${i}:`, fileInput.files);
+                
+                if (fileInput.files && fileInput.files[0]) {
+                    const file = fileInput.files[0];
+                    console.log(`Añadiendo foto ${i}:`, file.name, file.size, file.type);
+                    formData.append(`foto-${i}`, file);
+                    hayFotos = true;
+                }
+            }
+            
+            if (!hayFotos) {
+                console.warn("No se encontraron archivos de fotos para enviar");
+            }
+            
+            // Mostrar todos los datos que se enviarán
+            console.log("Datos a enviar:");
+            for (let pair of formData.entries()) {
+                console.log(pair[0], pair[1]);
+            }
+            
+            // Enviar al servidor
+            fetch('/clasificacion/registrar_clasificacion', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                console.log("Estado de la respuesta:", response.status);
+                console.log("Headers de la respuesta:", response.headers);
+                
+                // Intentar obtener la redirección directamente si la respuesta es una redirección
+                if (response.redirected) {
+                    console.log("Redirección detectada:", response.url);
+                    window.location.href = response.url;
+                    return null; // No continuar con el procesamiento JSON
+                }
+                
+                return response.json().catch(e => {
+                    // Si no es JSON, manejar el error
+                    console.error("Error al parsear respuesta JSON:", e);
+                    return { success: false, message: "Error en la respuesta del servidor" };
+                });
+            })
+            .then(data => {
+                if (!data) return; // Si ya manejamos la redirección, salir
+                
+                loadingOverlay.style.display = 'none';
+                console.log("Respuesta del servidor:", data);
+                
+                if (data.success) {
+                    alert("Clasificación guardada correctamente");
+                    // Redirigir a la página de resultados
+                    window.location.href = data.redirect_url;
+                } else {
+                    alert("Error al guardar la clasificación: " + (data.message || "Error desconocido"));
+                }
+            })
+            .catch(error => {
+                loadingOverlay.style.display = 'none';
+                console.error('Error en la petición:', error);
+                alert("Error al guardar la clasificación. Por favor, intente de nuevo.");
+            });
+        });
+        
+        // Cancelar y volver a la página anterior
+        btnCancelar.addEventListener('click', () => {
+            window.history.back();
+        });
+
+        // Validar el formulario antes de enviar
+        document.getElementById('main-form').addEventListener('submit', function(e) {
+            e.preventDefault(); // Prevenir el envío automático
+            
+            // Asegurarse de que al menos un tipo de clasificación esté seleccionado
+            const checkAutomatica = document.getElementById('clasificacionAutomatica');
+            const checkManual = document.getElementById('clasificacionManual');
+            
+            if (!checkAutomatica.checked && !checkManual.checked) {
+                document.getElementById('clasificacionAlerta').classList.remove('d-none');
+                return false;
+            }
+            
+            // Verificar y validar los campos numéricos
+            if (checkManual.checked) {
+                // Asegurarse de que los valores vacíos se conviertan a cero
+                document.getElementById('verdes').value = document.getElementById('verdes').value || "0";
+                document.getElementById('sobremaduros').value = document.getElementById('sobremaduros').value || "0";
+                document.getElementById('dano_corona').value = document.getElementById('dano_corona').value || "0";
+                document.getElementById('pedunculo_largo').value = document.getElementById('pedunculo_largo').value || "0";
+                document.getElementById('podridos').value = document.getElementById('podridos').value || "0";
+                
+                // Mostrar los valores que se van a enviar
+                console.log("Valores a enviar:");
+                console.log("Verdes:", document.getElementById('verdes').value);
+                console.log("Sobremaduros:", document.getElementById('sobremaduros').value);
+                console.log("Daño Corona:", document.getElementById('dano_corona').value);
+                console.log("Pedúnculo Largo:", document.getElementById('pedunculo_largo').value);
+                console.log("Podridos:", document.getElementById('podridos').value);
+            }
+            
+            // Continuar con el envío
+            this.submit();
+        });
+    });
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Manejo de checkboxes para mostrar/ocultar secciones
+        const checkAutomatica = document.getElementById('clasificacionAutomatica');
+        const checkManual = document.getElementById('clasificacionManual');
+        const seccionFotos = document.getElementById('seccionFotos');
+        const seccionClasificacionManual = document.getElementById('seccionClasificacionManual');
+        const alerta = document.getElementById('clasificacionAlerta');
+        
+        function actualizarSecciones() {
+            // Mostrar/ocultar sección de fotos
+            if (checkAutomatica.checked) {
+                seccionFotos.classList.remove('d-none');
+            } else {
+                seccionFotos.classList.add('d-none');
+            }
+            
+            // Mostrar/ocultar sección de clasificación manual
+            if (checkManual.checked) {
+                seccionClasificacionManual.classList.remove('d-none');
+            } else {
+                seccionClasificacionManual.classList.add('d-none');
+            }
+            
+            // Mostrar/ocultar alerta si ningún checkbox está seleccionado
+            if (!checkAutomatica.checked && !checkManual.checked) {
+                alerta.classList.remove('d-none');
+            } else {
+                alerta.classList.add('d-none');
+            }
+        }
+        
+        // Inicializar estado de secciones
+        actualizarSecciones();
+        
+        // Escuchar cambios en los checkboxes
+        checkAutomatica.addEventListener('change', actualizarSecciones);
+        checkManual.addEventListener('change', actualizarSecciones);
+        
+        // Manejar el botón Cancelar
+        document.getElementById('btn-cancelar').addEventListener('click', function() {
+            if (confirm('¿Está seguro de cancelar la clasificación? Los datos no guardados se perderán.')) {
+                window.location.href = "{{ url_for('misc.ver_guia_centralizada', codigo_guia=codigo_guia) }}";
+            }
+        });
+        
+        // Manejar el botón Procesar Clasificación
+        document.getElementById('btn-guardar').addEventListener('click', function() {
+            // Validar que al menos una clasificación esté seleccionada
+            if (!checkAutomatica.checked && !checkManual.checked) {
+                alerta.classList.remove('d-none');
+                return;
+            }
+            
+            // Confirmar antes de procesar
+            if (confirm('¿Está seguro de procesar la clasificación?')) {
+                procesarClasificacion();
+            }
+        });
+        
+        async function procesarClasificacion() {
+            // Mostrar indicador de carga
+            mostrarCarga(true);
+            console.log('Iniciando proceso de clasificación');
+            
+            try {
+                // Estrategia #1: Envío directo del formulario
+                try {
+                    // Método más simple y directo - enviar el formulario principal
+                    console.log('MÉTODO 1: Intentando submit directo del formulario principal');
+                    
+                    // Verificar si hay imágenes para subir
+                    const hayImagenes = verificarImagenes();
+                    console.log('¿Hay imágenes para subir?', hayImagenes);
+                    
+                    // Transferir datos de formulario manual al formulario principal si es necesario
+                    if (checkManual.checked) {
+                        // Buscar o crear los campos en el formulario principal
+                        const agregarCampoOculto = (id, valor) => {
+                            let input = document.querySelector(`#main-form input[name=${id}]`);
+                            if (!input) {
+                                input = document.createElement('input');
+                                input.type = 'hidden';
+                                input.name = id;
+                                document.getElementById('main-form').appendChild(input);
+                            }
+                            input.value = document.getElementById(id)?.value || valor || '0';
+                        };
+                        
+                        // Agregar campos
+                        agregarCampoOculto('verdes', '0');
+                        agregarCampoOculto('sobremaduros', '0');
+                        agregarCampoOculto('dano_corona', '0');
+                        agregarCampoOculto('pedunculo_largo', '0');
+                        agregarCampoOculto('podridos', '0');
+                        console.log('Campos de clasificación manual transferidos al formulario principal');
+                    }
+                    
+                    // Transferir archivos de imagen al formulario principal si es necesario
+                    if (checkAutomatica.checked && hayImagenes) {
+                        for (let i = 1; i <= 3; i++) {
+                            const fileInput = document.getElementById(`foto-${i}`);
+                            if (fileInput.files.length > 0) {
+                                console.log(`Preparando archivo para foto-${i}:`, fileInput.files[0].name);
+                                
+                                // Verificar si ya existe un input para este archivo en el formulario principal
+                                let inputPrincipal = document.querySelector(`#main-form input[name=foto-${i}]`);
+                                if (!inputPrincipal) {
+                                    // Crear un nuevo input de archivo en el formulario principal
+                                    const dt = new DataTransfer();
+                                    dt.items.add(fileInput.files[0]);
+                                    
+                                    inputPrincipal = document.createElement('input');
+                                    inputPrincipal.type = 'file';
+                                    inputPrincipal.name = `foto-${i}`;
+                                    inputPrincipal.style.display = 'none';
+                                    inputPrincipal.files = dt.files;
+                                    document.getElementById('main-form').appendChild(inputPrincipal);
+                                    console.log(`Input de archivo foto-${i} creado y añadido al formulario principal`);
+                                }
+                            } else {
+                                console.log(`No hay archivo seleccionado para foto-${i}`);
+                            }
+                        }
+                    }
+                    
+                    // Submit directo
+                    console.log('Enviando formulario principal');
+                    document.getElementById('main-form').submit();
+                    return; // Si llega aquí, la navegación ya habrá comenzado
+                } catch (submitError) {
+                    console.error('Error con submit directo:', submitError);
+                    // Continuar con otros métodos
+                }
+                
+                // Estrategia #2: Fetch API con FormData
+                // Crear objeto FormData para enviar datos
+                const formData = new FormData();
+                const codigoGuia = document.getElementById('codigo_guia').value;
+                formData.append('codigo_guia', codigoGuia);
+                console.log('MÉTODO 2: Intentando con Fetch API. Código guía:', codigoGuia);
+                
+                // Agregar datos de clasificación manual si está seleccionada
+                if (checkManual.checked) {
+                    formData.append('verdes', document.getElementById('verdes').value || '0');
+                    formData.append('sobremaduros', document.getElementById('sobremaduros').value || '0');
+                    formData.append('dano_corona', document.getElementById('dano_corona').value || '0');
+                    formData.append('pedunculo_largo', document.getElementById('pedunculo_largo').value || '0');
+                    formData.append('podridos', document.getElementById('podridos').value || '0');
+                    console.log('Datos clasificación manual agregados a FormData');
+                }
+                
+                // Agregar fotos si clasificación automática está seleccionada
+                let fotosAgregadas = 0;
+                if (checkAutomatica.checked) {
+                    for (let i = 1; i <= 3; i++) {
+                        const fileInput = document.getElementById(`foto-${i}`);
+                        if (fileInput.files.length > 0) {
+                            const file = fileInput.files[0];
+                            console.log(`Agregando archivo foto-${i} a FormData:`, file.name, 'tipo:', file.type, 'tamaño:', file.size);
+                            formData.append(`foto-${i}`, file);
+                            fotosAgregadas++;
+                        } else {
+                            console.log(`No hay archivo para foto-${i}`);
+                        }
+                    }
+                    console.log(`${fotosAgregadas} fotos agregadas a FormData`);
+                    
+                    // Verificar el contenido del FormData (solo para depuración)
+                    for (let [key, value] of formData.entries()) {
+                        if (value instanceof File) {
+                            console.log(`FormData contiene: ${key} = File(${value.name}, ${value.type}, ${value.size} bytes)`);
+                        } else {
+                            console.log(`FormData contiene: ${key} = ${value}`);
+                        }
+                    }
+                }
+                
+                // Intentos de envío - primero con fetch, luego con formulario directo
+                try {
+                    // Intentar primero con fetch
+                    console.log('Intentando envío con fetch');
+                    
+                    // URL para enviar
+                    const url = "{{ url_for('clasificacion.registrar_clasificacion') }}";
+                    console.log('Enviando request a:', url);
+                    
+                    // Enviar datos al servidor
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    console.log('Respuesta recibida, status:', response.status);
+                    
+                    if (response.redirected) {
+                        console.log('Redirección detectada a:', response.url);
+                        window.location.href = response.url;
+                        return;
+                    }
+                    
+                    // Intentar obtener respuesta como JSON
+                    let data;
+                    try {
+                        data = await response.json();
+                        console.log('Datos de respuesta JSON:', data);
+                    } catch (jsonError) {
+                        console.log('Respuesta no es JSON, procesando como texto');
+                        const text = await response.text();
+                        console.log('Texto de respuesta (primeros 100 caracteres):', text.substring(0, 100));
+                        
+                        // Si la respuesta parece ser HTML, podría ser una redirección
+                        if (text.includes('<!DOCTYPE html>') || text.includes('<html>')) {
+                            console.log('Respuesta parece ser HTML, intentando redirección manual');
+                            window.location.href = `/clasificacion/ver_resultados_clasificacion/${codigoGuia}`;
+                            return;
+                        }
+                        
+                        // Si llegamos aquí, mostrar un mensaje y continuar
+                        console.log('Respuesta no reconocida, continuando con estrategia de redirección');
+                        window.location.href = `/clasificacion/ver_resultados_clasificacion/${codigoGuia}`;
+                        return;
+                    }
+                    
+                    // Ocultar indicador de carga
+                    mostrarCarga(false);
+                    
+                    // Si llegamos aquí, el fetch funcionó
+                    // Procesar la respuesta como antes
+                    if (data && data.success) {
+                        if (data.redirect_url) {
+                            console.log('Redirigiendo a:', data.redirect_url);
+                            try {
+                                // Intentar primero con la URL generada por url_for
+                                window.location.href = data.redirect_url;
+                                
+                                // Si después de 1 segundo seguimos en la misma página, probar con URL directa
+                                setTimeout(function() {
+                                    if (window.location.pathname.includes('/clasificacion/')) {
+                                        console.log('Redirección con redirect_url no funcionó. Probando URL directa.');
+                                        const directUrl = `/clasificacion/ver_resultados_clasificacion/${codigoGuia}`;
+                                        console.log('URL directa:', directUrl);
+                                        window.location.href = directUrl;
+                                    }
+                                }, 1000);
+                            } catch (redirectError) {
+                                console.error('Error en redirección:', redirectError);
+                                // Intentar con URL directa como fallback
+                                window.location.href = `/clasificacion/ver_resultados_clasificacion/${codigoGuia}`;
+                            }
+                        } else {
+                            // No hay información de redirección, usar la URL directa
+                            const directUrl = `/clasificacion/ver_resultados_clasificacion/${codigoGuia}`;
+                            console.log('Usando URL directa para redirección:', directUrl);
+                            window.location.href = directUrl;
+                        }
+                    } else {
+                        // Error en la respuesta JSON
+                        console.error('Error en respuesta JSON:', data);
+                        alert('Error al procesar la clasificación. Por favor, intente nuevamente.');
+                    }
+                } catch (fetchError) {
+                    console.error('Error con fetch API:', fetchError);
+                    // Si falla fetch, intentar con formulario directo
+                    document.getElementById('main-form').submit();
+                }
+            } catch (error) {
+                console.error('Error general:', error);
+                alert('Error al procesar la clasificación');
+                mostrarCarga(false);
+            }
+        }
+        
+        // Función para verificar si hay imágenes seleccionadas
+        function verificarImagenes() {
+            let hayImagenes = false;
+            for (let i = 1; i <= 3; i++) {
+                const fileInput = document.getElementById(`foto-${i}`);
+                if (fileInput && fileInput.files && fileInput.files.length > 0) {
+                    hayImagenes = true;
+                    console.log(`Imagen ${i} seleccionada:`, fileInput.files[0].name);
+                }
+            }
+            return hayImagenes;
+        }
+
+        // Test URL generation
+        document.addEventListener('DOMContentLoaded', function() {
+            const codigoGuia = document.getElementById('codigo_guia').value;
+            console.log('Current codigo_guia:', codigoGuia);
+            
+            // Test URL construction
+            const testUrl = `/clasificacion/ver_resultados_clasificacion/${codigoGuia}`;
+            console.log('Test URL for redirection:', testUrl);
+            
+            // Add event listener to the save button for additional debugging
+            document.getElementById('btn-guardar').addEventListener('click', function() {
+                console.log('Procesar Clasificación button clicked');
+            });
+            
+            // Add event listener for debug button
+            document.getElementById('btn-debug').addEventListener('click', function() {
+                console.log('Debug button clicked');
+                const codigo = document.getElementById('codigo_guia').value;
+                
+                // First try the debug route
+                fetch(`/clasificacion/debug_redirect/${codigo}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log('Debug route response:', data);
+                        alert(`Debug info:\nRedirect URL: ${data.redirect_url}\nDirect URL: ${data.direct_url}`);
+                        
+                        // Try direct navigation
+                        if (confirm('¿Intentar navegar a la página de resultados?')) {
+                            window.location.href = data.redirect_url;
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error with debug route:', error);
+                        alert('Error with debug route: ' + error);
+                    });
+            });
+
+            // Add event listener for debug button
+            document.getElementById('btn-debug').addEventListener('click', function() {
+                console.log('Debug button clicked');
+                const codigo = document.getElementById('codigo_guia').value;
+                
+                // First try the debug route
+                fetch(`/clasificacion/debug_redirect/${codigo}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log('Debug route response:', data);
+                        alert(`Debug info:\nRedirect URL: ${data.redirect_url}\nDirect URL: ${data.direct_url}`);
+                        
+                        // Try direct navigation
+                        if (confirm('¿Intentar navegar a la página de resultados?')) {
+                            window.location.href = data.redirect_url;
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error with debug route:', error);
+                        alert('Error with debug route: ' + error);
+                    });
+            });
+            
+            // Alternate method using standard form submission
+            function usarFormularioDirecto() {
+                // Get values from original form
+                if (document.getElementById('verdes')) {
+                    document.getElementById('direct-verdes').value = document.getElementById('verdes').value || '0';
+                    document.getElementById('direct-sobremaduros').value = document.getElementById('sobremaduros').value || '0';
+                    document.getElementById('direct-dano_corona').value = document.getElementById('dano_corona').value || '0';
+                    document.getElementById('direct-pedunculo_largo').value = document.getElementById('pedunculo_largo').value || '0';
+                    document.getElementById('direct-podridos').value = document.getElementById('podridos').value || '0';
+                }
+                
+                // Submit the direct form
+                document.getElementById('direct-form').classList.remove('d-none');
+                document.getElementById('direct-submit').click();
+            }
+            
+            // Add failsafe to process button
+            document.getElementById('btn-guardar').addEventListener('dblclick', function(event) {
+                event.preventDefault();
+                console.log('Double-click on process button - using direct form');
+                usarFormularioDirecto();
+            });
+        });
+    });
+</script>
+{% endblock %} 

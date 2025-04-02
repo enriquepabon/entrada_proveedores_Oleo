@@ -1,0 +1,419 @@
+{% extends "base.html" %}
+
+{% block title %}Resultados de Pesaje Neto - {{ codigo_guia }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .main-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+    .info-section {
+        background-color: #f8f9fa;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .process-section {
+        background-color: #ffffff;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .weight-section {
+        background-color: #e9f7ef;
+        border-left: 5px solid #28a745;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+    }
+    .section-title {
+        font-size: 1.4rem;
+        font-weight: 600;
+        margin-bottom: 15px;
+        color: #2c3e50;
+        border-bottom: 1px solid #eee;
+        padding-bottom: 10px;
+    }
+    .weight-display {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #28a745;
+    }
+    .weight-label {
+        font-size: 0.9rem;
+        color: #6c757d;
+    }
+    .support-image {
+        max-width: 100%;
+        height: auto;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: transform 0.3s;
+    }
+    .support-image:hover {
+        transform: scale(1.05);
+    }
+    .verification-section {
+        background-color: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+    }
+    .verification-success {
+        background-color: #d4edda;
+        border-left: 4px solid #28a745;
+    }
+    .verification-fail {
+        background-color: #f8d7da;
+        border-left: 4px solid #dc3545;
+    }
+    .status-badge {
+        display: inline-block;
+        padding: 5px 10px;
+        border-radius: 20px;
+        font-size: 0.9em;
+        color: white;
+    }
+    .badge-success {
+        background-color: #28a745;
+    }
+    .badge-danger {
+        background-color: #dc3545;
+    }
+    .available-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        justify-content: center;
+        margin-top: 30px;
+    }
+    .action-button {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 15px;
+        border-radius: 8px;
+        text-decoration: none;
+        color: #fff;
+        min-width: 150px;
+        text-align: center;
+        transition: transform 0.3s, box-shadow 0.3s;
+    }
+    .action-button:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        color: #fff;
+    }
+    .action-icon {
+        font-size: 1.5rem;
+        margin-bottom: 8px;
+    }
+    .action-label {
+        font-size: 0.9rem;
+    }
+    .primary-action {
+        background-color: #2980b9;
+    }
+    .success-action {
+        background-color: #27ae60;
+    }
+    .secondary-action {
+        background-color: #7f8c8d;
+    }
+    .warning-action {
+        background-color: #f39c12;
+    }
+    .image-thumbnail {
+        width: 100px;
+        height: 100px;
+        object-fit: cover;
+        border-radius: 4px;
+        margin: 5px;
+        cursor: pointer;
+    }
+    .modal-image {
+        max-width: 100%;
+        max-height: 80vh;
+    }
+    .validation-item {
+        padding: 8px;
+        margin-bottom: 10px;
+        border-radius: 4px;
+    }
+    .validation-success {
+        background-color: #d4edda;
+        border-left: 4px solid #28a745;
+    }
+    .validation-error {
+        background-color: #f8d7da;
+        border-left: 4px solid #dc3545;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="main-container">
+    <h2 class="text-center mb-4">Resultados de Pesaje Neto</h2>
+    <div class="alert alert-success text-center mb-4">
+        <i class="fas fa-check-circle me-2"></i> Pesaje neto completado para la guía <strong>{{ codigo_guia }}</strong>
+    </div>
+
+    <!-- Información del Proveedor -->
+    <div class="info-section">
+        <div class="section-title">Información del Proveedor</div>
+        <div class="row">
+            <div class="col-md-6">
+                <p><strong>Código Proveedor:</strong> {{ codigo_proveedor }}</p>
+                <p><strong>Nombre:</strong> {{ nombre_proveedor }}</p>
+                <p><strong>Cantidad de Racimos:</strong> {{ racimos }}</p>
+            </div>
+            <div class="col-md-6">
+                <p><strong>Fecha de Registro:</strong> {{ fecha_registro }}</p>
+                <p><strong>Transportador:</strong> {{ transportador }}</p>
+                <p><strong>Placa:</strong> {{ placa }}</p>
+                <p><strong>Guía Transporte SAP:</strong> {{ codigo_guia_transporte_sap|default('No disponible', true) }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Información del Pesaje -->
+    <div class="process-section">
+        <div class="section-title">Comparativa de Pesos</div>
+        <div class="row">
+            <div class="col-md-4">
+                <div class="weight-section text-center p-3">
+                    <div class="weight-label">Peso Bruto</div>
+                    <div class="weight-display">{{ peso_bruto }} kg</div>
+                    <div class="text-muted small">Vehículo cargado</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="weight-section text-center p-3">
+                    <div class="weight-label">Peso Tara</div>
+                    <div class="weight-display">{{ peso_tara|default(peso_neto, true) }} kg</div>
+                    <div class="text-muted small">Vehículo vacío</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="weight-section text-center p-3">
+                    <div class="weight-label">Peso Neto (Producto)</div>
+                    <div class="weight-display">{{ peso_neto }} kg</div>
+                    <div class="text-muted small">Carga efectiva</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Respuesta del Sistema SAP -->
+    {% if tipo_pesaje_neto == 'sap' and respuesta_sap %}
+    <div class="process-section">
+        <div class="section-title">Información del Sistema SAP</div>
+        {% if respuesta_sap.guia_transito_sap %}
+        <div class="validation-item {% if 'exitosa' in respuesta_sap.guia_transito_sap %}validation-success{% else %}validation-error{% endif %}">
+            <strong>Guía Tránsito SAP:</strong> {{ respuesta_sap.guia_transito_sap }}
+        </div>
+        {% endif %}
+        
+        {% if respuesta_sap.codigo_proveedor %}
+        <div class="validation-item {% if 'exitosa' in respuesta_sap.codigo_proveedor %}validation-success{% else %}validation-error{% endif %}">
+            <strong>Código Proveedor:</strong> {{ respuesta_sap.codigo_proveedor }}
+        </div>
+        {% endif %}
+        
+        {% if respuesta_sap.peso_bruto %}
+        <div class="validation-item {% if 'exitosa' in respuesta_sap.peso_bruto %}validation-success{% else %}validation-error{% endif %}">
+            <strong>Peso Bruto:</strong> {{ respuesta_sap.peso_bruto }}
+        </div>
+        {% endif %}
+        
+        <div class="row mt-3">
+            <div class="col-md-6">
+                <p><strong>Fecha SAP:</strong> {{ respuesta_sap.fecha|default(fecha_pesaje_neto, true) }}</p>
+            </div>
+            <div class="col-md-6">
+                <p><strong>Hora SAP:</strong> {{ respuesta_sap.hora|default(hora_pesaje_neto, true) }}</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Detalles del Pesaje Neto -->
+    <div class="process-section">
+        <div class="section-title">Detalles del Pesaje Neto</div>
+        <div class="row">
+            <div class="col-md-6">
+                <p><strong>Tipo de Pesaje:</strong> 
+                    {% if tipo_pesaje_neto == 'directo' %}
+                        <span class="badge bg-success">Pesaje Directo (Báscula)</span>
+                    {% elif tipo_pesaje_neto == 'virtual' %}
+                        <span class="badge bg-warning">Pesaje Virtual (Manual)</span>
+                    {% elif tipo_pesaje_neto == 'sap' %}
+                        <span class="badge bg-primary">Sistema SAP</span>
+                    {% else %}
+                        <span class="badge bg-secondary">{{ tipo_pesaje_neto }}</span>
+                    {% endif %}
+                </p>
+                <p><strong>Fecha:</strong> {{ fecha_pesaje_neto }}</p>
+                <p><strong>Hora:</strong> {{ hora_pesaje_neto }}</p>
+            </div>
+            <div class="col-md-6">
+                {% if comentarios_neto %}
+                <div class="card">
+                    <div class="card-header">
+                        <i class="fas fa-comment me-2"></i> Comentarios
+                    </div>
+                    <div class="card-body">
+                        {{ comentarios_neto }}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Verificación de Placa (si existe) -->
+    {% if verificacion_placa %}
+    <div class="verification-section {% if verificacion_placa.coincide %}verification-success{% else %}verification-fail{% endif %}">
+        <div class="section-title">Verificación de Placa</div>
+        <div class="row">
+            <div class="col-md-6">
+                <p><strong>Placa Registrada:</strong> {{ verificacion_placa.placa_registrada }}</p>
+                <p><strong>Placa Detectada:</strong> {{ verificacion_placa.placa_detectada }}</p>
+            </div>
+            <div class="col-md-6 text-center">
+                <p><strong>Estado:</strong></p>
+                {% if verificacion_placa.coincide %}
+                <span class="status-badge badge-success">VERIFICADO ✓</span>
+                {% else %}
+                <span class="status-badge badge-danger">NO COINCIDE ✗</span>
+                {% endif %}
+            </div>
+        </div>
+        {% if foto_placa_neto %}
+        <div class="mt-3">
+            <p><strong>Imagen de la Placa:</strong></p>
+            <img src="{{ url_for('static', filename=foto_placa_neto) }}" alt="Imagen de verificación de placa" class="image-thumbnail" onclick="showImageModal(this.src)">
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Fotos de Soporte (si existen) -->
+    {% if fotos_pesaje_neto and fotos_pesaje_neto|length > 0 %}
+    <div class="process-section">
+        <div class="section-title">Fotos de Soporte</div>
+        <div class="d-flex flex-wrap">
+            {% for foto in fotos_pesaje_neto %}
+            <div class="m-2">
+                <img src="{{ url_for('static', filename=foto) }}" alt="Foto de soporte {{ loop.index }}" class="image-thumbnail" onclick="showImageModal(this.src)">
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Acciones Disponibles -->
+    <div class="process-section">
+        <div class="section-title">Acciones Disponibles</div>
+        <div class="available-actions">
+            <a href="{{ url_for('generar_pdf_pesaje_neto', codigo_guia=codigo_guia) }}" class="action-button success-action">
+                <i class="fas fa-file-pdf action-icon"></i>
+                <span class="action-label">Generar PDF</span>
+            </a>
+            <a href="{{ url_for('pesaje.lista_pesajes_neto') }}" class="action-button secondary-action">
+                <i class="fas fa-list action-icon"></i>
+                <span class="action-label">Ver Lista de Pesajes</span>
+            </a>
+            <a href="{{ url_for('salida.registro_salida', codigo_guia=codigo_guia) }}" class="action-button primary-action">
+                <i class="fas fa-truck action-icon"></i>
+                <span class="action-label">Ir a Registro Salida</span>
+            </a>
+            <button class="action-button warning-action" data-bs-toggle="modal" data-bs-target="#qrScanModal">
+                <i class="fas fa-qrcode action-icon"></i>
+                <span class="action-label">Escanear QR</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para imágenes -->
+<div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="imageModalLabel">Imagen Ampliada</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+                <img id="modalImage" src="" alt="Imagen ampliada" class="modal-image">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para escaneo QR -->
+<div class="modal fade" id="qrScanModal" tabindex="-1" aria-labelledby="qrScanModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="qrScanModalLabel">Escanear Código QR</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="reader" class="mb-3"></div>
+                <div id="qrResult" class="alert alert-info" style="display: none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://unpkg.com/html5-qrcode@2.2.1/html5-qrcode.min.js"></script>
+<script>
+    // Función para mostrar imagen en el modal
+    function showImageModal(src) {
+        document.getElementById('modalImage').src = src;
+        new bootstrap.Modal(document.getElementById('imageModal')).show();
+    }
+
+    // Configuración del lector QR cuando se abre el modal
+    document.getElementById('qrScanModal').addEventListener('shown.bs.modal', function () {
+        const html5QrCode = new Html5Qrcode("reader");
+        const qrConfig = { fps: 10, qrbox: { width: 250, height: 250 } };
+        
+        // Función de éxito para el escaneo QR
+        function onScanSuccess(decodedText, decodedResult) {
+            document.getElementById('qrResult').innerHTML = `
+                <strong>Código QR leído:</strong> ${decodedText}
+                <div class="mt-2">
+                    <a href="${decodedText}" class="btn btn-primary btn-sm">Ir al enlace</a>
+                </div>
+            `;
+            document.getElementById('qrResult').style.display = 'block';
+            html5QrCode.stop();
+        }
+
+        // Iniciar la cámara
+        html5QrCode.start(
+            { facingMode: "environment" },
+            qrConfig,
+            onScanSuccess
+        ).catch((err) => {
+            console.error("Error al iniciar la cámara: ", err);
+        });
+        
+        // Detener la cámara cuando se cierra el modal
+        document.getElementById('qrScanModal').addEventListener('hidden.bs.modal', function () {
+            html5QrCode.stop().catch(err => console.error(err));
+        });
+    });
+</script>
+{% endblock %} 

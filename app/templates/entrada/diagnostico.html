@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diagnóstico de Entradas</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            padding: 30px;
+            font-family: Arial, sans-serif;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        .container {
+            max-width: 1200px;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #fff;
+        }
+        h2 {
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="mb-4">Diagnóstico de Entradas</h1>
+        
+        <div class="section">
+            <h2>Información de Configuración</h2>
+            <ul>
+                <li><strong>Ruta actual:</strong> {{ diagnostico.ruta }}</li>
+                <li><strong>USAR_NUEVOS_TEMPLATES:</strong> {{ diagnostico.config.USAR_NUEVOS_TEMPLATES }}</li>
+                <li><strong>USAR_NUEVOS_TEMPLATES_ENTRADA:</strong> {{ diagnostico.config.USAR_NUEVOS_TEMPLATES_ENTRADA }}</li>
+                <li><strong>Directorio de templates:</strong> {{ diagnostico.config.template_folder }}</li>
+                <li><strong>Directorio estático:</strong> {{ diagnostico.config.static_folder }}</li>
+            </ul>
+        </div>
+        
+        <div class="section">
+            <h2>Rutas del Sistema</h2>
+            <div class="table-responsive">
+                <table class="table table-bordered">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Clave</th>
+                            <th>Valor</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for key, value in diagnostico.rutas.items() %}
+                        <tr>
+                            <td>{{ key }}</td>
+                            <td>{{ value }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>Directorios</h2>
+            
+            <div class="mb-4">
+                <h4>Directorio Raíz del Proyecto</h4>
+                <ul class="list-group">
+                    {% for item in diagnostico.directorios.project_root %}
+                    <li class="list-group-item">{{ item }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            
+            <div class="mb-4">
+                <h4>Directorio de la Aplicación</h4>
+                <ul class="list-group">
+                    {% for item in diagnostico.directorios.app_root %}
+                    <li class="list-group-item">{{ item }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            
+            <div class="mb-4">
+                <h4>Directorio de Templates</h4>
+                <ul class="list-group">
+                    {% for item in diagnostico.directorios.templates_dir %}
+                    <li class="list-group-item">{{ item }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>Templates Disponibles</h2>
+            {% if diagnostico.templates_disponibles %}
+                <p>Total templates: {{ diagnostico.templates_disponibles|length }}</p>
+                <ul>
+                    {% for template in diagnostico.templates_disponibles %}
+                        {% if 'entrada' in template %}
+                            <li class="text-primary">{{ template }}</li>
+                        {% else %}
+                            <li>{{ template }}</li>
+                        {% endif %}
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p class="alert alert-warning">No se encontraron templates.</p>
+            {% endif %}
+        </div>
+        
+        <div class="section">
+            <h2>Datos de Muestra</h2>
+            {% if diagnostico.registros_encontrados > 0 %}
+                <p>Registros encontrados: {{ diagnostico.registros_encontrados }}</p>
+                <h3>Muestra de registros (máximo 3):</h3>
+                <pre>{{ diagnostico.registros_muestra|tojson(indent=2) }}</pre>
+            {% else %}
+                {% if diagnostico.error_db %}
+                    <p class="alert alert-danger">Error accediendo a la base de datos: {{ diagnostico.error_db }}</p>
+                {% else %}
+                    <p class="alert alert-warning">No se encontraron registros.</p>
+                {% endif %}
+            {% endif %}
+        </div>
+        
+        <div class="section">
+            <h2>Enlaces de prueba</h2>
+            <p>Prueba los siguientes enlaces para verificar su funcionamiento:</p>
+            <div class="list-group">
+                <a href="{{ url_for('entrada.home') }}" class="list-group-item list-group-item-action">
+                    Home (página principal)
+                </a>
+                <a href="{{ url_for('misc.upload_file') }}" class="list-group-item list-group-item-action">
+                    Upload File (página de carga)
+                </a>
+                <a href="{{ url_for('entrada.lista_entradas') }}" class="list-group-item list-group-item-action">
+                    Lista de Entradas (enlace problemático)
+                </a>
+                <a href="{{ url_for('entrada.lista_registros_entrada') }}" class="list-group-item list-group-item-action">
+                    Lista de Registros de Entrada (ruta original)
+                </a>
+            </div>
+        </div>
+    </div>
+</body>
+</html> 

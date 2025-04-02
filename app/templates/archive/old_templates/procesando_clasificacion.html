@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Procesando Clasificación Automática</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        
+        .processing-container {
+            width: 90%;
+            max-width: 600px;
+            text-align: center;
+            padding: 30px;
+            background-color: white;
+            border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        
+        .header-logo {
+            max-width: 150px;
+            margin-bottom: 20px;
+        }
+        
+        .progress-container {
+            margin: 30px 0;
+        }
+        
+        .progress {
+            height: 30px;
+            border-radius: 50px;
+            background-color: #f0f0f0;
+            margin-bottom: 20px;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .progress-bar {
+            height: 100%;
+            border-radius: 50px;
+            background: linear-gradient(90deg, #64b5f6, #1976d2, #0d47a1);
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .spinner-container {
+            margin: 30px 0;
+        }
+        
+        .spinner {
+            width: 80px;
+            height: 80px;
+            border: 8px solid #f0f0f0;
+            border-top: 8px solid #1976d2;
+            border-radius: 50%;
+            animation: spin 1.5s linear infinite;
+            margin: 0 auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .status-text {
+            font-size: 1.1rem;
+            margin: 20px 0;
+            color: #666;
+        }
+        
+        .error-container {
+            display: none;
+            background-color: #ffeeee;
+            border-left: 4px solid #ff4444;
+            padding: 15px;
+            margin-top: 20px;
+            text-align: left;
+            border-radius: 4px;
+        }
+        
+        .error-message {
+            color: #cc0000;
+            margin-bottom: 10px;
+        }
+        
+        .retry-btn {
+            background-color: #f44336;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        
+        h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+        
+        .footer {
+            margin-top: 30px;
+            font-size: 0.85rem;
+            color: #999;
+        }
+        
+        .processing-steps {
+            text-align: left;
+            max-width: 400px;
+            margin: 30px auto;
+        }
+        
+        .processing-step {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            opacity: 0.5;
+            transition: opacity 0.3s ease;
+        }
+        
+        .processing-step.active {
+            opacity: 1;
+            font-weight: 600;
+        }
+        
+        .processing-step.completed {
+            opacity: 1;
+            color: #28a745;
+        }
+        
+        .step-icon {
+            width: 24px;
+            margin-right: 15px;
+            text-align: center;
+        }
+        
+        .step-text {
+            flex: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="processing-container">
+        <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo" class="header-logo">
+        <h2>Procesando Clasificación Automática</h2>
+        <p class="mb-0">Guía: <strong>{{ codigo_guia }}</strong></p>
+        <p>Proveedor: <strong>{{ codigo_proveedor }}</strong></p>
+        
+        <div class="spinner-container">
+            <div class="spinner"></div>
+        </div>
+        
+        <div class="progress-container">
+            <div class="progress">
+                <div id="progressBar" class="progress-bar" role="progressbar" style="width: 0%;">0%</div>
+            </div>
+            <p id="statusText" class="status-text">Preparando imágenes para procesamiento...</p>
+        </div>
+        
+        <div class="processing-steps">
+            <div id="step1" class="processing-step active">
+                <div class="step-icon"><i class="fas fa-file-image"></i></div>
+                <div class="step-text">Preparando imágenes</div>
+            </div>
+            <div id="step2" class="processing-step">
+                <div class="step-icon"><i class="fas fa-cloud-upload-alt"></i></div>
+                <div class="step-text">Enviando a servicio de IA</div>
+            </div>
+            <div id="step3" class="processing-step">
+                <div class="step-icon"><i class="fas fa-robot"></i></div>
+                <div class="step-text">Procesando con modelo de detección</div>
+            </div>
+            <div id="step4" class="processing-step">
+                <div class="step-icon"><i class="fas fa-chart-pie"></i></div>
+                <div class="step-text">Calculando resultados</div>
+            </div>
+            <div id="step5" class="processing-step">
+                <div class="step-icon"><i class="fas fa-check"></i></div>
+                <div class="step-text">Finalizando y guardando</div>
+            </div>
+        </div>
+        
+        <div id="errorContainer" class="error-container">
+            <div class="error-message">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span id="errorText">Error al procesar las imágenes.</span>
+            </div>
+            <button class="retry-btn" onclick="window.location.reload()">
+                <i class="fas fa-redo"></i> Reintentar
+            </button>
+        </div>
+        
+        <div class="footer">
+            Este proceso puede tardar varios minutos dependiendo de la cantidad de imágenes.
+            <br>No cierre esta ventana mientras se procesan las imágenes.
+        </div>
+    </div>
+
+    <script>
+        const progressBar = document.getElementById('progressBar');
+        const statusText = document.getElementById('statusText');
+        const errorContainer = document.getElementById('errorContainer');
+        const errorText = document.getElementById('errorText');
+        const steps = document.querySelectorAll('.processing-step');
+        
+        // Función para actualizar un paso
+        function updateStep(stepNumber, status) {
+            // Resetear todos los pasos
+            steps.forEach((step, index) => {
+                step.classList.remove('active', 'completed');
+                if (index < stepNumber - 1) {
+                    step.classList.add('completed');
+                }
+            });
+            
+            // Actualizar el paso actual
+            if (status === 'active') {
+                steps[stepNumber - 1].classList.add('active');
+            } else if (status === 'completed') {
+                steps[stepNumber - 1].classList.add('completed');
+            }
+        }
+        
+        // Función para actualizar la barra de progreso
+        function updateProgress(percent, message, step) {
+            progressBar.style.width = percent + '%';
+            progressBar.textContent = percent + '%';
+            
+            if (message) {
+                statusText.textContent = message;
+            }
+            
+            if (step) {
+                updateStep(step, 'active');
+            }
+        }
+        
+        // Función para mostrar error
+        function showError(message) {
+            errorText.textContent = message || 'Error al procesar las imágenes.';
+            errorContainer.style.display = 'block';
+        }
+        
+        // Función para verificar el estado del procesamiento
+        function checkProcessingStatus() {
+            fetch(`/check_procesamiento_status/{{ codigo_guia }}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'completed') {
+                        // Procesamiento completo, redirigir a resultados
+                        updateProgress(100, 'Procesamiento completado', 5);
+                        updateStep(5, 'completed');
+                        
+                        // Esperar un momento antes de redirigir
+                        setTimeout(() => {
+                            window.location.href = '/mostrar_resultados_automaticos/{{ codigo_guia }}';
+                        }, 1500);
+                    } else if (data.status === 'error') {
+                        // Error en el procesamiento
+                        showError(data.message);
+                    } else if (data.status === 'processing') {
+                        // Aún procesando, actualizar progreso
+                        updateProgress(data.progress, data.message, data.step);
+                        
+                        // Verificar nuevamente en 2 segundos
+                        setTimeout(checkProcessingStatus, 2000);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error al verificar estado:', error);
+                    showError('Error de conexión al verificar el estado del procesamiento');
+                });
+        }
+        
+        // Iniciar el procesamiento y la verificación de estado cuando la página carga
+        window.onload = function() {
+            // Iniciar animación de progreso mientras esperamos la primera respuesta del servidor
+            let percent = 0;
+            const initialInterval = setInterval(() => {
+                percent += 1;
+                if (percent > 15) {
+                    clearInterval(initialInterval);
+                }
+                updateProgress(percent, 'Preparando imágenes para procesamiento...', 1);
+            }, 200);
+            
+            // Iniciar procesamiento
+            fetch(`/iniciar_procesamiento/{{ codigo_guia }}`, {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'started') {
+                    // Limpiar intervalo inicial
+                    clearInterval(initialInterval);
+                    
+                    // Iniciar verificación periódica
+                    updateProgress(15, 'Procesamiento iniciado', 1);
+                    setTimeout(checkProcessingStatus, 2000);
+                } else {
+                    showError(data.message || 'Error al iniciar el procesamiento');
+                }
+            })
+            .catch(error => {
+                console.error('Error al iniciar procesamiento:', error);
+                showError('Error de conexión al iniciar el procesamiento');
+            });
+        };
+    </script>
+</body>
+</html> 

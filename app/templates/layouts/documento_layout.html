@@ -1,0 +1,53 @@
+{% import "components/pesaje_styles.html" as styles %}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Documento{% endblock %}</title>
+    
+    {% block styles %}
+    {{ styles.base_styles() }}
+    {% if for_print %}
+    {{ styles.print_styles() }}
+    {% endif %}
+    {% endblock %}
+    
+    {% block additional_styles %}{% endblock %}
+</head>
+<body>
+    <div class="main-container">
+        {% if for_print %}
+        <div class="actions no-print">
+            <button class="btn btn-primary" onclick="window.print()">
+                Imprimir/Guardar como PDF
+            </button>
+            <a href="{{ volver_url }}" class="btn btn-secondary">
+                Volver a Resultados
+            </a>
+        </div>
+        {% endif %}
+
+        <div class="header-section">
+            <img src="{{ url_for('static', filename='images/logo.png', _external=True if for_pdf else False) }}" 
+                 alt="Logo" class="header-logo">
+            <h1>{% block header_title %}Documento{% endblock %}</h1>
+            <h3>{% block header_subtitle %}{% endblock %}</h3>
+        </div>
+
+        {% block content %}{% endblock %}
+
+        <div class="footer">
+            <p>Documento generado el {{ fecha_generacion }} a las {{ hora_generacion }}</p>
+            <p>© {{ fecha_generacion.split('/')[2] }} Extractora María La Baja - Todos los derechos reservados</p>
+        </div>
+    </div>
+
+    {% if for_print %}
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    {% endif %}
+    
+    {% block scripts %}{% endblock %}
+</body>
+</html> 

@@ -1,0 +1,59 @@
+{% extends "layouts/documento_layout.html" %}
+{% import "components/pesaje_datos.html" as pesaje_componentes %}
+{% import "components/clasificacion_datos.html" as clasificacion_componentes %}
+{% import "components/clasificacion_styles.html" as clasificacion_styles %}
+
+{% block title %}Comprobante de Clasificación - {{ codigo_guia }}{% endblock %}
+
+{% block additional_styles %}
+{{ clasificacion_styles.clasificacion_styles() }}
+{% endblock %}
+
+{% block header_title %}Comprobante de Clasificación{% endblock %}
+{% block header_subtitle %}Guía: {{ codigo_guia }}{% endblock %}
+
+{% block content %}
+<div class="content-row">
+    <div class="info-column">
+        {{ pesaje_componentes.datos_proveedor(
+            codigo_proveedor, 
+            nombre_proveedor, 
+            transportador, 
+            placa, 
+            cantidad_racimos, 
+            codigo_guia_transporte_sap
+        ) }}
+
+        <div class="info-section">
+            <div class="section-title">Información General</div>
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="info-label">Peso Bruto</div>
+                    <div class="weight-value">{{ peso_bruto }} kg</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Fecha Clasificación</div>
+                    <div class="info-value">{{ fecha_clasificacion }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Hora Clasificación</div>
+                    <div class="info-value">{{ hora_clasificacion }}</div>
+                </div>
+            </div>
+        </div>
+
+        {{ clasificacion_componentes.datos_clasificacion_manual(clasificacion_manual) }}
+    </div>
+
+    <div class="info-column">
+        {{ clasificacion_componentes.imagenes_clasificacion(fotos, for_pdf) }}
+
+        <div class="qr-section">
+            <div class="section-title">Código QR para seguimiento</div>
+            <img src="{{ qr_code }}" alt="Código QR" class="qr-code">
+        </div>
+        
+        {{ clasificacion_componentes.datos_clasificacion_automatica(clasificacion_automatica) }}
+    </div>
+</div>
+{% endblock %} 

@@ -1,0 +1,64 @@
+{% extends "layouts/documento_layout.html" %}
+{% import "components/pesaje_datos.html" as pesaje_componentes %}
+
+{% block title %}Comprobante de Pesaje - {{ codigo_guia }}{% endblock %}
+
+{% block header_title %}Comprobante de Pesaje{% endblock %}
+{% block header_subtitle %}Guía: {{ codigo_guia }}{% endblock %}
+
+{% block content %}
+<div class="content-row">
+    <div class="info-column">
+        {{ pesaje_componentes.datos_proveedor(
+            codigo_proveedor, 
+            nombre_proveedor, 
+            transportador, 
+            placa, 
+            racimos, 
+            codigo_guia_transporte_sap
+        ) }}
+
+        {{ pesaje_componentes.datos_pesaje(
+            peso_bruto, 
+            tipo_pesaje, 
+            fecha_pesaje, 
+            hora_pesaje
+        ) }}
+    </div>
+
+    <div class="info-column">
+        {% if imagen_pesaje %}
+        <div class="info-section">
+            <div class="section-title">Imagen del Pesaje</div>
+            <img src="{{ imagen_pesaje }}" alt="Imagen del pesaje" class="weight-image">
+        </div>
+        {% endif %}
+
+        <div class="qr-section">
+            <div class="section-title">Código QR para seguimiento</div>
+            <img src="{{ qr_code }}" alt="Código QR" class="qr-code">
+        </div>
+    </div>
+</div>
+
+<!-- Detalles de Pesaje -->
+<div style="margin-top: 20px; border: 1px solid #ddd; padding: 15px;">
+    <h3 style="margin: 0 0 15px 0; border-bottom: 1px solid #ddd; padding-bottom: 10px;">DETALLES DE PESAJE</h3>
+    <table style="width: 100%; border-collapse: collapse;">
+        <tr>
+            <td style="width: 50%; padding: 5px;"><strong>Peso Bruto:</strong> {{ peso_bruto }} kg</td>
+            <td style="width: 50%; padding: 5px;"><strong>Tipo de Pesaje:</strong> {{ tipo_pesaje }}</td>
+        </tr>
+        <tr>
+            <td style="padding: 5px;"><strong>Fecha de Pesaje:</strong> {{ fecha_pesaje }}</td>
+            <td style="padding: 5px;"><strong>Hora de Pesaje:</strong> {{ hora_pesaje }}</td>
+        </tr>
+    </table>
+    
+    <!-- Verificación de Placa -->
+    {{ pesaje_componentes.detalles_verificacion_placa(placa, placa_detectada, placa_coincide) }}
+    
+    <!-- Fotos de evidencia de pesaje -->
+    {{ pesaje_componentes.fotos_evidencia(fotos_pesaje, for_pdf) }}
+</div>
+{% endblock %} 

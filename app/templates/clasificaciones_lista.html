@@ -1,0 +1,236 @@
+{% extends 'base.html' %}
+
+{% block title %}Listado de Clasificaciones - Sistema de Tiquetes{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<style>
+    .filter-card {
+        margin-bottom: 1.5rem;
+        border-top: 3px solid #0d6efd;
+    }
+    .filter-section {
+        padding: 15px;
+    }
+    .results-card {
+        border-top: 3px solid #28a745;
+    }
+    .stats-section {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 1rem;
+    }
+    .stat-card {
+        flex: 1;
+        min-width: 200px;
+        background-color: white;
+        border-radius: 8px;
+        padding: 15px;
+        text-align: center;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .stat-value {
+        font-size: 1.8rem;
+        font-weight: bold;
+        color: #0d6efd;
+    }
+    .stat-label {
+        color: #6c757d;
+        font-size: 0.9rem;
+    }
+    .table-actions {
+        white-space: nowrap;
+    }
+    .badge {
+        font-size: 0.85rem;
+        padding: 0.35em 0.65em;
+    }
+    .clear-filters {
+        font-size: 0.9rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    <h2 class="mb-4 text-center">Listado de Clasificaciones</h2>
+
+    <!-- Estadísticas rápidas -->
+    <div class="stats-section">
+        <div class="stat-card">
+            <div class="stat-value" id="total-clasificaciones">{{ clasificaciones|length }}</div>
+            <div class="stat-label">Total Clasificaciones</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="completadas">{{ clasificaciones|selectattr('estado', 'equalto', 'completado')|list|length }}</div>
+            <div class="stat-label">Completadas</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="en-proceso">{{ clasificaciones|selectattr('estado', 'equalto', 'en_proceso')|list|length }}</div>
+            <div class="stat-label">En Proceso</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="automaticas">{{ clasificaciones|selectattr('automatica_completado')|list|length }}</div>
+            <div class="stat-label">Automáticas</div>
+        </div>
+    </div>
+
+    <!-- Panel de filtros -->
+    <div class="card filter-card">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0">Filtros de Búsqueda</h5>
+            <button type="button" class="btn btn-sm btn-light" id="toggleFilters">
+                <i class="fas fa-filter"></i> Mostrar/Ocultar
+            </button>
+        </div>
+        <div class="card-body filter-section" id="filterSection">
+            <form id="filterForm" method="GET" action="/clasificaciones/lista">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label for="fecha_desde" class="form-label">Fecha desde:</label>
+                        <input type="text" class="form-control datepicker" id="fecha_desde" name="fecha_desde" 
+                               value="{{ filtros.fecha_desde }}" placeholder="DD/MM/AAAA">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="fecha_hasta" class="form-label">Fecha hasta:</label>
+                        <input type="text" class="form-control datepicker" id="fecha_hasta" name="fecha_hasta" 
+                               value="{{ filtros.fecha_hasta }}" placeholder="DD/MM/AAAA">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="codigo_proveedor" class="form-label">Código:</label>
+                        <input type="text" class="form-control" id="codigo_proveedor" name="codigo_proveedor" 
+                               value="{{ filtros.codigo_proveedor }}" placeholder="Código de proveedor">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="nombre_proveedor" class="form-label">Proveedor:</label>
+                        <input type="text" class="form-control" id="nombre_proveedor" name="nombre_proveedor" 
+                               value="{{ filtros.nombre_proveedor }}" placeholder="Nombre de proveedor">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="estado" class="form-label">Estado:</label>
+                        <select class="form-select" id="estado" name="estado">
+                            <option value="">Todos</option>
+                            <option value="completado" {% if filtros.estado == 'completado' %}selected{% endif %}>Completado</option>
+                            <option value="en_proceso" {% if filtros.estado == 'en_proceso' %}selected{% endif %}>En proceso</option>
+                            <option value="pendiente" {% if filtros.estado == 'pendiente' %}selected{% endif %}>Pendiente</option>
+                        </select>
+                    </div>
+                    <div class="col-md-9 d-flex align-items-end">
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-search"></i> Buscar
+                            </button>
+                            <a href="/clasificaciones/lista" class="btn btn-outline-secondary clear-filters">
+                                <i class="fas fa-times"></i> Limpiar Filtros
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabla de resultados -->
+    <div class="card results-card">
+        <div class="card-header bg-success text-white">
+            <h5 class="card-title mb-0">Clasificaciones Registradas</h5>
+        </div>
+        <div class="card-body">
+            {% if clasificaciones %}
+            <div class="table-responsive">
+                <table class="table table-hover table-bordered">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Código Guía</th>
+                            <th>Proveedor</th>
+                            <th>Código</th>
+                            <th>Fecha</th>
+                            <th>Hora</th>
+                            <th>Racimos</th>
+                            <th>Estado</th>
+                            <th class="text-center">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for clasificacion in clasificaciones %}
+                        <tr>
+                            <td>{{ clasificacion.codigo_guia }}</td>
+                            <td>{{ clasificacion.nombre_proveedor }}</td>
+                            <td>{{ clasificacion.codigo_proveedor }}</td>
+                            <td>{{ clasificacion.fecha_clasificacion }}</td>
+                            <td>{{ clasificacion.hora_clasificacion }}</td>
+                            <td>{{ clasificacion.cantidad_racimos }}</td>
+                            <td>
+                                {% if clasificacion.estado == 'completado' %}
+                                <span class="badge bg-success">Completado</span>
+                                {% elif clasificacion.estado == 'en_proceso' %}
+                                <span class="badge bg-warning text-dark">En proceso</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Pendiente</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center table-actions">
+                                <div class="btn-group" role="group">
+                                    {% if clasificacion.manual_completado %}
+                                    <a href="/ver_resultados_clasificacion/{{ clasificacion.codigo_guia }}" class="btn btn-sm btn-outline-primary" title="Ver clasificación manual">
+                                        <i class="fas fa-clipboard-check"></i>
+                                    </a>
+                                    {% endif %}
+                                    
+                                    {% if clasificacion.automatica_completado %}
+                                    <a href="/ver_resultados_automaticos/{{ clasificacion.codigo_guia }}" class="btn btn-sm btn-outline-success" title="Ver clasificación automática">
+                                        <i class="fas fa-robot"></i>
+                                    </a>
+                                    {% endif %}
+                                    
+                                    <a href="/guias/guia_{{ clasificacion.codigo_guia }}.html" class="btn btn-sm btn-outline-info" title="Ver guía">
+                                        <i class="fas fa-file-alt"></i>
+                                    </a>
+                                    
+                                    <a href="{{ url_for('misc.ver_guia_centralizada', codigo_guia=clasificacion.codigo_guia) }}" class="btn btn-sm btn-outline-primary" title="Ver guía centralizada">
+                                        <i class="fas fa-clipboard-list"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i> No hay clasificaciones registradas con los filtros seleccionados.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/es.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Inicializar selector de fechas
+        flatpickr(".datepicker", {
+            dateFormat: "d/m/Y",
+            locale: "es",
+            allowInput: true
+        });
+
+        // Mostrar/ocultar filtros
+        const toggleFilters = document.getElementById('toggleFilters');
+        const filterSection = document.getElementById('filterSection');
+        
+        toggleFilters.addEventListener('click', function() {
+            if (filterSection.style.display === 'none') {
+                filterSection.style.display = 'block';
+            } else {
+                filterSection.style.display = 'none';
+            }
+        });
+    });
+</script>
+{% endblock %} 

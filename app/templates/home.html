@@ -1,0 +1,208 @@
+{% extends 'base.html' %}
+
+{% block title %}Home - Sistema de Gestión MLB Extractora{% endblock %}
+
+{% block extra_css %}
+<style>
+    .card {
+        transition: transform 0.3s, box-shadow 0.3s;
+        margin-bottom: 20px;
+        height: 100%;
+    }
+    .card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    }
+    .card-body {
+        display: flex;
+        flex-direction: column;
+    }
+    .card-title {
+        font-weight: bold;
+        margin-bottom: 15px;
+    }
+    .card-text {
+        flex-grow: 1;
+        margin-bottom: 15px;
+    }
+    .card-icon {
+        font-size: 3rem;
+        color: #0d6efd;
+        margin-bottom: 15px;
+    }
+    .section-title {
+        border-left: 5px solid #0d6efd;
+        padding-left: 15px;
+        margin-bottom: 20px;
+    }
+    .header {
+        background-color: #f8f9fa;
+        padding: 30px 0;
+        margin-bottom: 30px;
+        border-radius: 0 0 10px 10px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="header">
+    <div class="container">
+        <div class="row align-items-center">
+            <div class="col-md-2 text-center mb-3 mb-md-0">
+                <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Logo MLB Extractora" class="img-fluid" style="max-height: 100px;">
+            </div>
+            <div class="col-md-10">
+                <h1 class="display-5 fw-bold">Sistema de Gestión</h1>
+                <p class="lead">MLB Extractora María La Baja - Panel de Control</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container mb-5">
+    <!-- Sección para iniciar proceso -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2 class="section-title">Iniciar Proceso</h2>
+        </div>
+        <div class="col-md-12">
+            <div class="card text-center">
+                <div class="card-body">
+                    <i class="fas fa-play-circle card-icon"></i>
+                    <h3 class="card-title">Registrar Nuevo Tiquete</h3>
+                    <p class="card-text">Inicia el proceso de registro de entrada de proveedores con un nuevo tiquete.</p>
+                    <a href="{{ url_for('entrada.index') }}" class="btn btn-primary btn-lg">
+                        <i class="fas fa-arrow-right me-2"></i>Ir a Registro
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sección de listas y consultas -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2 class="section-title">Listas y Consultas</h2>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <i class="fas fa-clipboard-list card-icon"></i>
+                    <h5 class="card-title">Registros de Entrada</h5>
+                    <p class="card-text">Lista de todos los registros de entrada de proveedores.</p>
+                    <a href="{{ url_for('entrada.lista_entradas') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-external-link-alt me-2"></i>Ver Lista
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <i class="fas fa-weight-hanging card-icon"></i>
+                    <h5 class="card-title">Registros de Peso Bruto</h5>
+                    <p class="card-text">Lista de todos los pesajes brutos registrados en el sistema.</p>
+                    <a href="{{ url_for('pesaje.lista_pesajes') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-external-link-alt me-2"></i>Ver Lista
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <i class="fas fa-sort-amount-down card-icon"></i>
+                    <h5 class="card-title">Registros de Clasificación</h5>
+                    <p class="card-text">Lista de todas las clasificaciones de racimos realizadas.</p>
+                    <a href="{{ url_for('clasificacion.listar_clasificaciones_filtradas') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-external-link-alt me-2"></i>Ver Lista
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4 mt-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <i class="fas fa-balance-scale card-icon"></i>
+                    <h5 class="card-title">Registros de Peso Neto</h5>
+                    <p class="card-text">Lista de todos los pesajes netos registrados en el sistema.</p>
+                    <a href="{{ url_for('pesaje.lista_pesajes_neto') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-external-link-alt me-2"></i>Ver Lista
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Registro de Salida -->
+        <div class="col-md-4 mt-4">
+            <div class="card h-100 bg-light">
+                <div class="card-body">
+                    <i class="fas fa-truck card-icon text-muted"></i>
+                    <h5 class="card-title text-muted">Registros de Salida</h5>
+                    <p class="card-text text-muted">Lista de registros de salida de camiones (En desarrollo).</p>
+                    <button class="btn btn-outline-secondary" disabled>
+                        <i class="fas fa-tools me-2"></i>Próximamente
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Búsqueda de Guía -->
+        <div class="col-md-4 mt-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <i class="fas fa-search card-icon"></i>
+                    <h5 class="card-title">Buscar Guía</h5>
+                    <p class="card-text">Busca una guía específica por su código para ver sus detalles.</p>
+                    <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#searchModal">
+                        <i class="fas fa-search me-2"></i>Buscar Guía
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de búsqueda -->
+<div class="modal fade" id="searchModal" tabindex="-1" aria-labelledby="searchModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="searchModalLabel">Buscar Guía</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="searchForm">
+                    <div class="mb-3">
+                        <label for="codigoGuia" class="form-label">Código de Guía:</label>
+                        <input type="text" class="form-control" id="codigoGuia" placeholder="Ej: 0103241A">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <button type="button" class="btn btn-primary" id="btnBuscar">Buscar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Manejar la búsqueda de guía
+    document.getElementById('btnBuscar').addEventListener('click', function() {
+        const codigoGuia = document.getElementById('codigoGuia').value.trim();
+        if (codigoGuia) {
+            window.location.href = "{{ url_for('misc.serve_guia', filename='') }}" + "guia_" + codigoGuia + ".html";
+        } else {
+            alert('Por favor ingrese un código de guía válido');
+        }
+    });
+</script>
+{% endblock %} 

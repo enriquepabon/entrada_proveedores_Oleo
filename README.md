@@ -1,117 +1,124 @@
-# TiquetesApp - Sistema de Gestión de Tiquetes de Fruta
+# TiquetesApp
+
+Sistema de gestión de tiquetes para el registro, pesaje y clasificación de entradas a planta.
 
 ## Descripción
-Sistema web para la gestión y procesamiento de tiquetes de fruta, que incluye:
-- Registro y validación de tiquetes
-- Pesaje (directo y virtual)
-- Clasificación automática de racimos usando IA
-- Clasificación manual
-- Generación de reportes y documentos PDF
-- Seguimiento del proceso completo
 
-## Características
-- Procesamiento de imágenes con OCR para extracción de datos
-- Integración con Roboflow para clasificación automática de racimos
-- Sistema de autorización para pesaje virtual
-- Generación automática de códigos QR
-- Generación de PDFs para cada etapa del proceso
-- Interfaz web responsive y amigable
+TiquetesApp es una aplicación web desarrollada con Flask que permite gestionar el proceso completo de registro, pesaje y clasificación de vehículos que ingresan a la planta. El sistema captura imágenes, datos del vehículo, información de pesaje y utiliza técnicas de análisis de imágenes para clasificar automáticamente los ingresos.
 
-## Tecnologías
-- Python 3.x
-- Flask
-- HTML/CSS/JavaScript
-- Bootstrap 5
-- WeasyPrint (generación de PDFs)
-- Pillow (procesamiento de imágenes)
-- Roboflow API (clasificación de imágenes)
+## Características principales
+
+- Registro de vehículos y conductores
+- Captura y procesamiento de imágenes
+- Pesaje de vehículos
+- Clasificación automática de ingresos
+- Generación de tiquetes PDF
+- Panel de administración
+- API para integración con otros sistemas
+
+## Reestructuración del proyecto
+
+La aplicación ha sido completamente reestructurada utilizando Flask Blueprints para mejorar la organización, mantenibilidad y escalabilidad del código. Los módulos principales ahora están organizados como blueprints independientes:
+
+- **Entrada**: Gestión de registros de entrada
+- **Pesaje**: Proceso de pesaje de vehículos
+- **Clasificación**: Sistema de clasificación automática
+- **Misc**: Funcionalidades misceláneas y webhooks
+- **Admin**: Administración del sistema
+- **API**: Endpoints para integración con otros sistemas
 
 ## Instalación
 
 1. Clonar el repositorio:
 ```bash
-git clone [URL_DEL_REPOSITORIO]
+git clone [url-del-repositorio]
 cd TiquetesApp
 ```
 
 2. Crear y activar entorno virtual:
 ```bash
-python -m venv venv
+python3 -m venv venv
 source venv/bin/activate  # En Windows: venv\Scripts\activate
 ```
 
 3. Instalar dependencias:
 ```bash
-pip install -r requirements.txt
+make install-deps
+# Alternativa: pip install -r requirements.txt
 ```
 
-4. Configurar variables de entorno:
-Crear archivo `.env` con las siguientes variables:
-```
-ROBOFLOW_API_KEY=tu_api_key
-PROCESS_WEBHOOK_URL=url_webhook
-REGISTER_WEBHOOK_URL=url_webhook
-REVALIDATION_WEBHOOK_URL=url_webhook
-ADMIN_NOTIFICATION_WEBHOOK_URL=url_webhook
-PESAJE_WEBHOOK_URL=url_webhook
-AUTORIZACION_WEBHOOK_URL=url_webhook
-REGISTRO_PESO_WEBHOOK_URL=url_webhook
-CLASIFICACION_WEBHOOK_URL=url_webhook
-REGISTRO_CLASIFICACION_WEBHOOK_URL=url_webhook
-```
+4. Configurar la aplicación:
+- Copiar `config.py.example` a `config.py`
+- Editar `config.py` con los valores adecuados para su entorno
 
-5. Crear directorios necesarios:
+5. Iniciar la aplicación:
 ```bash
-mkdir -p static/{uploads,pdfs,guias,excels,qr}
+make run
+# Alternativa: python3 run.py
 ```
 
-## Uso
+## Comandos útiles
 
-1. Iniciar el servidor:
+Se ha incluido un Makefile para facilitar tareas comunes:
+
 ```bash
-python apptiquetes.py
+# Ver comandos disponibles
+make help
+
+# Ejecutar la aplicación
+make run
+
+# Limpiar archivos temporales
+make clean-temp
+
+# Limpiar archivos redundantes
+make clean-redundant
+
+# Corregir URLs en las plantillas
+make fix-templates
+
+# Verificar la base de datos
+make check-db
+
+# Instalar dependencias
+make install-deps
 ```
 
-2. Acceder a la aplicación en:
-```
-http://localhost:5002
-```
+## Estructura del proyecto
 
-## Estructura del Proyecto
-```
-TiquetesApp/
-├── apptiquetes.py         # Aplicación principal
-├── config.py             # Configuración
-├── utils.py             # Utilidades
-├── knowledge_updater.py  # Actualizador de conocimiento
-├── parser.py            # Parser de respuestas
-├── static/              # Archivos estáticos
-│   ├── uploads/        # Imágenes subidas
-│   ├── pdfs/          # PDFs generados
-│   ├── guias/         # HTMLs de guías
-│   ├── excels/        # Archivos Excel
-│   └── qr/            # Códigos QR generados
-├── templates/          # Plantillas HTML
-└── requirements.txt    # Dependencias
-```
+Para comprender mejor la estructura y organización del proyecto, consulte la [documentación de estructura del proyecto](docs/project_structure.md).
 
-## Flujo del Proceso
-1. Registro inicial del tiquete
-2. Validación de datos
-3. Pesaje (directo o virtual)
-4. Clasificación de racimos (automática y/o manual)
-5. Registro de peso tara
-6. Registro de salida
+## Webhooks y APIs
 
-## Contribución
-1. Fork el repositorio
-2. Crear rama para feature (`git checkout -b feature/AmazingFeature`)
-3. Commit cambios (`git commit -m 'Add some AmazingFeature'`)
-4. Push a la rama (`git push origin feature/AmazingFeature`)
-5. Abrir Pull Request
+La aplicación proporciona varios webhooks y APIs para integración con sistemas externos:
 
-## Licencia
-Distribuido bajo la Licencia MIT. Ver `LICENSE` para más información.
+- **Webhooks**: 
+  - `/webhook/tiquete`: Notificaciones sobre tiquetes
+  - `/webhook/clasificacion`: Resultados de clasificación
+  - `/webhook/procesamiento`: Eventos de procesamiento
+  - `/webhook/pesaje`: Notificaciones de pesaje
+
+- **APIs**:
+  - `/api/tiquetes`: CRUD para tiquetes
+  - `/api/clasificacion`: API para resultados de clasificación
+  - `/api/stats`: Estadísticas generales
+
+## Requisitos
+
+- Python 3.8+
+- Flask
+- SQLAlchemy
+- Pillow (para procesamiento de imágenes)
+- Otras dependencias listadas en requirements.txt
+
+## Documentación
+
+- [Estructura del proyecto](docs/project_structure.md)
+- [Manual de usuario](docs/user_manual.md) (pendiente)
+- [API Reference](docs/api_reference.md) (pendiente)
 
 ## Contacto
-Enrique Pabon - epabon@oleoflores.com
+
+Para soporte o consultas:
+- Email: [email-de-contacto]
+- Teléfono: [número-de-contacto]

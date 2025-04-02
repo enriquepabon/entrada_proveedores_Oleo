@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reporte de Clasificación - {{ codigo_guia }}</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #ddd;
+            padding-bottom: 10px;
+        }
+        .logo {
+            max-width: 120px;
+            margin-bottom: 10px;
+        }
+        .title {
+            font-size: 24px;
+            margin: 5px 0;
+        }
+        .subtitle {
+            font-size: 18px;
+            color: #555;
+            margin: 5px 0;
+        }
+        .info-section {
+            margin-bottom: 20px;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+            border: 1px solid #eee;
+        }
+        .section-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 5px;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        .info-item {
+            margin-bottom: 5px;
+        }
+        .info-label {
+            font-weight: bold;
+            color: #666;
+            font-size: 13px;
+        }
+        .info-value {
+            font-size: 14px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .footer {
+            text-align: center;
+            font-size: 12px;
+            color: #777;
+            margin-top: 20px;
+            padding-top: 10px;
+            border-top: 1px solid #ddd;
+        }
+        .qr-code {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .qr-code img {
+            max-width: 120px;
+        }
+        .photos-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .photo-item {
+            width: 48%;
+            margin-bottom: 15px;
+        }
+        .photo-item img {
+            width: 100%;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .photo-caption {
+            font-size: 12px;
+            text-align: center;
+            margin-top: 5px;
+        }
+        .photo-pair {
+            display: flex;
+            flex-direction: column;
+            width: 48%;
+        }
+        .total-row {
+            font-weight: bold;
+            background-color: #e6f7ff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="{{ url_for('static', filename='images/logo.png', _external=True) }}" alt="Logo" class="logo">
+            <h1 class="title">Reporte de Clasificación de Racimos</h1>
+            <h2 class="subtitle">Código de Guía: {{ codigo_guia }}</h2>
+        </div>
+
+        <div class="info-section">
+            <div class="section-title">Información del Proveedor</div>
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="info-label">Código</div>
+                    <div class="info-value">{{ codigo_proveedor }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Nombre</div>
+                    <div class="info-value">{{ nombre_proveedor }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Fecha Clasificación</div>
+                    <div class="info-value">{{ fecha_clasificacion }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Hora Clasificación</div>
+                    <div class="info-value">{{ hora_clasificacion }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Cantidad Total de Racimos</div>
+                    <div class="info-value">{{ cantidad_racimos }}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="info-section">
+            <div class="section-title">Clasificación Manual</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tipo de Racimo</th>
+                        <th>Cantidad</th>
+                        <th>Porcentaje</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Racimos Verdes</td>
+                        <td>{{ clasificacion_manual.verdes or 0 }}</td>
+                        <td>
+                            {% if cantidad_racimos and cantidad_racimos > 0 %}
+                                {{ ((clasificacion_manual.verdes or 0) / cantidad_racimos * 100) | round(1) }}%
+                            {% else %}
+                                0%
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Racimos Sobremaduros</td>
+                        <td>{{ clasificacion_manual.sobremaduros or 0 }}</td>
+                        <td>
+                            {% if cantidad_racimos and cantidad_racimos > 0 %}
+                                {{ ((clasificacion_manual.sobremaduros or 0) / cantidad_racimos * 100) | round(1) }}%
+                            {% else %}
+                                0%
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Racimos con Daño en Corona</td>
+                        <td>{{ clasificacion_manual.danio_corona or 0 }}</td>
+                        <td>
+                            {% if cantidad_racimos and cantidad_racimos > 0 %}
+                                {{ ((clasificacion_manual.danio_corona or 0) / cantidad_racimos * 100) | round(1) }}%
+                            {% else %}
+                                0%
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Racimos Pendúnculo Largo</td>
+                        <td>{{ clasificacion_manual.pendunculo_largo or 0 }}</td>
+                        <td>
+                            {% if cantidad_racimos and cantidad_racimos > 0 %}
+                                {{ ((clasificacion_manual.pendunculo_largo or 0) / cantidad_racimos * 100) | round(1) }}%
+                            {% else %}
+                                0%
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Racimos Podridos</td>
+                        <td>{{ clasificacion_manual.podridos or 0 }}</td>
+                        <td>
+                            {% if cantidad_racimos and cantidad_racimos > 0 %}
+                                {{ ((clasificacion_manual.podridos or 0) / cantidad_racimos * 100) | round(1) }}%
+                            {% else %}
+                                0%
+                            {% endif %}
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        {% if clasificacion_automatica %}
+            {% set all_zeros = true %}
+            {% set total_racimos_detectados = 0 %}
+            {% for key, value in clasificacion_automatica.items() %}
+                {% if value.cantidad and value.cantidad > 0 %}
+                    {% set all_zeros = false %}
+                    {% set total_racimos_detectados = total_racimos_detectados + value.cantidad %}
+                {% endif %}
+            {% endfor %}
+
+            <div class="info-section">
+                <div class="section-title">Clasificación Automática</div>
+
+                {% if not all_zeros %}
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Categoría</th>
+                                <th>Cantidad</th>
+                                <th>Porcentaje</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Racimos Verdes</td>
+                                <td>{{ clasificacion_automatica.verdes.cantidad if clasificacion_automatica.verdes is defined else 0 }}</td>
+                                <td>{{ clasificacion_automatica.verdes.porcentaje|round(1) if clasificacion_automatica.verdes is defined else 0 }}%</td>
+                            </tr>
+                            <tr>
+                                <td>Racimos Maduros</td>
+                                <td>{{ clasificacion_automatica.maduros.cantidad if clasificacion_automatica.maduros is defined else 0 }}</td>
+                                <td>{{ clasificacion_automatica.maduros.porcentaje|round(1) if clasificacion_automatica.maduros is defined else 0 }}%</td>
+                            </tr>
+                            <tr>
+                                <td>Racimos Sobremaduros</td>
+                                <td>{{ clasificacion_automatica.sobremaduros.cantidad if clasificacion_automatica.sobremaduros is defined else 0 }}</td>
+                                <td>{{ clasificacion_automatica.sobremaduros.porcentaje|round(1) if clasificacion_automatica.sobremaduros is defined else 0 }}%</td>
+                            </tr>
+                            <tr>
+                                <td>Racimos Podridos</td>
+                                <td>{{ clasificacion_automatica.podridos.cantidad if clasificacion_automatica.podridos is defined else 0 }}</td>
+                                <td>{{ clasificacion_automatica.podridos.porcentaje|round(1) if clasificacion_automatica.podridos is defined else 0 }}%</td>
+                            </tr>
+                            <tr>
+                                <td>Daño en Corona</td>
+                                <td>{{ clasificacion_automatica.danio_corona.cantidad if clasificacion_automatica.danio_corona is defined else 0 }}</td>
+                                <td>{{ clasificacion_automatica.danio_corona.porcentaje|round(1) if clasificacion_automatica.danio_corona is defined else 0 }}%</td>
+                            </tr>
+                            <tr>
+                                <td>Pedúnculo Largo</td>
+                                <td>{{ clasificacion_automatica.pendunculo_largo.cantidad if clasificacion_automatica.pendunculo_largo is defined else 0 }}</td>
+                                <td>{{ clasificacion_automatica.pendunculo_largo.porcentaje|round(1) if clasificacion_automatica.pendunculo_largo is defined else 0 }}%</td>
+                            </tr>
+                            <tr class="total-row">
+                                <td><strong>Total de Racimos</strong></td>
+                                <td><strong>{{ total_racimos_detectados }}</strong></td>
+                                <td><strong>100%</strong></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                {% else %}
+                    <p>No se detectaron racimos en la clasificación automática.</p>
+                {% endif %}
+            </div>
+        {% endif %}
+
+        {% if fotos and fotos|length > 0 %}
+            <div class="info-section">
+                <div class="section-title">Imágenes</div>
+                <div class="photos-container">
+                    {% for foto in fotos %}
+                        <div class="photo-pair">
+                            <div>
+                                <img src="{{ foto.original }}" alt="Foto Original">
+                                <div class="photo-caption">Original</div>
+                            </div>
+                            {% if foto.procesada %}
+                                <div style="margin-top: 10px;">
+                                    <img src="{{ foto.procesada }}" alt="Foto Procesada">
+                                    <div class="photo-caption">Procesada</div>
+                                </div>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endif %}
+
+        <div class="qr-code">
+            <img src="{{ qr_code }}" alt="Código QR">
+            <div class="photo-caption">Escanee para ver detalles</div>
+        </div>
+
+        <div class="footer">
+            <p>Reporte generado: {{ fecha_generacion }} a las {{ hora_generacion }}</p>
+            <p>© {{ fecha_generacion.split('/')[2] }} Extractora María La Baja - Todos los derechos reservados</p>
+        </div>
+    </div>
+</body>
+</html>

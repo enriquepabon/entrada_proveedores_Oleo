@@ -1,0 +1,578 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resultados de Clasificación Automática - {{ codigo_guia }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .main-container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+        .header-section {
+            background: white;
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        .results-section {
+            background: white;
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        .actions-section {
+            background: white;
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        .action-button {
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+        }
+        .action-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .back-link {
+            margin-bottom: 1.5rem;
+            display: inline-block;
+        }
+        .code-badge {
+            font-size: 1.1rem;
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
+        }
+        .info-card {
+            border-radius: 10px;
+            margin-bottom: 1.5rem;
+            border: none;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .info-label {
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+            color: #6c757d;
+        }
+        .info-value {
+            font-size: 1.1rem;
+        }
+        .classification-value {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: #198754;
+        }
+        .results-table th {
+            background-color: #f8f9fa;
+            color: #495057;
+        }
+        .img-container {
+            margin-top: 1rem;
+        }
+        .img-container img {
+            max-width: 100%;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .image-comparison {
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 2rem;
+        }
+        .image-pair {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .image-card {
+            flex: 1;
+            min-width: 300px;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .image-header {
+            background-color: #f8f9fa;
+            padding: 0.5rem 1rem;
+            border-bottom: 1px solid #dee2e6;
+            font-weight: 600;
+        }
+        .image-body {
+            padding: 1rem;
+        }
+        .image-body img {
+            width: 100%;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+        .image-body img:hover {
+            transform: scale(1.02);
+        }
+        .detection-item {
+            margin-bottom: 0.5rem;
+            padding: 0.5rem;
+            background-color: rgba(0,0,0,0.03);
+            border-radius: 4px;
+        }
+        .photo-section {
+            background-color: white;
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            border-left: 5px solid #0d6efd;
+        }
+        .photo-section h4 {
+            color: #0d6efd;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid #e9ecef;
+            padding-bottom: 0.5rem;
+        }
+        .summary-table {
+            margin-bottom: 1.5rem;
+        }
+        .summary-table th {
+            background-color: #f8f9fa;
+        }
+        .modal-fullscreen-img {
+            display: none;
+            position: fixed;
+            z-index: 1050;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.9);
+            overflow: auto;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-content-img {
+            max-width: 90%;
+            max-height: 90%;
+        }
+        .close-modal {
+            position: absolute;
+            top: 15px;
+            right: 35px;
+            color: #f1f1f1;
+            font-size: 40px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <div class="header-section">
+            <a href="{{ url_for('clasificacion.listar_clasificaciones_filtradas') }}" class="back-link">
+                <i class="fas fa-arrow-left me-2"></i>Volver a lista de clasificaciones
+            </a>
+            
+            <div class="text-center">
+                <h2 class="mb-3">Resultados de Clasificación Automática</h2>
+                <span class="badge bg-primary code-badge mb-3">Guía: {{ codigo_guia }}</span>
+                <p class="lead">Análisis realizado por inteligencia artificial</p>
+            </div>
+        </div>
+        
+        <div class="row">
+            <div class="col-lg-6">
+                <div class="results-section">
+                    <h4 class="mb-4"><i class="fas fa-info-circle me-2"></i>Información del Proveedor</h4>
+                    <div class="card info-card">
+                        <div class="card-body">
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <div class="info-label">Nombre</div>
+                                    <div class="info-value">{{ nombre_proveedor }}</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="info-label">Código</div>
+                                    <div class="info-value">{{ codigo_proveedor }}</div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="info-label">Fecha de Registro</div>
+                                    <div class="info-value">{{ fecha_registro }}</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="info-label">Hora de Registro</div>
+                                    <div class="info-value">{{ hora_registro }}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-lg-6">
+                <div class="results-section">
+                    <h4 class="mb-4"><i class="fas fa-robot me-2"></i>Resumen de Clasificación IA</h4>
+                    <div class="card info-card">
+                        <div class="card-body">
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <div class="info-label">Total de Racimos</div>
+                                    <div class="classification-value">{{ cantidad_racimos }}</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="info-label">Racimos Detectados</div>
+                                    <div class="classification-value">{{ total_racimos_detectados }}</div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="info-label">Modelo Utilizado</div>
+                                    <div class="info-value">{{ modelo_utilizado }}</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="info-label">Tiempo de Procesamiento</div>
+                                    <div class="info-value">{{ tiempo_procesamiento }}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="results-section">
+            <h4 class="mb-4"><i class="fas fa-chart-pie me-2"></i>Resultados Consolidados de la Clasificación</h4>
+            <div class="table-responsive">
+                <table class="table table-bordered results-table">
+                    <thead>
+                        <tr>
+                            <th>Categoría</th>
+                            <th>Cantidad</th>
+                            <th>Porcentaje</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Racimos Verdes</td>
+                            <td>
+                                {% if resultados_automaticos.verdes is mapping and resultados_automaticos.verdes.cantidad is defined %}
+                                    {{ resultados_automaticos.verdes.cantidad }}
+                                {% elif resultados_automaticos.verdes is number %}
+                                    {{ resultados_automaticos.verdes }}
+                                {% else %}
+                                    {{ resultados_automaticos.get('Racimos verdes', 0) }}
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if resultados_automaticos.verdes is mapping and resultados_automaticos.verdes.porcentaje is defined %}
+                                    {{ resultados_automaticos.verdes.porcentaje }}%
+                                {% elif resultados_automaticos.verdes is number and cantidad_racimos and cantidad_racimos > 0 %}
+                                    {{ (resultados_automaticos.verdes / cantidad_racimos * 100)|round(1) }}%
+                                {% else %}
+                                    0%
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Racimos Maduros</td>
+                            <td>
+                                {% if resultados_automaticos.maduros is mapping and resultados_automaticos.maduros.cantidad is defined %}
+                                    {{ resultados_automaticos.maduros.cantidad }}
+                                {% elif resultados_automaticos.maduros is number %}
+                                    {{ resultados_automaticos.maduros }}
+                                {% else %}
+                                    {{ resultados_automaticos.get('racimo maduro', 0) }}
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if resultados_automaticos.maduros is mapping and resultados_automaticos.maduros.porcentaje is defined %}
+                                    {{ resultados_automaticos.maduros.porcentaje }}%
+                                {% elif resultados_automaticos.maduros is number and cantidad_racimos and cantidad_racimos > 0 %}
+                                    {{ (resultados_automaticos.maduros / cantidad_racimos * 100)|round(1) }}%
+                                {% else %}
+                                    0%
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Racimos Sobremaduros</td>
+                            <td>
+                                {% if resultados_automaticos.sobremaduros is mapping and resultados_automaticos.sobremaduros.cantidad is defined %}
+                                    {{ resultados_automaticos.sobremaduros.cantidad }}
+                                {% elif resultados_automaticos.sobremaduros is number %}
+                                    {{ resultados_automaticos.sobremaduros }}
+                                {% else %}
+                                    {{ resultados_automaticos.get('racimo sobremaduro', 0) }}
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if resultados_automaticos.sobremaduros is mapping and resultados_automaticos.sobremaduros.porcentaje is defined %}
+                                    {{ resultados_automaticos.sobremaduros.porcentaje }}%
+                                {% elif resultados_automaticos.sobremaduros is number and cantidad_racimos and cantidad_racimos > 0 %}
+                                    {{ (resultados_automaticos.sobremaduros / cantidad_racimos * 100)|round(1) }}%
+                                {% else %}
+                                    0%
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Racimos con Daño en Corona</td>
+                            <td>
+                                {% if resultados_automaticos.danio_corona is mapping and resultados_automaticos.danio_corona.cantidad is defined %}
+                                    {{ resultados_automaticos.danio_corona.cantidad }}
+                                {% elif resultados_automaticos.danio_corona is number %}
+                                    {{ resultados_automaticos.danio_corona }}
+                                {% else %}
+                                    {{ resultados_automaticos.get('racimo daño en corona', 0) }}
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if resultados_automaticos.danio_corona is mapping and resultados_automaticos.danio_corona.porcentaje is defined %}
+                                    {{ resultados_automaticos.danio_corona.porcentaje }}%
+                                {% elif resultados_automaticos.danio_corona is number and cantidad_racimos and cantidad_racimos > 0 %}
+                                    {{ (resultados_automaticos.danio_corona / cantidad_racimos * 100)|round(1) }}%
+                                {% else %}
+                                    0%
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Racimos Pendúnculo Largo</td>
+                            <td>
+                                {% if resultados_automaticos.pendunculo_largo is mapping and resultados_automaticos.pendunculo_largo.cantidad is defined %}
+                                    {{ resultados_automaticos.pendunculo_largo.cantidad }}
+                                {% elif resultados_automaticos.pendunculo_largo is number %}
+                                    {{ resultados_automaticos.pendunculo_largo }}
+                                {% else %}
+                                    {{ resultados_automaticos.get('racimo pedunculo largo', 0) }}
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if resultados_automaticos.pendunculo_largo is mapping and resultados_automaticos.pendunculo_largo.porcentaje is defined %}
+                                    {{ resultados_automaticos.pendunculo_largo.porcentaje }}%
+                                {% elif resultados_automaticos.pendunculo_largo is number and cantidad_racimos and cantidad_racimos > 0 %}
+                                    {{ (resultados_automaticos.pendunculo_largo / cantidad_racimos * 100)|round(1) }}%
+                                {% else %}
+                                    0%
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Racimos Podridos</td>
+                            <td>
+                                {% if resultados_automaticos.podridos is mapping and resultados_automaticos.podridos.cantidad is defined %}
+                                    {{ resultados_automaticos.podridos.cantidad }}
+                                {% elif resultados_automaticos.podridos is number %}
+                                    {{ resultados_automaticos.podridos }}
+                                {% else %}
+                                    {{ resultados_automaticos.get('racimo podrido', 0) }}
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if resultados_automaticos.podridos is mapping and resultados_automaticos.podridos.porcentaje is defined %}
+                                    {{ resultados_automaticos.podridos.porcentaje }}%
+                                {% elif resultados_automaticos.podridos is number and cantidad_racimos and cantidad_racimos > 0 %}
+                                    {{ (resultados_automaticos.podridos / cantidad_racimos * 100)|round(1) }}%
+                                {% else %}
+                                    0%
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        {% if resultados_por_foto %}
+        <h3 class="text-center mb-4"><i class="fas fa-images me-2"></i>Detalle por Fotografía</h3>
+        
+        {% for foto_num, foto_data in resultados_por_foto.items() %}
+        <div class="photo-section">
+            <h4><i class="fas fa-camera me-2"></i>Foto {{ foto_num }}</h4>
+            
+            <div class="row">
+                <div class="col-lg-6">
+                    <h5 class="mb-3">Resumen de Detecciones</h5>
+                    <div class="table-responsive">
+                        <table class="table table-bordered summary-table">
+                            <thead>
+                                <tr>
+                                    <th>Categoría</th>
+                                    <th>Cantidad</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if foto_data.detecciones %}
+                                    {% if foto_data.detecciones.verdes > 0 %}
+                                    <tr>
+                                        <td>Racimos Verdes</td>
+                                        <td>{{ foto_data.detecciones.verdes }}</td>
+                                    </tr>
+                                    {% endif %}
+                                    
+                                    {% if foto_data.detecciones.maduros > 0 %}
+                                    <tr>
+                                        <td>Racimos Maduros</td>
+                                        <td>{{ foto_data.detecciones.maduros }}</td>
+                                    </tr>
+                                    {% endif %}
+                                    
+                                    {% if foto_data.detecciones.sobremaduros > 0 %}
+                                    <tr>
+                                        <td>Racimos Sobremaduros</td>
+                                        <td>{{ foto_data.detecciones.sobremaduros }}</td>
+                                    </tr>
+                                    {% endif %}
+                                    
+                                    {% if foto_data.detecciones.danio_corona > 0 %}
+                                    <tr>
+                                        <td>Racimos con Daño en Corona</td>
+                                        <td>{{ foto_data.detecciones.danio_corona }}</td>
+                                    </tr>
+                                    {% endif %}
+                                    
+                                    {% if foto_data.detecciones.pendunculo_largo > 0 %}
+                                    <tr>
+                                        <td>Racimos Pendúnculo Largo</td>
+                                        <td>{{ foto_data.detecciones.pendunculo_largo }}</td>
+                                    </tr>
+                                    {% endif %}
+                                    
+                                    {% if foto_data.detecciones.podridos > 0 %}
+                                    <tr>
+                                        <td>Racimos Podridos</td>
+                                        <td>{{ foto_data.detecciones.podridos }}</td>
+                                    </tr>
+                                    {% endif %}
+                                {% endif %}
+                                
+                                <tr class="table-primary">
+                                    <td><strong>Total Racimos Detectados</strong></td>
+                                    <td><strong>{{ foto_data.potholes_detected }}</strong></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="col-lg-6">
+                    <h5 class="mb-3">Imágenes de Soporte</h5>
+                    <div class="image-pair">
+                        {% if foto_data.original %}
+                        <div class="image-card">
+                            <div class="image-header">Imagen Original</div>
+                            <div class="image-body">
+                                <img src="{{ url_for('static', filename=foto_data.original) }}" alt="Imagen original {{ foto_num }}" class="zoomable-img">
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if foto_data.procesada %}
+                        <div class="image-card">
+                            <div class="image-header">Imagen con Detecciones</div>
+                            <div class="image-body">
+                                <img src="{{ url_for('static', filename=foto_data.procesada) }}" alt="Imagen procesada {{ foto_num }}" class="zoomable-img">
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if foto_data.etiquetas %}
+                        <div class="image-card">
+                            <div class="image-header">Imagen con Clasificación</div>
+                            <div class="image-body">
+                                <img src="{{ url_for('static', filename=foto_data.etiquetas) }}" alt="Etiquetas {{ foto_num }}" class="zoomable-img">
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+        {% endif %}
+        
+        <div class="actions-section">
+            <div class="text-center mb-4">
+                <h4><i class="fas fa-cog me-2"></i>Acciones</h4>
+            </div>
+            <div class="row justify-content-center">
+                <div class="col-md-3">
+                    <a href="{{ url_for('procesar_imagenes', url_guia=codigo_guia) }}" class="btn btn-warning w-100 action-button">
+                        <i class="fas fa-cogs me-2"></i> Procesar Imágenes con IA
+                    </a>
+                </div>
+                <div class="col-md-3">
+                    <a href="{{ url_for('serve_guia', filename='guia_' + codigo_guia + '.html') }}" class="btn btn-primary w-100 action-button">
+                        <i class="fas fa-file-alt me-2"></i> Ver Guía Completa
+                    </a>
+                </div>
+                {% if url_for('clasificacion.ver_resultados_clasificacion', url_guia=codigo_guia) %}
+                <div class="col-md-3">
+                    <a href="{{ url_for('clasificacion.ver_resultados_clasificacion', url_guia=codigo_guia) }}" class="btn btn-success w-100 action-button">
+                        <i class="fas fa-clipboard-check me-2"></i> Ver Clasificación Manual
+                    </a>
+                </div>
+                {% endif %}
+                <div class="col-md-3">
+                    <a href="{{ url_for('clasificacion.listar_clasificaciones_filtradas') }}" class="btn btn-secondary w-100 action-button">
+                        <i class="fas fa-list me-2"></i> Ver Todas las Clasificaciones
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal para mostrar imágenes ampliadas -->
+    <div id="imageModal" class="modal-fullscreen-img">
+        <span class="close-modal">&times;</span>
+        <img class="modal-content-img" id="expandedImg">
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Funcionalidad para ampliar imágenes
+        document.addEventListener('DOMContentLoaded', function() {
+            const modal = document.getElementById('imageModal');
+            const modalImg = document.getElementById('expandedImg');
+            const closeBtn = document.getElementsByClassName('close-modal')[0];
+            const zoomableImgs = document.querySelectorAll('.zoomable-img');
+            
+            // Abrir modal al hacer clic en una imagen
+            zoomableImgs.forEach(img => {
+                img.addEventListener('click', function() {
+                    modal.style.display = 'flex';
+                    modalImg.src = this.src;
+                });
+            });
+            
+            // Cerrar modal al hacer clic en X
+            closeBtn.addEventListener('click', function() {
+                modal.style.display = 'none';
+            });
+            
+            // Cerrar modal al hacer clic fuera de la imagen
+            modal.addEventListener('click', function(event) {
+                if (event.target === modal) {
+                    modal.style.display = 'none';
+                }
+            });
+        });
+    </script>
+</body>
+</html>
+{% endblock %} 

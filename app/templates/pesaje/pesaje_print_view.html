@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comprobante de Pesaje - {{ codigo_guia }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        .main-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .header-section {
+            text-align: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #333;
+            padding-bottom: 15px;
+        }
+        .header-logo {
+            max-width: 150px;
+            margin-bottom: 10px;
+        }
+        .content-row {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        .info-column {
+            width: 48%;
+        }
+        .info-section {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        .section-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #dee2e6;
+            padding-bottom: 5px;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .info-item {
+            margin-bottom: 5px;
+        }
+        .info-label {
+            font-weight: bold;
+            color: #6c757d;
+            font-size: 13px;
+        }
+        .info-value {
+            font-size: 14px;
+        }
+        .weight-value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #198754;
+        }
+        .weight-image {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .qr-section {
+            text-align: center;
+            margin-top: 15px;
+        }
+        .qr-code {
+            max-width: 120px;
+            margin: 0 auto;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            font-size: 12px;
+            color: #6c757d;
+            border-top: 1px solid #dee2e6;
+            padding-top: 10px;
+        }
+        .actions {
+            text-align: center;
+            margin: 20px 0;
+        }
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+            body {
+                padding: 0;
+                margin: 0;
+            }
+            .main-container {
+                max-width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <div class="actions no-print">
+            <button class="btn btn-primary" onclick="window.print()">
+                Imprimir/Guardar como PDF
+            </button>
+            <a href="{{ url_for('pesaje.ver_resultados_pesaje', codigo_guia=codigo_guia) }}" class="btn btn-secondary">
+                Volver a Resultados
+            </a>
+        </div>
+
+        <div class="header-section">
+            <img src="{{ url_for('static', filename='images/logo.png') }}" 
+                 alt="Logo" class="header-logo">
+            <h1>Comprobante de Pesaje</h1>
+            <h3>Guía: {{ codigo_guia }}</h3>
+        </div>
+
+        <div class="content-row">
+            <div class="info-column">
+                <div class="info-section">
+                    <div class="section-title">Datos del Proveedor</div>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <div class="info-label">Código</div>
+                            <div class="info-value">{{ codigo_proveedor }}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Nombre</div>
+                            <div class="info-value">{{ nombre_proveedor }}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Transportador</div>
+                            <div class="info-value">{{ transportador }}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Placa</div>
+                            <div class="info-value">{{ placa }}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Racimos</div>
+                            <div class="info-value">{{ racimos }}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Código Guía Transporte SAP</div>
+                            <div class="info-value">{{ codigo_guia_transporte_sap }}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="info-section">
+                    <div class="section-title">Información del Pesaje</div>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <div class="info-label">Peso Bruto</div>
+                            <div class="weight-value">{{ peso_bruto }} kg</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Tipo de Pesaje</div>
+                            <div class="info-value">{{ tipo_pesaje|title }}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Fecha</div>
+                            <div class="info-value">{{ fecha_pesaje }}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Hora</div>
+                            <div class="info-value">{{ hora_pesaje }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="info-column">
+                {% if imagen_pesaje %}
+                <div class="info-section">
+                    <div class="section-title">Imagen del Pesaje</div>
+                    <img src="{{ imagen_pesaje }}" alt="Imagen del pesaje" class="weight-image">
+                </div>
+                {% endif %}
+
+                <div class="qr-section">
+                    <div class="section-title">Código QR para seguimiento</div>
+                    <img src="{{ qr_code }}" alt="Código QR" class="qr-code">
+                </div>
+                
+                <!-- Fotos de evidencia de pesaje -->
+                {% if fotos_pesaje and fotos_pesaje|length > 0 %}
+                <div class="info-section">
+                    <div class="section-title">Evidencia Fotográfica del Pesaje</div>
+                    <div class="photo-grid">
+                        {% for foto in fotos_pesaje %}
+                        <div class="photo-item">
+                            <img src="{{ foto.replace('static/', url_for('static', filename='')) }}" 
+                                 alt="Evidencia de pesaje {{ loop.index }}" 
+                                 class="weight-image">
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Documento generado el {{ fecha_generacion }} a las {{ hora_generacion }}</p>
+            <p>© {{ fecha_generacion.split('/')[2] }} Extractora María La Baja - Todos los derechos reservados</p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> 

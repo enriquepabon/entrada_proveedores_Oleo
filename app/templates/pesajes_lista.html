@@ -1,0 +1,229 @@
+<!-- templates/pesajes_lista.html -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lista de Pesajes</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .main-container {
+            max-width: 1400px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+        .header-section {
+            background: white;
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        .filters-section {
+            background: white;
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        .list-section {
+            background: white;
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        .table-responsive {
+            overflow-x: auto;
+        }
+        .btn-action {
+            min-width: 120px;
+            margin: 0.25rem;
+        }
+        .back-link {
+            margin-bottom: 1.5rem;
+            display: inline-block;
+        }
+        .status-badge {
+            font-size: 0.85rem;
+            padding: 0.35rem 0.65rem;
+        }
+        /* Estilo para las celdas en la tabla */
+        .table td {
+            vertical-align: middle;
+        }
+        /* Tamaño específico para columnas */
+        .col-guia {
+            min-width: 140px;
+        }
+        .col-proveedor {
+            min-width: 200px;
+        }
+        .col-fecha {
+            min-width: 110px;
+        }
+        .col-hora {
+            min-width: 100px;
+        }
+        .col-transportista {
+            min-width: 180px;
+        }
+        .col-peso {
+            min-width: 120px;
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <div class="header-section">
+            <a href="{{ url_for('misc.upload_file') }}" class="back-link">
+                <i class="fas fa-arrow-left me-2"></i>Volver al inicio
+            </a>
+            <h2>Lista de Pesajes</h2>
+            <p class="text-muted">Filtre y busque registros de pesajes</p>
+        </div>
+
+        <div class="filters-section">
+            <h4 class="mb-3">Filtros</h4>
+            <form action="{{ url_for('pesaje.lista_pesajes') }}" method="GET">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label for="fecha_desde" class="form-label">Fecha Desde</label>
+                        <input type="date" class="form-control" id="fecha_desde" name="fecha_desde" 
+                               value="{{ filtros.fecha_desde }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="fecha_hasta" class="form-label">Fecha Hasta</label>
+                        <input type="date" class="form-control" id="fecha_hasta" name="fecha_hasta" 
+                               value="{{ filtros.fecha_hasta }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="codigo_proveedor" class="form-label">Código Proveedor</label>
+                        <input type="text" class="form-control" id="codigo_proveedor" name="codigo_proveedor" 
+                               placeholder="Ej: 0103241" value="{{ filtros.codigo_proveedor }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="nombre_proveedor" class="form-label">Nombre Proveedor</label>
+                        <input type="text" class="form-control" id="nombre_proveedor" name="nombre_proveedor" 
+                               placeholder="Nombre del proveedor" value="{{ filtros.nombre_proveedor }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="tipo_pesaje" class="form-label">Tipo de Pesaje</label>
+                        <select class="form-select" id="tipo_pesaje" name="tipo_pesaje">
+                            <option value="" {% if not filtros.tipo_pesaje %}selected{% endif %}>Todos</option>
+                            <option value="directo" {% if filtros.tipo_pesaje == 'directo' %}selected{% endif %}>Pesaje Soporte Foto</option>
+                            <option value="virtual" {% if filtros.tipo_pesaje == 'virtual' %}selected{% endif %}>Pesaje Manual</option>
+                            <option value="bascula" {% if filtros.tipo_pesaje == 'bascula' %}selected{% endif %}>Pesaje Directo</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="fas fa-filter me-2"></i>Aplicar Filtros
+                        </button>
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <a href="{{ url_for('pesaje.lista_pesajes') }}" class="btn btn-outline-secondary w-100">
+                            <i class="fas fa-times me-2"></i>Limpiar Filtros
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <div class="list-section">
+            <h4 class="mb-4">Resultados ({{ pesajes|length }} encontrados)</h4>
+            
+            {% if pesajes %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="col-guia">Guía</th>
+                            <th class="col-proveedor">Proveedor</th>
+                            <th class="col-fecha">Fecha Entrada</th>
+                            <th class="col-hora">Hora Registro</th>
+                            <th class="col-transportista">Transportista</th>
+                            <th class="col-fecha">Fecha Pesaje</th>
+                            <th class="col-hora">Hora Pesaje</th>
+                            <th>Se Cargó</th>
+                            <th>Se Acarreó</th>
+                            <th>Tipo Pesaje</th>
+                            <th class="col-peso">Peso Bruto (kg)</th>
+                            <th>Guía Transporte SAP</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pesaje in pesajes %}
+                        <tr>
+                            <td>{{ pesaje.codigo_guia }}</td>
+                            <td>
+                                <strong>{{ pesaje.codigo_proveedor }}</strong><br>
+                                <span class="text-muted">{{ pesaje.nombre_proveedor if pesaje.nombre_proveedor and pesaje.nombre_proveedor != 'None' and pesaje.nombre_proveedor != 'No disponible' else "No disponible" }}</span>
+                            </td>
+                            <td>{{ pesaje.fecha_registro }}</td>
+                            <td>{{ pesaje.hora_registro }}</td>
+                            <td>
+                                {% if pesaje.transportador and pesaje.transportador != 'None' and pesaje.transportador != 'No disponible' %}
+                                    {{ pesaje.transportador }}
+                                {% else %}
+                                    <span class="text-muted">No disponible</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ pesaje.fecha_pesaje }}</td>
+                            <td>{{ pesaje.hora_pesaje }}</td>
+                            <td>{{ pesaje.cargo }}</td>
+                            <td>{{ pesaje.acarreo }}</td>
+                            <td>
+                                <span class="badge bg-{{ 'success' if pesaje.tipo_pesaje == 'directo' else ('primary' if pesaje.tipo_pesaje == 'bascula' else 'info') }}">
+                                    {% if pesaje.tipo_pesaje == 'directo' %}
+                                        Soporte Foto
+                                    {% elif pesaje.tipo_pesaje == 'virtual' %}
+                                        Manual
+                                    {% elif pesaje.tipo_pesaje == 'bascula' %}
+                                        Directo
+                                    {% else %}
+                                        {{ pesaje.tipo_pesaje|title }}
+                                    {% endif %}
+                                </span>
+                            </td>
+                            <td><strong>{{ pesaje.peso_bruto }}</strong></td>
+                            <td>{{ pesaje.codigo_guia_transporte_sap if pesaje.codigo_guia_transporte_sap and pesaje.codigo_guia_transporte_sap != 'None' and pesaje.codigo_guia_transporte_sap != 'No disponible' else "No disponible" }}</td>
+                            <td>
+                                <div class="d-flex flex-wrap">
+                                    <a href="{{ url_for('misc.ver_resultados_pesaje', codigo_guia=pesaje.codigo_guia) }}" 
+                                       class="btn btn-sm btn-primary btn-action">
+                                        <i class="fas fa-eye me-1"></i>Ver
+                                    </a>
+                                    <a href="{{ url_for('misc.generar_pdf_pesaje', codigo_guia=pesaje.codigo_guia) }}" 
+                                       class="btn btn-sm btn-success btn-action">
+                                        <i class="fas fa-file-pdf me-1"></i>PDF
+                                    </a>
+                                    {% if pesaje.estado_actual == 'pesaje_completado' %}
+                                    <a href="{{ url_for('clasificacion.clasificacion', codigo=pesaje.codigo_guia) }}" 
+                                       class="btn btn-sm btn-info btn-action">
+                                        <i class="fas fa-list-check me-1"></i>Clasificar
+                                    </a>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i>No se encontraron registros de pesaje con los filtros seleccionados.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> 
