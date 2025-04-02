@@ -128,10 +128,10 @@ def ver_resultados_pesaje_neto(codigo_guia):
 
         # Obtener los datos más recientes de la base de datos
         try:
-            conn = sqlite3.connect('tiquetes.db')
+            conn = sqlite3.connect(current_app.config['TIQUETES_DB_PATH'])
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT peso_tara, peso_neto, fecha_pesaje, hora_pesaje, comentarios, respuesta_sap
+                SELECT peso_tara, peso_neto, fecha_pesaje_neto, hora_pesaje_neto, comentarios, respuesta_sap
                 FROM pesajes_neto 
                 WHERE codigo_guia = ?
             """, (codigo_guia,))
@@ -158,7 +158,8 @@ def ver_resultados_pesaje_neto(codigo_guia):
         # Preparar los datos para la plantilla
         context = {
             'codigo_guia': codigo_guia,
-            'datos_guia': datos_guia
+            'datos_guia': datos_guia,
+            'utils': utils  # Agregar utils al contexto
         }
         
         return render_template('resultados_pesaje_neto.html', **context)

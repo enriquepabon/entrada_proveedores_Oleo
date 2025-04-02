@@ -69,6 +69,15 @@
                     </div>
                 </div>
                 {% endif %}
+                {% if datos_guia.respuesta_sap %}
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="alert alert-info">
+                            <strong>Respuesta SAP:</strong> {{ datos_guia.respuesta_sap }}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
             </div>
 
             <!-- Acciones -->
