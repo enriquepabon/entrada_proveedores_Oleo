@@ -16,9 +16,13 @@ from app.blueprints.pesaje import bp
 from app.utils.common import CommonUtils as Utils
 from app.blueprints.misc.routes import allowed_file, ALLOWED_EXTENSIONS, PLACA_WEBHOOK_URL, PESAJE_WEBHOOK_URL
 import sqlite3
+import pytz
 
 # Configurar logging
 logger = logging.getLogger(__name__)
+
+# Definir zona horaria de Bogotá
+BOGOTA_TZ = pytz.timezone('America/Bogota')
 
 # Path to the database
 DB_PATH = 'tiquetes.db'
@@ -28,6 +32,16 @@ codigos_autorizacion = {}
 
 # Configuración para el webhook de autorización (puedes ajustar esto según necesites)
 AUTORIZACION_WEBHOOK_URL = "https://hook.us2.make.com/py29fwgfrehp9il45832acotytu8xr5s"
+
+def get_bogota_datetime():
+    """
+    Obtiene la fecha y hora actual en la zona horaria de Bogotá.
+    Returns:
+        tuple: (fecha_str, hora_str) en formato DD/MM/YYYY y HH:MM:SS
+    """
+    now_utc = datetime.now(pytz.UTC)
+    now_bogota = now_utc.astimezone(BOGOTA_TZ)
+    return now_bogota.strftime('%d/%m/%Y'), now_bogota.strftime('%H:%M:%S')
 
 # Función para procesar imagen de placa
 def process_plate_image(image_path, filename):
@@ -360,7 +374,10 @@ def registrar_peso_directo():
     Recibe datos del pesaje (JSON o FormData) y lo guarda en la base de datos
     """
     try:
-        utils = current_app.config.get('utils')
+        utils = current_app.config.get('utils', Utils(current_app))
+        
+        # Obtener fecha y hora en zona horaria de Bogotá
+        fecha_actual, hora_actual = get_bogota_datetime()
         
         # Determinar si los datos vienen como JSON o como FormData
         if request.is_json:
@@ -400,21 +417,6 @@ def registrar_peso_directo():
         codigo_proveedor = datos_existentes.get('codigo_proveedor') or datos_existentes.get('codigo')
         nombre_proveedor = datos_existentes.get('nombre_proveedor') or datos_existentes.get('nombre')
         
-        # Capturar fecha y hora actuales
-        fecha_pesaje = datetime.now().strftime('%d/%m/%Y')
-        hora_pesaje = datetime.now().strftime('%H:%M:%S')
-        
-        # Verificar si hay una guía de transporte SAP disponible
-        # Primero buscar en el formulario, luego en JSON, luego en la sesión
-        codigo_guia_transporte_sap = request.form.get('codigo_guia_transporte_sap')
-        if not codigo_guia_transporte_sap and request.is_json:
-            codigo_guia_transporte_sap = data.get('codigo_guia_transporte_sap')
-        if not codigo_guia_transporte_sap and 'codigo_guia_transporte_sap' in session:
-            codigo_guia_transporte_sap = session.get('codigo_guia_transporte_sap')
-            # Limpiar de la sesión después de usarlo
-            session.pop('codigo_guia_transporte_sap', None)
-            logger.info(f"Recuperada guía de transporte SAP de la sesión: {codigo_guia_transporte_sap}")
-        
         # Preparar datos para almacenar
         datos_pesaje = {
             'codigo_guia': codigo_guia,
@@ -422,10 +424,10 @@ def registrar_peso_directo():
             'nombre_proveedor': nombre_proveedor or datos_existentes.get('nombre_proveedor', ''),
             'peso_bruto': peso_bruto,
             'tipo_pesaje': 'directo',
-            'fecha_pesaje': fecha_pesaje,
-            'hora_pesaje': hora_pesaje,
+            'fecha_pesaje': fecha_actual,
+            'hora_pesaje': hora_actual,
             'imagen_pesaje': imagen_pesaje or '',
-            'codigo_guia_transporte_sap': codigo_guia_transporte_sap or datos_existentes.get('codigo_guia_transporte_sap', '')
+            'codigo_guia_transporte_sap': datos_existentes.get('codigo_guia_transporte_sap', '')
         }
         
         # Almacenar en la base de datos
@@ -439,13 +441,13 @@ def registrar_peso_directo():
             datos_existentes.update({
                 'peso_bruto': peso_bruto,
                 'tipo_pesaje': 'directo',
-                'fecha_pesaje': fecha_pesaje,
-                'hora_pesaje': hora_pesaje
+                'fecha_pesaje': fecha_actual,
+                'hora_pesaje': hora_actual
             })
             
-            if codigo_guia_transporte_sap:
-                datos_existentes['codigo_guia_transporte_sap'] = codigo_guia_transporte_sap
-                logger.info(f"Guía de transporte SAP {codigo_guia_transporte_sap} almacenada para {codigo_guia}")
+            if datos_pesaje['codigo_guia_transporte_sap']:
+                datos_existentes['codigo_guia_transporte_sap'] = datos_pesaje['codigo_guia_transporte_sap']
+                logger.info(f"Guía de transporte SAP {datos_pesaje['codigo_guia_transporte_sap']} almacenada para {codigo_guia}")
                 
             # Actualizar la guía
             utils.update_datos_guia(codigo_guia, datos_existentes)
@@ -1114,7 +1116,10 @@ def procesar_pesaje_directo():
     """
     try:
         # Inicializar Utils dentro del contexto de la aplicación
-        utils = Utils(current_app)
+        utils = current_app.config.get('utils', Utils(current_app))
+        
+        # Obtener fecha y hora en zona horaria de Bogotá
+        fecha_actual, hora_actual = get_bogota_datetime()
         
         # Verificar que haya un archivo cargado
         if 'imagen' not in request.files:

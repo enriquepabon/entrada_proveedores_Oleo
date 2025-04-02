@@ -18,9 +18,23 @@ from app.utils.image_processing import process_plate_image
 import db_utils  # Importar db_utils para operaciones de base de datos
 import db_operations  # Importar db_operations
 from tiquete_parser import parse_markdown_response
+import pytz
 
 # Configurar logging
 logger = logging.getLogger(__name__)
+
+# Definir zona horaria de Bogotá
+BOGOTA_TZ = pytz.timezone('America/Bogota')
+
+def get_bogota_datetime():
+    """
+    Obtiene la fecha y hora actual en la zona horaria de Bogotá.
+    Returns:
+        tuple: (fecha_str, hora_str) en formato DD/MM/YYYY y HH:MM:SS
+    """
+    now_utc = datetime.now(pytz.UTC)
+    now_bogota = now_utc.astimezone(BOGOTA_TZ)
+    return now_bogota.strftime('%d/%m/%Y'), now_bogota.strftime('%H:%M:%S')
 
 @bp.route('/index')
 def index():
@@ -1360,6 +1374,12 @@ def registrar_entrada():
         return redirect(url_for('misc.upload_file'))
     
     try:
+        # Inicializar Utils dentro del contexto de la aplicación
+        utils = current_app.config.get('utils', Utils(current_app))
+        
+        # Obtener fecha y hora en zona horaria de Bogotá
+        fecha_actual, hora_actual = get_bogota_datetime()
+        
         # Obtener datos del formulario
         codigo_proveedor = request.form.get('codigo_proveedor', '')
         nombre_proveedor = request.form.get('nombre_proveedor', '')
