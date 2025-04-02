@@ -7,6 +7,7 @@ import json
 import sqlite3
 from app.blueprints.salida import bp
 from app.utils.common import CommonUtils as Utils
+from app.utils.common import convert_to_bogota_time
 
 # Configurar logging
 logger = logging.getLogger(__name__)
@@ -271,7 +272,7 @@ def ver_resultados_salida(codigo_guia):
             
         # Verificar si la salida ha sido registrada en la tabla salidas
         try:
-            conn = sqlite3.connect('tiquetes.db')
+            conn = sqlite3.connect(current_app.config['TIQUETES_DB_PATH'])
             cursor = conn.cursor()
             cursor.execute("SELECT fecha_salida, hora_salida, comentarios_salida FROM salidas WHERE codigo_guia = ?", (codigo_guia,))
             salida_data = cursor.fetchone()
@@ -307,7 +308,8 @@ def ver_resultados_salida(codigo_guia):
         context = {
             'datos': datos_guia,
             'qr_code_url': url_for('static', filename=f'qr/{qr_filename}'),
-            'proceso_completado': True
+            'proceso_completado': True,
+            'convert_to_bogota_time': convert_to_bogota_time
         }
         
         return render_template('resultados_salida.html', **context)

@@ -92,7 +92,7 @@
                     </div>
                     <div class="col-md-6">
                         {% if datos.fecha_pesaje_neto %}
-                        {% set fecha_pesaje_neto_bogota, hora_pesaje_neto_bogota = utils.convert_to_bogota_time(datos.fecha_pesaje_neto, datos.hora_pesaje_neto) %}
+                        {% set fecha_pesaje_neto_bogota, hora_pesaje_neto_bogota = convert_to_bogota_time(datos.fecha_pesaje_neto, datos.hora_pesaje_neto) %}
                         <p><strong>Fecha Pesaje Neto:</strong> {{ fecha_pesaje_neto_bogota }}</p>
                         <p><strong>Hora Pesaje Neto:</strong> {{ hora_pesaje_neto_bogota }}</p>
                         {% endif %}
@@ -106,7 +106,7 @@
                 <div class="row">
                     <div class="col-md-6">
                         {% if datos.fecha_salida %}
-                        {% set fecha_salida_bogota, hora_salida_bogota = utils.convert_to_bogota_time(datos.fecha_salida, datos.hora_salida) %}
+                        {% set fecha_salida_bogota, hora_salida_bogota = convert_to_bogota_time(datos.fecha_salida, datos.hora_salida) %}
                         <p><strong>Fecha Salida:</strong> {{ fecha_salida_bogota }}</p>
                         <p><strong>Hora Salida:</strong> {{ hora_salida_bogota }}</p>
                         {% endif %}

@@ -11,7 +11,7 @@ import glob
 from werkzeug.utils import secure_filename
 from app.blueprints.misc import bp
 from app.utils.common import CommonUtils as Utils
-from app.utils.common import standardize_template_data
+from app.utils.common import standardize_template_data, convert_to_bogota_time
 import time
 import sqlite3
 import base64
@@ -955,381 +955,72 @@ def generar_pdf_pesaje(codigo_guia):
 @bp.route('/guia-centralizada/<path:codigo_guia>')
 def ver_guia_centralizada(codigo_guia):
     """
-    Vista centralizada de una guía, mostrando toda la información relevante.
+    Muestra una vista consolidada del estado y datos de una guía.
+    Ahora también maneja códigos de guía con sufijos como _v1, _v2.
     """
     try:
-        import db_utils
-        from flask import current_app
+        # Inicializar Utils dentro del contexto de la aplicación
+        utils = current_app.config.get('utils', Utils(current_app))
         
-        # Inicializar utils desde la configuración de la aplicación
-        utils = current_app.config.get('utils')
-        if not utils:
-            logger.error("Utils no disponible en la configuración de la aplicación")
-            flash("Error: configuración de utilidades no disponible", "danger")
-            return redirect(url_for('misc.index'))
+        # Limpiar el código de guía si tiene un sufijo _vX
+        # codigo_guia_base = re.sub(r'_v\d+$', '', codigo_guia)
         
-        logger.info(f"Accediendo a vista centralizada de guía: {codigo_guia}")
-        
-        # Obtener datos de la guía
+        # Obtener datos de la guía utilizando el código original
         datos_guia = utils.get_datos_guia(codigo_guia)
-        logger.info(f"Datos de guía obtenidos: {datos_guia}")
+        if not datos_guia:
+            flash(f"No se encontraron datos para la guía {codigo_guia}", "warning")
+            return render_template('error.html', message=f"Guía {codigo_guia} no encontrada"), 404
         
-        # Verificar y corregir la ruta de la imagen si es necesario
-        if datos_guia and datos_guia.get('image_filename'):
-            logger.info(f"Nombre de archivo de imagen encontrado: {datos_guia['image_filename']}")
-            
-            # Verificar si la imagen existe en la ruta esperada
-            image_path = os.path.join(current_app.static_folder, 'uploads', datos_guia['image_filename'])
-            logger.info(f"Ruta completa de la imagen: {image_path}")
-            
-            if not os.path.exists(image_path):
-                logger.warning(f"Imagen no encontrada en ruta principal: {image_path}")
-                
-                # Buscar en registros de entrada para obtener el nombre correcto del archivo
-                try:
-                    entry_record = db_utils.get_entry_record_by_guide_code(codigo_guia)
-                    logger.info(f"Registro de entrada encontrado: {entry_record}")
-                    
-                    if entry_record and entry_record.get('image_filename'):
-                        datos_guia['image_filename'] = entry_record['image_filename']
-                        logger.info(f"Nombre de imagen actualizado desde registro de entrada: {datos_guia['image_filename']}")
-                        
-                        # Verificar si la imagen actualizada existe
-                        updated_image_path = os.path.join(current_app.static_folder, 'uploads', datos_guia['image_filename'])
-                        if os.path.exists(updated_image_path):
-                            logger.info(f"Imagen encontrada en ruta actualizada: {updated_image_path}")
-                    else:
-                        logger.warning("No se encontró nombre de imagen en el registro de entrada")
-                except Exception as e:
-                    logger.error(f"Error buscando imagen en registros de entrada: {str(e)}")
-        else:
-            logger.warning(f"No se encontró nombre de archivo de imagen para la guía: {codigo_guia}")
-
-        # Obtener datos del registro de entrada
-        try:
-            entry_record = db_utils.get_entry_record_by_guide_code(codigo_guia)
-            if entry_record:
-                # Actualizar datos_guia con la información del registro de entrada
-                datos_guia.update({
-                    'codigo_proveedor': entry_record.get('codigo_proveedor'),
-                    'nombre_proveedor': entry_record.get('nombre_proveedor'),
-                    'nombre_agricultor': entry_record.get('nombre_proveedor'),  # Para compatibilidad
-                    'transportador': entry_record.get('transportador'),
-                    'placa': entry_record.get('placa'),
-                    'racimos': entry_record.get('cantidad_racimos'),
-                    'cantidad_racimos': entry_record.get('cantidad_racimos'),
-                    'acarreo': entry_record.get('acarreo'),
-                    'cargo': entry_record.get('cargo')
-                })
-                logger.info(f"Datos de registro de entrada obtenidos para {codigo_guia}")
-            else:
-                logger.warning(f"No se encontró registro de entrada para la guía {codigo_guia}")
-        except Exception as e:
-            logger.error(f"Error obteniendo registros de entrada: {str(e)}")
-
-        # NUEVO: Verificar directamente si existe una clasificación para esta guía
-        clasificacion_completada = False
-        fecha_clasificacion = None
-        hora_clasificacion = None
+        # Determinar el estado actual y pasos completados
+        estado_info = utils.determinar_estado_guia(codigo_guia, datos_guia)
         
-        try:
-            # Verificar en la tabla de clasificaciones
-            conn = sqlite3.connect('tiquetes.db')
-            cursor = conn.cursor()
-            cursor.execute("SELECT fecha_clasificacion, hora_clasificacion FROM clasificaciones WHERE codigo_guia = ?", (codigo_guia,))
-            result = cursor.fetchone()
-            if result:
-                clasificacion_completada = True
-                fecha_clasificacion = result[0]
-                hora_clasificacion = result[1]
-                logger.info(f"Encontrada clasificación para {codigo_guia} en tabla clasificaciones: fecha={fecha_clasificacion}, hora={hora_clasificacion}")
-                
-                # Actualizar datos_guia con esta información
-                datos_guia['clasificacion_completada'] = True
-                datos_guia['estado_clasificacion'] = 'completado'
-                datos_guia['fecha_clasificacion'] = fecha_clasificacion
-                datos_guia['hora_clasificacion'] = hora_clasificacion
-                
-                # También verificar si existen archivos de clasificación
-                clasificaciones_dir = os.path.join(current_app.static_folder, 'clasificaciones')
-                json_path = os.path.join(clasificaciones_dir, f"clasificacion_{codigo_guia}.json")
-                if os.path.exists(json_path):
-                    logger.info(f"Encontrado archivo de clasificación: {json_path}")
-                    datos_guia['archivo_clasificacion'] = True
-            else:
-                logger.info(f"No se encontró clasificación en tabla clasificaciones para {codigo_guia}")
-            
-            # NUEVO: Verificar si existe un pesaje neto para la guía
-            cursor.execute("SELECT fecha_pesaje, hora_pesaje, peso_neto FROM pesajes_neto WHERE codigo_guia = ?", (codigo_guia,))
-            result = cursor.fetchone()
-            pesaje_neto_completado = False
-            if result:
-                fecha_pesaje_neto = result[0]
-                hora_pesaje_neto = result[1]
-                peso_neto = result[2]
-                
-                if fecha_pesaje_neto and hora_pesaje_neto and peso_neto:
-                    pesaje_neto_completado = True
-                    logger.info(f"Encontrado pesaje neto para {codigo_guia}: fecha={fecha_pesaje_neto}, hora={hora_pesaje_neto}, peso={peso_neto}")
-                    
-                    # Actualizar datos_guia con esta información
-                    datos_guia['pesaje_neto_completado'] = True
-                    datos_guia['fecha_pesaje_neto'] = fecha_pesaje_neto
-                    datos_guia['hora_pesaje_neto'] = hora_pesaje_neto
-                    datos_guia['peso_neto'] = peso_neto
-            else:
-                # Si no hay en la DB, pero existe en los datos_guia, considerarlo completado
-                if datos_guia.get('peso_neto') and datos_guia.get('peso_neto') != 'Pendiente' and datos_guia.get('peso_neto') != 'N/A':
-                    pesaje_neto_completado = True
-                    datos_guia['pesaje_neto_completado'] = True
-                    logger.info(f"Pesaje neto encontrado en datos_guia para {codigo_guia}")
-            
-            # NUEVO: Verificar si existe registro de salida para la guía
-            cursor.execute("SELECT fecha_salida, hora_salida, comentarios_salida FROM salidas WHERE codigo_guia = ?", (codigo_guia,))
-            result = cursor.fetchone()
-            salida_completada = False
-            if result:
-                fecha_salida = result[0]
-                hora_salida = result[1]
-                comentarios_salida = result[2]
-                
-                if fecha_salida and hora_salida:
-                    salida_completada = True
-                    logger.info(f"Encontrado registro de salida para {codigo_guia}: fecha={fecha_salida}, hora={hora_salida}")
-                    
-                    # Actualizar datos_guia con esta información
-                    datos_guia['fecha_salida'] = fecha_salida
-                    datos_guia['hora_salida'] = hora_salida
-                    datos_guia['comentarios_salida'] = comentarios_salida
-                    datos_guia['estado_salida'] = 'Completado'
-                    datos_guia['estado_final'] = 'completado'
-                    datos_guia['estado_actual'] = 'proceso_completado'
-            else:
-                logger.info(f"No se encontró registro de salida en tabla salidas para {codigo_guia}")
-            
-            conn.close()
-        except Exception as e:
-            logger.error(f"Error verificando datos en tabla: {str(e)}")
-
-        # --- INICIO LÓGICA PEPA --- (Moved outside the exception block)
-        es_pepa = False
-        racimos_valor = str(datos_guia.get('cantidad_racimos', datos_guia.get('racimos', ''))).strip().lower()
-        if racimos_valor == 'pepa':
-            es_pepa = True
-            logger.info(f"Guía {codigo_guia} es de PEPA. Omitiendo clasificación.")
-            # Marcar clasificación como completada/omitida para el flujo
-            clasificacion_completada = True # Update local variable if used later
-            datos_guia['clasificacion_completada'] = True
-            datos_guia['estado_clasificacion'] = 'Omitido (Pepa)'
-            # Asignar fecha/hora de pesaje como placeholder si no existen para clasificación
-            if not datos_guia.get('fecha_clasificacion'):
-                datos_guia['fecha_clasificacion'] = datos_guia.get('fecha_pesaje', 'N/A')
-            if not datos_guia.get('hora_clasificacion'):
-                 datos_guia['hora_clasificacion'] = datos_guia.get('hora_pesaje', 'N/A')
-            # Añadir a pasos completados si la lista existe y no está ya
-            if 'pasos_completados' in datos_guia and isinstance(datos_guia['pasos_completados'], list) and 'clasificacion' not in datos_guia['pasos_completados']:
-                 datos_guia['pasos_completados'].append('clasificacion')
-            if 'datos_disponibles' in datos_guia and isinstance(datos_guia['datos_disponibles'], list) and 'clasificacion' not in datos_guia['datos_disponibles']:
-                 datos_guia['datos_disponibles'].append('clasificacion')
-        # --- FIN LÓGICA PEPA ---
-
-        # Recalcular estado_info basado en los datos actualizados (importante DESPUÉS de la lógica PEPA)
-        # Re-import locally to try and resolve UnboundLocalError
-        from app.utils.common import get_estado_guia
-        estado_info = get_estado_guia(codigo_guia)
-        logger.info(f"Estado Info recalculado (post-pepa check): {estado_info}")
-
-        # Logging detallado para diagnóstico del problema
-        logger.info(f"----- DATOS GUÍA CENTRALIZADA PRE-ESTADO ({codigo_guia}) -----")
-        logger.info(f"Estado actual: {datos_guia.get('estado_actual')}")
-        logger.info(f"Estado clasificación: {datos_guia.get('estado_clasificacion')}")
-        logger.info(f"Clasificación completada: {datos_guia.get('clasificacion_completada')}")
-        logger.info(f"Clasificación verificada directamente: {clasificacion_completada}")
-        logger.info(f"Pesaje neto completado: {datos_guia.get('pesaje_neto_completado', pesaje_neto_completado)}")
-        logger.info(f"Salida completada: {datos_guia.get('estado_salida') == 'Completado' or salida_completada}")
-        logger.info(f"Fecha salida: {datos_guia.get('fecha_salida', 'No disponible')}")
-        logger.info(f"Hora salida: {datos_guia.get('hora_salida', 'No disponible')}")
+        # Verificar si el proveedor es 'PEPA' (código '999999')
+        es_pepa = datos_guia.get('codigo_proveedor') == '999999'
+        if es_pepa:
+            # Si es PEPA, marcar clasificación como completada
+            if 'clasificacion' not in estado_info['pasos_completados']:
+                 estado_info['pasos_completados'].append('clasificacion')
+                 # Actualizar porcentaje si es necesario (por ejemplo, 60% si solo estaba en pesaje)
+                 if estado_info['porcentaje_avance'] < 60:
+                     estado_info['porcentaje_avance'] = 60
+                 if estado_info['siguiente_paso'] == 'clasificacion':
+                     estado_info['siguiente_paso'] = 'pesaje_neto'
+                     estado_info['descripcion'] = 'Clasificación omitida (PEPA)'
         
-        # Verificar si existen valores críticos en datos_guia
-        if 'pasos_completados' in datos_guia:
-            logger.info(f"Pasos completados: {datos_guia['pasos_completados']}")
-            if 'clasificacion' not in datos_guia['pasos_completados'] and clasificacion_completada:
-                logger.info("Agregando clasificación a pasos_completados")
-                datos_guia['pasos_completados'].append('clasificacion')
-            if 'pesaje_neto' not in datos_guia['pasos_completados'] and pesaje_neto_completado:
-                logger.info("Agregando pesaje_neto a pasos_completados")
-                datos_guia['pasos_completados'].append('pesaje_neto')
-            if 'salida' not in datos_guia['pasos_completados'] and salida_completada:
-                logger.info("Agregando salida a pasos_completados")
-                datos_guia['pasos_completados'].append('salida')
-        elif clasificacion_completada and pesaje_neto_completado and salida_completada:
-            logger.info("Creando pasos_completados con clasificación, pesaje_neto y salida")
-            datos_guia['pasos_completados'] = ['entrada', 'pesaje', 'clasificacion', 'pesaje_neto', 'salida']
-        elif clasificacion_completada and pesaje_neto_completado:
-            logger.info("Creando pasos_completados con clasificación y pesaje_neto")
-            datos_guia['pasos_completados'] = ['entrada', 'pesaje', 'clasificacion', 'pesaje_neto']
-        elif clasificacion_completada:
-            logger.info("Creando pasos_completados con clasificación")
-            datos_guia['pasos_completados'] = ['entrada', 'pesaje', 'clasificacion']
-        elif pesaje_neto_completado:
-            logger.info("Creando pasos_completados con pesaje_neto")
-            datos_guia['pasos_completados'] = ['entrada', 'pesaje', 'pesaje_neto']
-            
-        if 'datos_disponibles' in datos_guia:
-            logger.info(f"Datos disponibles: {datos_guia['datos_disponibles']}")
-            if 'clasificacion' not in datos_guia['datos_disponibles'] and clasificacion_completada:
-                logger.info("Agregando clasificación a datos_disponibles")
-                datos_guia['datos_disponibles'].append('clasificacion')
-            if 'pesaje_neto' not in datos_guia['datos_disponibles'] and pesaje_neto_completado:
-                logger.info("Agregando pesaje_neto a datos_disponibles")
-                datos_guia['datos_disponibles'].append('pesaje_neto')
-            if 'salida' not in datos_guia['datos_disponibles'] and salida_completada:
-                logger.info("Agregando salida a datos_disponibles")
-                datos_guia['datos_disponibles'].append('salida')
-        elif clasificacion_completada and pesaje_neto_completado and salida_completada:
-            logger.info("Creando datos_disponibles con clasificación, pesaje_neto y salida")
-            datos_guia['datos_disponibles'] = ['entrada', 'pesaje', 'clasificacion', 'pesaje_neto', 'salida']
-        elif clasificacion_completada and pesaje_neto_completado:
-            logger.info("Creando datos_disponibles con clasificación y pesaje_neto")
-            datos_guia['datos_disponibles'] = ['entrada', 'pesaje', 'clasificacion', 'pesaje_neto']
-        elif clasificacion_completada:
-            logger.info("Creando datos_disponibles con clasificación")
-            datos_guia['datos_disponibles'] = ['entrada', 'pesaje', 'clasificacion']
-        elif pesaje_neto_completado:
-            logger.info("Creando datos_disponibles con pesaje_neto")
-            datos_guia['datos_disponibles'] = ['entrada', 'pesaje', 'pesaje_neto']
-            
-        # Datos de fecha y hora de clasificación
-        logger.info(f"Fecha clasificación: {datos_guia.get('fecha_clasificacion', fecha_clasificacion)}")
-        logger.info(f"Hora clasificación: {datos_guia.get('hora_clasificacion', hora_clasificacion)}")
-        logger.info("----- FIN DATOS GUÍA CENTRALIZADA -----")
+        # Asegurar que el estado refleje que la clasificación está completa si es Pepa
+        if es_pepa and 'clasificacion' not in datos_guia.get('pasos_completados', []):
+            if 'pasos_completados' not in datos_guia:
+                datos_guia['pasos_completados'] = []
+            datos_guia['pasos_completados'].append('clasificacion')
         
-        # Intentar obtener registros de entrada
-        try:
-            entrada_records = db_utils.get_entry_records({'codigo_guia': codigo_guia})
-            logger.info(f"Registros de entrada obtenidos: {len(entrada_records) if entrada_records else 0}")
-        except Exception as e:
-            logger.error(f"Error obteniendo registros de entrada: {str(e)}")
-            entrada_records = []
+        # Generar QR code
+        qr_filename = f'qr_guia_{codigo_guia}.png'
+        qr_path = os.path.join(current_app.config['QR_FOLDER'], qr_filename)
+        qr_url_route = url_for('.ver_guia_centralizada', codigo_guia=codigo_guia, _external=True)
+        if not os.path.exists(qr_path):
+            utils.generar_qr(qr_url_route, qr_path)
+        qr_url = url_for('static', filename=f'qr/{qr_filename}')
         
-        # Obtener información del estado actual
-        from app.utils.common import get_estado_guia
-        estado_info = get_estado_guia(codigo_guia)
+        # Timestamp para cache busting
+        now_timestamp = datetime.now().timestamp()
         
-        # Agregar timestamp para evitar caché en imágenes y recursos
-        now_timestamp = int(time.time())
-        current_year = datetime.now().year
-        
-        # Agregar información adicional para el template
-        datos_template = {
-            'estado_info': estado_info,
-            'datos_guia': datos_guia,
+        # Preparar el contexto para la plantilla
+        context = {
             'codigo_guia': codigo_guia,
+            'datos_guia': datos_guia,
+            'estado_info': estado_info,
+            'es_pepa': es_pepa,
+            'qr_url': qr_url,
             'now_timestamp': now_timestamp,
-            'current_year': current_year,
-            'template_version': '1.0.1',  # Agregar versión del template para depuración
-            'es_pepa': es_pepa, # Pasar la bandera a la plantilla
+            'convert_to_bogota_time': convert_to_bogota_time # Pasar la función
         }
         
-        # Generar QR para acceder directamente a esta vista si no existe
-        qr_filename = f"qr_centralizado_{codigo_guia}.png"
-        qr_path = os.path.join(current_app.static_folder, 'qr', qr_filename)
-        
-        if not os.path.exists(qr_path):
-            # Generar URL para el QR (url actual)
-            qr_url = url_for('misc.ver_guia_centralizada', codigo_guia=codigo_guia, _external=True)
-            logger.info(f"Generando QR para acceso directo a vista centralizada: {qr_url}")
-            utils.generar_qr(qr_url, qr_path)
-            
-            # Eliminar QR anterior si existe
-            old_qr_filename = f"qr_guia_estado_{codigo_guia}.png"
-            old_qr_path = os.path.join(current_app.static_folder, 'qr', old_qr_filename)
-            if os.path.exists(old_qr_path):
-                try:
-                    logger.info(f"Eliminando QR antiguo: {old_qr_filename}")
-                    os.rename(old_qr_path, f"{old_qr_path}.old")
-                except Exception as e:
-                    logger.warning(f"No se pudo renombrar el QR antiguo: {str(e)}")
-        
-        datos_template['qr_url'] = url_for('static', filename=f'qr/{qr_filename}') + f'?v={now_timestamp}'
-        
-        # Si falta algún campo importante, registrarlo en el log
-        campos_importantes = ['codigo_proveedor', 'nombre_agricultor', 'nombre_proveedor', 'transportador', 'placa', 'racimos']
-        for campo in campos_importantes:
-            if campo not in datos_guia or datos_guia.get(campo) is None or datos_guia.get(campo) == 'None' or datos_guia.get(campo) == 'N/A':
-                logger.warning(f"Campo importante no encontrado en datos_guia: {campo}")
-                
-        # Log detallado para depuración de imagen
-        logger.info(f"Datos de imagen: image_filename={datos_guia.get('image_filename')}, "
-                   f"imagen_pesaje={datos_guia.get('imagen_pesaje')}, "
-                   f"imagen_pesaje_neto={datos_guia.get('imagen_pesaje_neto')}")
-        
-        # Verificar que la plantilla existe
-        template_path = os.path.join(current_app.template_folder, 'guia_centralizada.html')
-        template_abs_path = os.path.abspath(template_path)
-        
-        logger.error(f"DEBUG - Template folder: {current_app.template_folder}")
-        logger.error(f"DEBUG - Template path: {template_path}")
-        logger.error(f"DEBUG - Template absolute path: {template_abs_path}")
-        logger.error(f"DEBUG - Os.getcwd(): {os.getcwd()}")
-        logger.error(f"DEBUG - Checking if template exists: {os.path.exists(template_path)}")
-        
-        # Look for templates in multiple potential locations
-        potential_locations = [
-            os.path.join(current_app.template_folder, 'guia_centralizada.html'),
-            os.path.join(os.getcwd(), 'templates', 'guia_centralizada.html'),
-            os.path.join(os.getcwd(), 'app', 'templates', 'guia_centralizada.html'),
-            os.path.join(os.getcwd(), 'TiquetesApp', 'templates', 'guia_centralizada.html'),
-        ]
-        
-        for loc in potential_locations:
-            logger.error(f"DEBUG - Checking location: {loc} - Exists: {os.path.exists(loc)}")
-            
-        if not os.path.exists(template_path):
-            logger.error(f"¡ERROR CRÍTICO! No se encuentra la plantilla guia_centralizada.html en {current_app.template_folder}")
-            
-            # Try to use an alternative template if found
-            for loc in potential_locations:
-                if os.path.exists(loc):
-                    logger.error(f"DEBUG - Using alternative template location: {loc}")
-                    # Override the template rendering by manually reading the file and rendering it
-                    with open(loc, 'r', encoding='utf-8') as f:
-                        template_content = f.read()
-                    from jinja2 import Template
-                    template = Template(template_content)
-                    return template.render(**datos_template)
-                    
-            return render_template('error.html', message="Error: Plantilla no encontrada"), 500
-        
-        # Renderizar el template con todos los datos - FORZAR USO DE ESTA PLANTILLA
-        try:
-            # Intenta renderizar con la plantilla correcta
-            return render_template('guia_centralizada.html', **datos_template)
-        except Exception as template_error:
-            # Si hay un error en la renderización, registrarlo y probar con una plantilla de fallback
-            logger.error(f"Error al renderizar guia_centralizada.html: {str(template_error)}")
-            logger.error(traceback.format_exc())
-            
-            try:
-                # Intentar con una plantilla de fallback más simple
-                return render_template('error.html', 
-                                      message=f"Error al mostrar información centralizada de la guía: {str(template_error)}",
-                                      datos_adicionales={
-                                          'codigo_guia': codigo_guia,
-                                          'estado': estado_info.get('estado', 'desconocido'),
-                                          'descripcion': estado_info.get('descripcion', 'No disponible'),
-                                          'error_template': str(template_error)
-                                      })
-            except Exception as fallback_error:
-                # Si incluso la plantilla de fallback falla, devolver texto plano
-                logger.critical(f"Error en plantilla de fallback: {str(fallback_error)}")
-                return f"Error crítico de plantilla: {str(template_error)}", 500
-        
+        return render_template('guia_centralizada.html', **context)
     except Exception as e:
-        logger.error(f"Error al mostrar vista centralizada para guía {codigo_guia}: {str(e)}")
+        logger.error(f"Error al mostrar guía centralizada para {codigo_guia}: {str(e)}")
         logger.error(traceback.format_exc())
-        flash(f"Error al mostrar información centralizada de la guía: {str(e)}", "error")
-        return render_template('error.html', message=f"Error al mostrar información centralizada de la guía: {str(e)}")
+        flash(f"Error al cargar la guía {codigo_guia}: {str(e)}", "error")
+        return render_template('error.html', message=f"Error al cargar la guía: {str(e)}")
 
 
 @bp.route('/guia-alt/<codigo_guia>')

@@ -9,6 +9,7 @@ import sqlite3
 import pytz
 from app.blueprints.pesaje_neto import bp
 from app.utils.common import CommonUtils as Utils
+from app.utils.common import convert_to_bogota_time
 
 # Configurar logging
 logger = logging.getLogger(__name__)
@@ -159,7 +160,7 @@ def ver_resultados_pesaje_neto(codigo_guia):
         context = {
             'codigo_guia': codigo_guia,
             'datos_guia': datos_guia,
-            'utils': utils  # Agregar utils al contexto
+            'convert_to_bogota_time': convert_to_bogota_time
         }
         
         return render_template('resultados_pesaje_neto.html', **context)
