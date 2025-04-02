@@ -11,7 +11,7 @@ import glob
 from werkzeug.utils import secure_filename
 from app.blueprints.misc import bp
 from app.utils.common import CommonUtils as Utils
-from app.utils.common import standardize_template_data, convert_to_bogota_time
+from app.utils.common import standardize_template_data
 import time
 import sqlite3
 import base64
@@ -19,8 +19,6 @@ import qrcode
 from app.utils.image_processing import process_plate_image
 from app.utils.common import get_estado_guia
 import pytz
-from config import app as app_config
-from config import Config, DevelopmentConfig, ProductionConfig
 from app.utils.pdf_generator import PDFGenerator
 
 # Database path (assuming it's at the workspace root)
