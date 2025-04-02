@@ -1081,11 +1081,57 @@ def ver_resultados_pesaje(codigo_guia):
             logger.error(f"No se encontraron datos para la guía: {codigo_guia}")
             return render_template('error.html', message=f"No se encontraron datos para la guía {codigo_guia}"), 404
 
-        # Verificar que el pesaje esté completado
-        if not datos_guia.get('peso_bruto'):
-            logger.warning(f"La guía {codigo_guia} no tiene pesaje bruto registrado")
+        # --- CONSULTAR PESAJES_BRUTO DIRECTAMENTE ---
+        # Verificar que el pesaje esté completado consultando la DB
+        peso_bruto_db = None
+        fecha_pesaje_db = None
+        hora_pesaje_db = None
+        guia_sap_db = None
+        try:
+            # Usar DB_PATH definido globalmente o desde config
+            # Asegúrate que DB_PATH esté correctamente definido y accesible aquí.
+            # Si no, usa current_app.config['TIQUETES_DB_PATH']
+            conn_check = sqlite3.connect(DB_PATH) 
+            cursor_check = conn_check.cursor()
+            logger.info(f"Consultando pesajes_bruto para {codigo_guia}")
+            cursor_check.execute("""
+                SELECT peso_bruto, fecha_pesaje, hora_pesaje, codigo_guia_transporte_sap 
+                FROM pesajes_bruto 
+                WHERE codigo_guia = ?
+            """, (codigo_guia,))
+            pesaje_result = cursor_check.fetchone()
+            conn_check.close()
+
+            if pesaje_result:
+                peso_bruto_db = pesaje_result[0]
+                fecha_pesaje_db = pesaje_result[1]
+                hora_pesaje_db = pesaje_result[2]
+                guia_sap_db = pesaje_result[3]
+                logger.info(f"Pesaje bruto encontrado en DB para {codigo_guia}: Peso={peso_bruto_db}, Fecha={fecha_pesaje_db}, Hora={hora_pesaje_db}, SAP={guia_sap_db}")
+                # Actualizar datos_guia con valores frescos de la DB
+                datos_guia['peso_bruto'] = peso_bruto_db
+                datos_guia['fecha_pesaje'] = fecha_pesaje_db
+                datos_guia['hora_pesaje'] = hora_pesaje_db
+                datos_guia['codigo_guia_transporte_sap'] = guia_sap_db
+            else:
+                logger.warning(f"No se encontró registro en pesajes_bruto para {codigo_guia}")
+
+        except sqlite3.Error as db_err:
+            logger.error(f"DB error consultando pesajes_bruto para {codigo_guia}: {db_err}")
+        except NameError:
+             logger.error("DB_PATH no está definida. Asegúrate que sea accesible en este contexto.")
+             # Podrías intentar obtenerla de current_app.config si está disponible
+             # flash("Error de configuración interna al verificar el pesaje.", "error")
+             # return redirect(url_for('misc.index')) # O alguna otra página de error/inicio
+        except Exception as e:
+            logger.error(f"Error inesperado consultando pesajes_bruto para {codigo_guia}: {e}")
+
+        # Verificar si se encontró el peso en la DB (o si ya estaba en datos_guia por si acaso)
+        if not peso_bruto_db and not datos_guia.get('peso_bruto'):
+            logger.warning(f"La guía {codigo_guia} no tiene pesaje bruto registrado (verificado en DB).")
             flash("No hay datos de pesaje registrados para esta guía.", "warning")
             return redirect(url_for('pesaje.pesaje', codigo=codigo_guia))
+        # --- FIN CONSULTA PESAJES_BRUTO ---
 
         # Agregar timestamp para evitar caché en imágenes
         now_timestamp = int(time.time())
