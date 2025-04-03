@@ -19,7 +19,7 @@ import qrcode
 from app.utils.image_processing import process_plate_image
 from app.utils.common import get_estado_guia
 import pytz
-from app.utils.pdf_generator import PDFGenerator
+from app.utils.pdf_generator import Pdf_generatorUtils
 
 # Database path (assuming it's at the workspace root)
 DB_PATH = 'tiquetes.db'
