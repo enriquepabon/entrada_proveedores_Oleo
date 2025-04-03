@@ -4206,7 +4206,7 @@ def sync_clasificacion(codigo_guia):
         with open(json_path, 'r') as f:
             clasificacion_data = json.load(f)
 
-        conn = sqlite3.connect(DB_PATH) # Usar la variable definida
+        conn = sqlite3.connect(current_app.config['TIQUETES_DB_PATH'])
         cursor = conn.cursor()
 
         # Preparar los datos para la actualización
@@ -4273,7 +4273,8 @@ def get_clasificacion_by_codigo_guia(codigo_guia):
     """
     conn = None # Initialize conn to None before the try block
     try:
-        conn = sqlite3.connect(DB_PATH)
+        db_path = current_app.config['TIQUETES_DB_PATH'] # Get DB path from app config
+        conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         
