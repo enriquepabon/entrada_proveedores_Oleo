@@ -4,6 +4,11 @@ import logging
 from datetime import datetime
 import traceback
 from flask import current_app
+import pytz
+
+# Define timezones
+UTC = pytz.utc
+BOGOTA_TZ = pytz.timezone('America/Bogota')
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -12,6 +17,7 @@ logger = logging.getLogger(__name__)
 def store_entry_record(record_data):
     """
     Store an entry record in the database.
+    Expects 'timestamp_registro_utc' field instead of 'fecha_registro' and 'hora_registro'.
     
     Args:
         record_data (dict): Dictionary containing the entry record data
@@ -121,13 +127,16 @@ def get_entry_records(filters=None):
         if filters:
             conditions = []
             
+            # Use timestamp_registro_utc for date filtering
             if filters.get('fecha_desde'):
-                conditions.append("fecha_registro >= ?")
-                params.append(filters['fecha_desde'])
+                # Assuming fecha_desde is YYYY-MM-DD, append time for comparison
+                conditions.append("timestamp_registro_utc >= ?")
+                params.append(f"{filters['fecha_desde']} 00:00:00") 
                 
             if filters.get('fecha_hasta'):
-                conditions.append("fecha_registro <= ?")
-                params.append(filters['fecha_hasta'])
+                # Assuming fecha_hasta is YYYY-MM-DD, append time for comparison
+                conditions.append("timestamp_registro_utc <= ?")
+                params.append(f"{filters['fecha_hasta']} 23:59:59")
                 
             if filters.get('codigo_proveedor'):
                 conditions.append("codigo_proveedor LIKE ?")
@@ -165,33 +174,29 @@ def get_entry_records(filters=None):
                     record['modified_fields'] = {}
             
             # Asegurar que campos críticos tengan valores predeterminados
-            # Lista de campos críticos que deben tener un valor
             campos_criticos = [
                 'codigo_proveedor', 'nombre_proveedor', 'placa', 
                 'cantidad_racimos', 'transportador', 'acarreo', 'cargo'
             ]
-            
-            # Asignar "No disponible" a campos críticos vacíos
             for campo in campos_criticos:
                 if campo not in record or record[campo] is None or record[campo] == '':
                     record[campo] = 'No disponible'
             
-            # Verificar otros campos importantes
-            if not record.get('fecha_registro'):
-                record['fecha_registro'] = '01/01/1970'
-            
-            if not record.get('hora_registro'):
-                record['hora_registro'] = '00:00:00'
+            # Handle new timestamp field
+            if not record.get('timestamp_registro_utc'):
+                record['timestamp_registro_utc'] = '1970-01-01 00:00:00' # Default timestamp
+                
+            # Remove old date/time fields if they still exist somehow (optional cleanup)
+            record.pop('fecha_registro', None)
+            record.pop('hora_registro', None)
                 
             # Procesar el código del proveedor para asegurar el formato correcto
             if record.get('codigo_proveedor') and record['codigo_proveedor'] != 'No disponible':
                 codigo_proveedor = record['codigo_proveedor']
-                # Usar regex para encontrar dígitos seguidos opcionalmente por letras
                 import re
                 match = re.match(r'(\d+[a-zA-Z]?)', codigo_proveedor)
                 if match:
                     codigo_base = match.group(1)
-                    # Si termina en letra, asegurar que sea A mayúscula
                     if re.search(r'[a-zA-Z]$', codigo_base):
                         record['codigo_proveedor'] = codigo_base[:-1] + 'A'
                     else:
@@ -201,13 +206,10 @@ def get_entry_records(filters=None):
             if (not record.get('codigo_proveedor') or record['codigo_proveedor'] == 'No disponible') and record.get('codigo_guia'):
                 codigo_guia = record['codigo_guia']
                 codigo_base = codigo_guia.split('_')[0] if '_' in codigo_guia else codigo_guia
-                
-                # Usar regex para encontrar dígitos seguidos opcionalmente por letras
                 import re
                 match = re.match(r'(\d+[a-zA-Z]?)', codigo_base)
                 if match:
                     codigo_base = match.group(1)
-                    # Si termina en letra, asegurar que sea A mayúscula
                     if re.search(r'[a-zA-Z]$', codigo_base):
                         record['codigo_proveedor'] = codigo_base[:-1] + 'A'
                     else:
@@ -215,32 +217,8 @@ def get_entry_records(filters=None):
                 
             records.append(record)
         
-        # Sort records by proper date and time (convert strings to datetime objects)
-        def parse_datetime_str(record):
-            try:
-                # Parse date in DD/MM/YYYY format and time in HH:MM:SS format
-                date_str = record.get('fecha_registro', '01/01/1970')
-                time_str = record.get('hora_registro', '00:00:00')
-                
-                if '/' in date_str:  # DD/MM/YYYY format
-                    day, month, year = map(int, date_str.split('/'))
-                    date_obj = datetime(year, month, day)
-                else:  # Fallback to YYYY-MM-DD format
-                    date_obj = datetime.strptime(date_str, '%Y-%m-%d')
-                
-                hours, minutes, seconds = map(int, time_str.split(':'))
-                
-                # Combine date and time
-                return datetime(
-                    date_obj.year, date_obj.month, date_obj.day,
-                    hours, minutes, seconds
-                )
-            except Exception as e:
-                logger.error(f"Error parsing date/time for record: {e}")
-                return datetime(1970, 1, 1)  # Fallback to oldest date
-        
-        # Sort by parsed datetime in descending order (newest first)
-        records.sort(key=parse_datetime_str, reverse=True)
+        # Sort records by timestamp_registro_utc (string comparison works for YYYY-MM-DD HH:MM:SS)
+        records.sort(key=lambda r: r.get('timestamp_registro_utc', '1970-01-01 00:00:00'), reverse=True)
         
         return records
     except KeyError:
@@ -255,27 +233,43 @@ def get_entry_records(filters=None):
 
 def get_entry_record_by_guide_code(codigo_guia):
     """
-    Retrieve a specific entry record by its guide code.
-    
-    Args:
-        codigo_guia (str): The guide code to search for
-        
-    Returns:
-        dict: The entry record as a dictionary, or None if not found
+    Retrieve a single entry record by its codigo_guia.
     """
     conn = None
     try:
         # Get DB path from app config
         db_path = current_app.config['TIQUETES_DB_PATH']
         conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
+        conn.row_factory = sqlite3.Row  # Enable column access by name
         cursor = conn.cursor()
         
+        # Select all columns for the given codigo_guia
         cursor.execute("SELECT * FROM entry_records WHERE codigo_guia = ?", (codigo_guia,))
         row = cursor.fetchone()
         
         if row:
+            # Convert row to dictionary
             record = {key: row[key] for key in row.keys()}
+
+            # --- Add Timezone Conversion for entry record timestamp ---
+            # TODO (Plan Timestamps): Mover la conversión de zona horaria a la capa de vista/plantilla.
+            # Esta conversión está aquí temporalmente por compatibilidad con plantillas existentes.
+            # Ref: REFACTORING_PLAN.md
+            ts_registro_utc_str = record.get('timestamp_registro_utc')
+            fecha_registro_bogota = None
+            hora_registro_bogota = None
+            if ts_registro_utc_str:
+                try:
+                    dt_utc = datetime.strptime(ts_registro_utc_str, "%Y-%m-%d %H:%M:%S")
+                    dt_utc = UTC.localize(dt_utc)
+                    dt_bogota = dt_utc.astimezone(BOGOTA_TZ)
+                    fecha_registro_bogota = dt_bogota.strftime('%d/%m/%Y')
+                    hora_registro_bogota = dt_bogota.strftime('%H:%M:%S')
+                except ValueError as e:
+                    logger.warning(f"Could not parse timestamp_registro_utc '{ts_registro_utc_str}' for {codigo_guia} in db_utils: {e}")
+            record['fecha_registro'] = fecha_registro_bogota
+            record['hora_registro'] = hora_registro_bogota
+            # --- End Timezone Conversion ---
             
             # Parse modified_fields if it's stored as string
             if record.get('modified_fields') and isinstance(record['modified_fields'], str):
@@ -285,65 +279,54 @@ def get_entry_record_by_guide_code(codigo_guia):
                 except:
                     record['modified_fields'] = {}
             
-            # Asegurar que campos críticos tengan valores predeterminados
-            # Lista de campos críticos que deben tener un valor
+            # Ensure critical fields have default values
             campos_criticos = [
                 'codigo_proveedor', 'nombre_proveedor', 'placa', 
                 'cantidad_racimos', 'transportador', 'acarreo', 'cargo'
             ]
-            
-            # Verificar y corregir campos importantes para la interfaz
-            # Verificar si 'nombre_proveedor' está vacío pero 'nombre' o 'nombre_agricultor' tienen datos
-            if record.get('nombre_proveedor') is None or record.get('nombre_proveedor') == '':
-                # Intentar obtener de 'nombre_agricultor'
-                if record.get('nombre_agricultor') and record.get('nombre_agricultor') != '':
-                    record['nombre_proveedor'] = record['nombre_agricultor']
-                # Si no, intentar obtener de 'nombre'
-                elif record.get('nombre') and record.get('nombre') != '':
-                    record['nombre_proveedor'] = record['nombre']
-            
-            # Verificar si 'cantidad_racimos' está vacío pero 'racimos' tiene datos
-            if record.get('cantidad_racimos') is None or record.get('cantidad_racimos') == '' or record.get('cantidad_racimos') == 'N/A':
-                if record.get('racimos') and record.get('racimos') != '' and record.get('racimos') != 'N/A':
-                    record['cantidad_racimos'] = record['racimos']
-                    logger.info(f"Campo cantidad_racimos actualizado desde racimos: {record['racimos']}")
-            
-            # También hacer la actualización inversa
-            if record.get('racimos') is None or record.get('racimos') == '' or record.get('racimos') == 'N/A':
-                if record.get('cantidad_racimos') and record.get('cantidad_racimos') != '' and record.get('cantidad_racimos') != 'N/A':
-                    record['racimos'] = record['cantidad_racimos']
-                    logger.info(f"Campo racimos actualizado desde cantidad_racimos: {record['cantidad_racimos']}")
-            
-            # Generar un código de transportista basado en el nombre si no existe
-            if (not record.get('codigo_transportista') or record.get('codigo_transportista') == 'N/A') and record.get('transportador'):
-                nombre_transportista = record.get('transportador')
-                if nombre_transportista and isinstance(nombre_transportista, str):
-                    # Extraer iniciales o primeras letras como un código básico
-                    iniciales = ''.join([word[0].upper() for word in nombre_transportista.split() if word])
-                    if iniciales:
-                        record['codigo_transportista'] = f"T-{iniciales}"
-                        logger.info(f"Código transportista generado para {codigo_guia}: {record['codigo_transportista']}")
-            
-            # Asignar "No disponible" a campos críticos vacíos
             for campo in campos_criticos:
                 if campo not in record or record[campo] is None or record[campo] == '':
                     record[campo] = 'No disponible'
             
-            # Verificar otros campos importantes
-            if not record.get('fecha_registro'):
-                record['fecha_registro'] = '01/01/1970'
+            # Handle new timestamp field and remove old ones if present
+            if not record.get('timestamp_registro_utc'):
+                record['timestamp_registro_utc'] = '1970-01-01 00:00:00' # Default timestamp
+            record.pop('fecha_registro', None)
+            record.pop('hora_registro', None)
+
+            # Process provider code (same logic as get_entry_records)
+            if record.get('codigo_proveedor') and record['codigo_proveedor'] != 'No disponible':
+                codigo_proveedor = record['codigo_proveedor']
+                import re
+                match = re.match(r'(\d+[a-zA-Z]?)', codigo_proveedor)
+                if match:
+                    codigo_base = match.group(1)
+                    if re.search(r'[a-zA-Z]$', codigo_base):
+                        record['codigo_proveedor'] = codigo_base[:-1] + 'A'
+                    else:
+                        record['codigo_proveedor'] = codigo_base + 'A'
+
+            if (not record.get('codigo_proveedor') or record['codigo_proveedor'] == 'No disponible') and record.get('codigo_guia'):
+                codigo_guia = record['codigo_guia']
+                codigo_base = codigo_guia.split('_')[0] if '_' in codigo_guia else codigo_guia
+                import re
+                match = re.match(r'(\d+[a-zA-Z]?)', codigo_base)
+                if match:
+                    codigo_base = match.group(1)
+                    if re.search(r'[a-zA-Z]$', codigo_base):
+                        record['codigo_proveedor'] = codigo_base[:-1] + 'A'
+                    else:
+                        record['codigo_proveedor'] = codigo_base + 'A'
             
-            if not record.get('hora_registro'):
-                record['hora_registro'] = '00:00:00'
-            
-            logger.info(f"Obtenido registro para guía {codigo_guia}: proveedor={record['nombre_proveedor']}, racimos={record['cantidad_racimos']}")
             return record
-        return None
+        else:
+            logger.warning(f"No entry record found for guide code: {codigo_guia}")
+            return None
     except KeyError:
         logger.error("Error: 'TIQUETES_DB_PATH' no está configurada en la aplicación Flask.")
         return None
     except sqlite3.Error as e:
-        logger.error(f"Error retrieving entry record by guide code: {e}")
+        logger.error(f"Error retrieving entry record {codigo_guia}: {e}")
         return None
     finally:
         if conn:
@@ -462,8 +445,7 @@ def get_pesaje_bruto_by_codigo_guia(codigo_guia):
                     'racimos': entry_record.get('cantidad_racimos', ''),
                     'acarreo': entry_record.get('acarreo', 'NO'),
                     'cargo': entry_record.get('cargo', 'NO'),
-                    'fecha_registro': entry_record.get('fecha_registro', ''),
-                    'hora_registro': entry_record.get('hora_registro', ''),
+                    'timestamp_registro_utc': entry_record.get('timestamp_registro_utc', ''),
                     'estado_actual': 'pendiente'
                 }
                 return datos_basicos

@@ -112,14 +112,14 @@ def get_pesajes_bruto(filtros=None):
                     # Add JOINs and filters as needed (similar to original code)
                     # ... 
                     cursor.execute(query, params)
+                    pesajes = []
                     for row in cursor.fetchall():
                         pesaje = {key: row[key] for key in row.keys()}
                         # Add default values, check providers, etc.
                         # ... (data cleaning/enrichment logic from original code) ...
                         codigo_guia = pesaje.get('codigo_guia')
                         if codigo_guia:
-                            todos_pesajes.append(pesaje)
-                            codigos_procesados.add(codigo_guia)
+                            pesajes.append(pesaje)
 
             except sqlite3.Error as e:
                  logger.error(f"Error consultando {db_path_secondary}: {e}")
@@ -130,37 +130,13 @@ def get_pesajes_bruto(filtros=None):
             logger.warning(f"Base de datos {db_path_secondary} no encontrada.")
             
         # If no records found, return empty list
-        if not todos_pesajes:
+        if not pesajes:
             return []
         
-        # Sort results (function definition is the same)
-        def parse_datetime_str(pesaje):
-            # ... (sorting logic remains the same) ...
-            try:
-                # Parsear fecha en formato DD/MM/YYYY y hora en formato HH:MM:SS
-                date_str = pesaje.get('fecha_pesaje', '01/01/1970')
-                time_str = pesaje.get('hora_pesaje', '00:00:00')
-                
-                if '/' in date_str:  # DD/MM/YYYY format
-                    day, month, year = map(int, date_str.split('/'))
-                    date_obj = datetime(year, month, day)
-                else:  # Fallback to YYYY-MM-DD format
-                    date_obj = datetime.strptime(date_str, '%Y-%m-%d')
-                
-                hours, minutes, seconds = map(int, time_str.split(':'))
-                
-                # Combine date and time
-                return datetime(
-                    date_obj.year, date_obj.month, date_obj.day,
-                    hours, minutes, seconds
-                )
-            except Exception as e:
-                logger.error(f"Error parsing date/time for pesaje: {e}")
-                return datetime(1970, 1, 1)  # Fallback to oldest date
+        # Sort results directly by the timestamp string
+        pesajes.sort(key=lambda p: p.get('timestamp_pesaje_utc', '1970-01-01 00:00:00'), reverse=True)
         
-        todos_pesajes.sort(key=parse_datetime_str, reverse=True)
-        
-        return todos_pesajes
+        return pesajes
     except Exception as e:
         logger.error(f"Error general recuperando registros de pesajes brutos: {e}")
         return []
@@ -238,8 +214,7 @@ def get_pesaje_bruto_by_codigo_guia(codigo_guia):
                             'nombre_proveedor': entry.get('nombre_proveedor', ''),
                             'peso_bruto': 'Pendiente',
                             'tipo_pesaje': 'pendiente',
-                            'fecha_pesaje': '',
-                            'hora_pesaje': '',
+                            'timestamp_registro_utc': entry.get('timestamp_registro_utc', ''),
                             'codigo_guia_transporte_sap': entry.get('codigo_guia_transporte_sap', 'No registrada'),
                             'estado': 'pendiente',
                             'image_filename': entry.get('image_filename', '')
@@ -794,12 +769,13 @@ def get_provider_by_code(codigo_proveedor, codigo_guia_actual=None):
         
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='entry_records'")
         if cursor.fetchone():
-            cursor.execute("SELECT * FROM entry_records WHERE codigo_proveedor = ? ORDER BY created_at DESC LIMIT 1", (codigo_proveedor,))
+            cursor.execute("SELECT * FROM entry_records WHERE codigo_proveedor = ? ORDER BY fecha_creacion DESC LIMIT 1", (codigo_proveedor,))
             row = cursor.fetchone()
             if row:
                 proveedor = {key: row[key] for key in row.keys()}
                 proveedor['codigo'] = proveedor.get('codigo_proveedor')
                 proveedor['nombre'] = proveedor.get('nombre_proveedor')
+                proveedor['timestamp_registro_utc'] = proveedor.get('timestamp_registro_utc', '')
                 proveedor['es_dato_otra_entrega'] = bool(codigo_guia_actual and proveedor.get('codigo_guia') != codigo_guia_actual)
                 if proveedor['es_dato_otra_entrega']:
                     logger.warning(f"Proveedor encontrado en otra entrada (código guía: {proveedor.get('codigo_guia')})")
@@ -847,4 +823,20 @@ def get_provider_by_code(codigo_proveedor, codigo_guia_actual=None):
         return None
     finally:
         if conn:
-            conn.close() 
+            conn.close()
+
+def get_entry_records_by_provider_code(codigo_proveedor):
+    # ... existing code ...
+        records = []
+        for row in c.fetchall():
+            record = {}
+            for key in row.keys():
+                record[key] = row[key]
+            # Ensure the timestamp field is included
+            record['timestamp_registro_utc'] = record.get('timestamp_registro_utc', '') 
+            records.append(record)
+        
+        conn.close()
+        logger.info(f"Encontrados {len(records)} registros para el proveedor {codigo_proveedor}")
+        return records
+    # ... existing code ... 

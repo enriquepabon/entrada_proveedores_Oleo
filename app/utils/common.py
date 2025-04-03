@@ -162,12 +162,12 @@ class CommonUtils:
             query = """
                 SELECT 
                     e.*, 
-                    pb.peso_bruto, pb.fecha_pesaje, pb.hora_pesaje, pb.tipo_pesaje, pb.codigo_guia_transporte_sap, 
+                    pb.peso_bruto, pb.timestamp_pesaje_utc, pb.tipo_pesaje, pb.codigo_guia_transporte_sap, 
                     c.fecha_clasificacion, c.hora_clasificacion, c.clasificacion_manual, c.clasificacion_automatica,
                     pn.peso_tara, pn.peso_neto, pn.peso_producto, 
-                    pn.fecha_pesaje_neto as fecha_pesaje_neto_db, pn.hora_pesaje_neto as hora_pesaje_neto_db,
+                    pn.fecha_pesaje as fecha_pesaje_neto_db, pn.hora_pesaje as hora_pesaje_neto_db,
                     pn.tipo_pesaje_neto, pn.comentarios as comentarios_neto, pn.respuesta_sap,
-                    s.fecha_salida, s.hora_salida, s.nota_salida, s.comentarios_salida
+                    s.fecha_salida, s.hora_salida, s.comentarios_salida
                 FROM entry_records e
                 LEFT JOIN pesajes_bruto pb ON e.codigo_guia = pb.codigo_guia
                 LEFT JOIN clasificaciones c ON e.codigo_guia = c.codigo_guia
@@ -192,9 +192,55 @@ class CommonUtils:
             logger.info(f"Datos combinados obtenidos para guía {codigo_guia}")
 
             # --- Timezone Conversion --- 
-            datos_guia['fecha_pesaje'], datos_guia['hora_pesaje'] = format_datetime_bogota(
-                datos_guia.get('fecha_pesaje'), datos_guia.get('hora_pesaje')
-            )
+            # Process entry record timestamp
+            # TODO (Plan Timestamps): Mover la conversión de zona horaria a la capa de vista/plantilla.
+            # Esta conversión está aquí temporalmente por compatibilidad con plantillas existentes.
+            # Ref: REFACTORING_PLAN.md
+            ts_registro_utc_str = datos_guia.get('timestamp_registro_utc')
+            fecha_registro_bogota = None
+            hora_registro_bogota = None
+            if ts_registro_utc_str:
+                try:
+                    # Parse the UTC timestamp string
+                    dt_utc = datetime.strptime(ts_registro_utc_str, "%Y-%m-%d %H:%M:%S")
+                    # Make it timezone aware (UTC)
+                    dt_utc = UTC.localize(dt_utc)
+                    # Convert to Bogota timezone
+                    dt_bogota = dt_utc.astimezone(BOGOTA_TZ)
+                    # Format into separate date and time strings
+                    fecha_registro_bogota = dt_bogota.strftime('%d/%m/%Y')
+                    hora_registro_bogota = dt_bogota.strftime('%H:%M:%S')
+                except ValueError as e:
+                    logger.warning(f"Could not parse timestamp_registro_utc '{ts_registro_utc_str}' for {codigo_guia}: {e}")
+            # Assign converted values (or None if parsing failed) back for compatibility
+            datos_guia['fecha_registro'] = fecha_registro_bogota
+            datos_guia['hora_registro'] = hora_registro_bogota
+            
+            # Process pesaje_bruto timestamp
+            # TODO (Plan Timestamps): Mover la conversión de zona horaria a la capa de vista/plantilla.
+            # Esta conversión está aquí temporalmente por compatibilidad con plantillas existentes.
+            # Ref: REFACTORING_PLAN.md
+            ts_pesaje_utc_str = datos_guia.get('timestamp_pesaje_utc')
+            fecha_pesaje_bogota = None
+            hora_pesaje_bogota = None
+            if ts_pesaje_utc_str:
+                try:
+                    # Parse the UTC timestamp string
+                    dt_utc = datetime.strptime(ts_pesaje_utc_str, "%Y-%m-%d %H:%M:%S")
+                    # Make it timezone aware (UTC)
+                    dt_utc = UTC.localize(dt_utc)
+                    # Convert to Bogota timezone
+                    dt_bogota = dt_utc.astimezone(BOGOTA_TZ)
+                    # Format into separate date and time strings
+                    fecha_pesaje_bogota = dt_bogota.strftime('%d/%m/%Y')
+                    hora_pesaje_bogota = dt_bogota.strftime('%H:%M:%S')
+                except ValueError as e:
+                    logger.warning(f"Could not parse timestamp_pesaje_utc '{ts_pesaje_utc_str}' for {codigo_guia}: {e}")
+            # Assign converted values (or None if parsing failed) back for compatibility
+            datos_guia['fecha_pesaje'] = fecha_pesaje_bogota
+            datos_guia['hora_pesaje'] = hora_pesaje_bogota
+            
+            # TODO (Plan Timestamps): Revisar y mover la conversión de zona horaria para clasificacion, pesaje_neto, salida.
             datos_guia['fecha_clasificacion'], datos_guia['hora_clasificacion'] = format_datetime_bogota(
                 datos_guia.get('fecha_clasificacion'), datos_guia.get('hora_clasificacion')
             )
@@ -217,8 +263,6 @@ class CommonUtils:
 
             # Handle potentially missing values from JOINs with defaults
             datos_guia['peso_bruto'] = datos_guia.get('peso_bruto')
-            datos_guia['fecha_pesaje'] = datos_guia.get('fecha_pesaje')
-            datos_guia['hora_pesaje'] = datos_guia.get('hora_pesaje')
             datos_guia['tipo_pesaje'] = datos_guia.get('tipo_pesaje')
             datos_guia['codigo_guia_transporte_sap'] = datos_guia.get('codigo_guia_transporte_sap') or datos_guia.get('guia_sap')
 
@@ -233,7 +277,7 @@ class CommonUtils:
 
             datos_guia['fecha_salida'] = datos_guia.get('fecha_salida')
             datos_guia['hora_salida'] = datos_guia.get('hora_salida')
-            datos_guia['nota_salida'] = datos_guia.get('nota_salida')
+            # datos_guia['nota_salida'] = datos_guia.get('nota_salida') # Comment out attempt to access potentially non-existent key
             datos_guia['comentarios_salida'] = datos_guia.get('comentarios_salida')
 
             # Process classification data (manual)

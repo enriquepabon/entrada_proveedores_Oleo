@@ -716,8 +716,7 @@ def process_validated_data():
                     'transportador': webhook_data.get('transportador', webhook_data.get('Transportador', '')),
                     'acarreo': webhook_data.get('acarreo', webhook_data.get('Se Acarreó', 'NO')),
                     'cargo': webhook_data.get('cargo', webhook_data.get('Se Cargó', 'NO')),
-                    'fecha_registro': datetime.now().strftime("%d/%m/%Y"),
-                    'hora_registro': datetime.now().strftime("%H:%M:%S"),
+                    'timestamp_registro_utc': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'), # <-- NEW UTC timestamp
                     'image_filename': image_filename,
                     'pdf_filename': pdf_filename,
                     'qr_filename': session.get('qr_filename', '')

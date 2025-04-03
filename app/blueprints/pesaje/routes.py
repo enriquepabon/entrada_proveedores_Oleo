@@ -376,8 +376,8 @@ def registrar_peso_directo():
     try:
         utils = current_app.config.get('utils', Utils(current_app))
         
-        # Obtener fecha y hora en zona horaria de Bogotá
-        fecha_actual, hora_actual = get_bogota_datetime()
+        # Obtener timestamp UTC
+        timestamp_utc = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
         
         # Determinar si los datos vienen como JSON o como FormData
         if request.is_json:
@@ -424,8 +424,7 @@ def registrar_peso_directo():
             'nombre_proveedor': nombre_proveedor or datos_existentes.get('nombre_proveedor', ''),
             'peso_bruto': peso_bruto,
             'tipo_pesaje': 'directo',
-            'fecha_pesaje': fecha_actual,
-            'hora_pesaje': hora_actual,
+            'timestamp_pesaje_utc': timestamp_utc,
             'imagen_pesaje': imagen_pesaje or '',
             'codigo_guia_transporte_sap': datos_existentes.get('codigo_guia_transporte_sap', '')
         }
@@ -441,8 +440,7 @@ def registrar_peso_directo():
             datos_existentes.update({
                 'peso_bruto': peso_bruto,
                 'tipo_pesaje': 'directo',
-                'fecha_pesaje': fecha_actual,
-                'hora_pesaje': hora_actual
+                'timestamp_pesaje_utc': timestamp_utc
             })
             
             if datos_pesaje['codigo_guia_transporte_sap']:

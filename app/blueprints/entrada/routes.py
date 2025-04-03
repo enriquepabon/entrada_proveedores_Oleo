@@ -1453,8 +1453,8 @@ def registrar_entrada():
                         'codigo_guia_transporte_sap': codigo_guia_transporte_sap,
                         'observaciones': observaciones,
                         'image_filename': image_filename,
-                        'fecha_registro': datetime.now().strftime("%Y-%m-%d"),
-                        'hora_registro': datetime.now().strftime("%H:%M:%S")
+                        # Use UTC timestamp in standard format
+                        'timestamp_registro_utc': datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
                     }
                     
                     # Guardar en la base de datos
