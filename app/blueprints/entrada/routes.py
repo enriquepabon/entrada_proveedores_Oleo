@@ -19,6 +19,10 @@ import db_utils  # Importar db_utils para operaciones de base de datos
 import db_operations  # Importar db_operations
 from tiquete_parser import parse_markdown_response
 import pytz
+from app.utils.pdf_generator import Pdf_generatorUtils # Using correct class name
+from app.utils.image_processing import Image_processingUtils
+from app.utils import db_operations  # Assuming db_operations.py is in app/utils
+from app.blueprints.misc.routes import allowed_file # Ensure this is the correct location
 
 # Configurar logging
 logger = logging.getLogger(__name__)
