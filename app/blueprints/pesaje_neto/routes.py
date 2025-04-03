@@ -9,7 +9,6 @@ import sqlite3
 import pytz
 from app.blueprints.pesaje_neto import bp
 from app.utils.common import CommonUtils as Utils
-from app.utils.common import convert_to_bogota_time
 
 # Configurar logging
 logger = logging.getLogger(__name__)
@@ -97,7 +96,7 @@ def ensure_pesajes_neto_schema():
                 except sqlite3.OperationalError as drop_err:
                     logger.error(f"Error al intentar eliminar columna obsoleta '{old_col}': {drop_err}. Se continuará, pero considera limpieza manual.")
         # --- END REMOVE OLD COLUMNS ---
-            
+                    
         conn.commit()
         logger.info("Esquema de la tabla pesajes_neto verificado/actualizado")
         conn.close()
@@ -129,10 +128,10 @@ def ver_resultados_pesaje_neto(codigo_guia):
 
         # Obtener los datos más recientes de la base de datos
         try:
-            conn = sqlite3.connect(current_app.config['TIQUETES_DB_PATH'])
+            conn = sqlite3.connect('tiquetes.db')
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT peso_tara, peso_neto, fecha_pesaje_neto, hora_pesaje_neto, comentarios, respuesta_sap
+                SELECT peso_tara, peso_neto, fecha_pesaje, hora_pesaje, comentarios, respuesta_sap
                 FROM pesajes_neto 
                 WHERE codigo_guia = ?
             """, (codigo_guia,))
@@ -159,8 +158,7 @@ def ver_resultados_pesaje_neto(codigo_guia):
         # Preparar los datos para la plantilla
         context = {
             'codigo_guia': codigo_guia,
-            'datos_guia': datos_guia,
-            'convert_to_bogota_time': convert_to_bogota_time
+            'datos_guia': datos_guia
         }
         
         return render_template('resultados_pesaje_neto.html', **context)

@@ -17,9 +17,6 @@ from app.utils.common import CommonUtils as Utils
 from app.blueprints.misc.routes import allowed_file, ALLOWED_EXTENSIONS, PLACA_WEBHOOK_URL, PESAJE_WEBHOOK_URL
 import sqlite3
 import pytz
-from app.utils.image_processing import procesar_imagen_entrada
-from config import app as app_config
-from app.utils.pdf_generator import PDFGenerator
 
 # Configurar logging
 logger = logging.getLogger(__name__)

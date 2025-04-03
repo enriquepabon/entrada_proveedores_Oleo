@@ -244,70 +244,40 @@
                         <i class="fas fa-clipboard-check"></i>
                     </div>
                     <div class="step-label">Registro</div>
-                    {% if datos_guia.fecha_registro %}
-                    {% set fecha_registro_bogota, hora_registro_bogota = convert_to_bogota_time(datos_guia.fecha_registro, datos_guia.hora_registro) %}
-                    <div class="step-date">{{ fecha_registro_bogota }}</div>
-                    <div class="step-time">{{ hora_registro_bogota }}</div>
-                    {% else %}
-                    <div class="step-date">--/--/----</div>
-                    <div class="step-time">--:--</div>
-                    {% endif %}
+                    <div class="step-date">{{ datos_guia.fecha_registro|default('--/--/----') }}</div>
+                    <div class="step-time">{{ datos_guia.hora_registro|default('--:--') }}</div>
                 </div>
                 <div class="process-step">
                     <div class="step-circle {% if 'pesaje' in estado_info.pasos_completados %}completed{% elif estado_info.siguiente_paso == 'pesaje' %}active{% endif %}">
                         <i class="fas fa-weight"></i>
                     </div>
                     <div class="step-label">Pesaje</div>
-                    {% if datos_guia.fecha_pesaje %}
-                    {% set fecha_pesaje_bogota, hora_pesaje_bogota = convert_to_bogota_time(datos_guia.fecha_pesaje, datos_guia.hora_pesaje) %}
-                    <div class="step-date">{{ fecha_pesaje_bogota }}</div>
-                    <div class="step-time">{{ hora_pesaje_bogota }}</div>
-                    {% else %}
-                    <div class="step-date">--/--/----</div>
-                    <div class="step-time">--:--</div>
-                    {% endif %}
+                    <div class="step-date">{{ datos_guia.fecha_pesaje|default('--/--/----') }}</div>
+                    <div class="step-time">{{ datos_guia.hora_pesaje|default('--:--') }}</div>
                 </div>
                 <div class="process-step">
                     <div class="step-circle {% if datos_guia.clasificacion_completada or 'clasificacion' in datos_guia.pasos_completados or es_pepa %}completed{% elif estado_info.siguiente_paso == 'clasificacion' %}active{% endif %}">
                         <i class="fas {{ 'fa-forward' if es_pepa else 'fa-tasks' }}"></i>
                     </div>
                     <div class="step-label">Clasificación</div>
-                    {% if datos_guia.fecha_clasificacion %}
-                    {% set fecha_clasificacion_bogota, hora_clasificacion_bogota = convert_to_bogota_time(datos_guia.fecha_clasificacion, datos_guia.hora_clasificacion) %}
-                    <div class="step-date">{{ fecha_clasificacion_bogota }}</div>
-                    <div class="step-time">{{ hora_clasificacion_bogota }}</div>
-                    {% else %}
-                    <div class="step-date">--/--/----</div>
-                    <div class="step-time">--:--</div>
-                    {% endif %}
+                    <div class="step-date">{{ datos_guia.fecha_clasificacion|default('--/--/----') }}</div>
+                    <div class="step-time">{{ datos_guia.hora_clasificacion|default('--:--') }}</div>
                 </div>
                 <div class="process-step">
                     <div class="step-circle {% if 'pesaje_neto' in estado_info.pasos_completados or datos_guia.pesaje_neto_completado or (datos_guia.peso_neto and datos_guia.peso_neto != 'Pendiente' and datos_guia.peso_neto != 'N/A') %}completed{% elif estado_info.siguiente_paso == 'pesaje_neto' %}active{% endif %}">
                         <i class="fas fa-balance-scale"></i>
                     </div>
                     <div class="step-label">Pesaje Neto</div>
-                    {% if datos_guia.fecha_pesaje_neto %}
-                    {% set fecha_pesaje_neto_bogota, hora_pesaje_neto_bogota = convert_to_bogota_time(datos_guia.fecha_pesaje_neto, datos_guia.hora_pesaje_neto) %}
-                    <div class="step-date">{{ fecha_pesaje_neto_bogota }}</div>
-                    <div class="step-time">{{ hora_pesaje_neto_bogota }}</div>
-                    {% else %}
-                    <div class="step-date">--/--/----</div>
-                    <div class="step-time">--:--</div>
-                    {% endif %}
+                    <div class="step-date">{{ datos_guia.fecha_pesaje_neto|default('--/--/----') }}</div>
+                    <div class="step-time">{{ datos_guia.hora_pesaje_neto|default('--:--') }}</div>
                 </div>
                 <div class="process-step">
                     <div class="step-circle {% if 'salida' in estado_info.pasos_completados or (datos_guia.fecha_salida and datos_guia.hora_salida) %}completed{% elif estado_info.siguiente_paso == 'salida' %}active{% endif %}">
                         <i class="fas fa-truck"></i>
                     </div>
                     <div class="step-label">Salida</div>
-                    {% if datos_guia.fecha_salida %}
-                    {% set fecha_salida_bogota, hora_salida_bogota = convert_to_bogota_time(datos_guia.fecha_salida, datos_guia.hora_salida) %}
-                    <div class="step-date">{{ fecha_salida_bogota }}</div>
-                    <div class="step-time">{{ hora_salida_bogota }}</div>
-                    {% else %}
-                    <div class="step-date">--/--/----</div>
-                    <div class="step-time">--:--</div>
-                    {% endif %}
+                    <div class="step-date">{{ datos_guia.fecha_salida|default('--/--/----') }}</div>
+                    <div class="step-time">{{ datos_guia.hora_salida|default('--:--') }}</div>
                 </div>
             </div>
             
@@ -405,14 +375,8 @@
                                     <ul class="list-group">
                                         <li class="list-group-item">
                                             <div class="fecha-hora">
-                                                {% if datos_guia.fecha_registro %}
-                                                {% set fecha_registro_bogota, hora_registro_bogota = convert_to_bogota_time(datos_guia.fecha_registro, datos_guia.hora_registro) %}
-                                                <span class="fecha"><strong>Fecha Registro:</strong> {{ fecha_registro_bogota }}</span>
-                                                <span class="hora"><strong>Hora:</strong> {{ hora_registro_bogota }}</span>
-                                                {% else %}
-                                                <span class="fecha"><strong>Fecha Registro:</strong> N/A</span>
-                                                <span class="hora"><strong>Hora:</strong> N/A</span>
-                                                {% endif %}
+                                                <span class="fecha"><strong>Fecha Registro:</strong> {{ datos_guia.fecha_registro|default('N/A') }}</span>
+                                                <span class="hora"><strong>Hora:</strong> {{ datos_guia.hora_registro|default('N/A') }}</span>
                                             </div>
                                         </li>
                                         <li class="list-group-item"><strong>Código Guía:</strong> {{ codigo_guia }}</li>
