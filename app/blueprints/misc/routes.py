@@ -18,6 +18,8 @@ import base64
 import qrcode
 from app.utils.image_processing import process_plate_image
 from app.utils.common import get_estado_guia
+import pytz
+from app.blueprints.clasificacion.routes import get_clasificacion_by_codigo_guia
 
 # Database path (assuming it's at the workspace root)
 DB_PATH = 'tiquetes.db'
@@ -1711,121 +1713,115 @@ def ensure_clasificaciones_schema():
 @bp.route('/ver_detalle_proveedor/<codigo_guia>')
 def ver_detalle_proveedor(codigo_guia):
     """
-    Muestra los detalles del proveedor para una guía específica.
+    Muestra una vista detallada de todo el proceso para una guía específica,
+    incluyendo registro, pesaje, clasificación y salida.
     """
     try:
-        # Asegurar que la tabla clasificaciones tenga todas las columnas necesarias
-        ensure_clasificaciones_schema()
-        
-        # Sincronizar datos de clasificación antes de mostrar el detalle
-        sync_clasificacion_from_json(codigo_guia)
-        
-        # Asegurar que la tabla entry_records tenga todas las columnas necesarias
-        ensure_entry_records_schema()
-        
-        # Obtener los datos de la guía
-        utils = current_app.config.get('utils')
-        datos_guia = utils.get_datos_guia(codigo_guia) if utils else None
-        
+        utils = Utils(current_app)
+        logger = logging.getLogger(__name__) # Ensure logger is available
+
+        # Obtener datos principales de la guía
+        datos_guia = utils.get_datos_guia(codigo_guia)
         if not datos_guia:
-            flash("No se encontraron datos para la guía especificada", "error")
-            return render_template('error.html', mensaje="No se encontraron datos para la guía especificada"), 404
-        
-        # Imprimir información en el log para depuración
-        logger.info(f"Datos de guía para {codigo_guia}:")
-        logger.info(f"Claves disponibles: {', '.join(datos_guia.keys())}")
-        
-        # Buscar específicamente claves relacionadas con SAP
-        for key, value in datos_guia.items():
-            if 'sap' in key.lower():
-                logger.info(f"  - {key}: {value}")
-        
-        # Generar el código QR
-        qr_filename = f'qr_guia_{codigo_guia}.png'
-        qr_path = os.path.join(current_app.static_folder, 'qr', qr_filename)
-        
-        if not os.path.exists(qr_path):
-            # URL para la vista centralizada de la guía
-            qr_url = url_for('misc.ver_guia_centralizada', codigo_guia=codigo_guia, _external=True)
-            utils.generar_qr(qr_url, qr_path)
-        
-        qr_code = url_for('static', filename=f'qr/{qr_filename}')
-        
-        # Obtener timestamp actual para el pie de página
-        now_timestamp = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
-            
-        # Añadir datos de clasificación manual y automática si existen
-        if datos_guia.get('clasificacion_manual'):
-            try:
-                datos_guia['clasificacion_manual'] = json.loads(datos_guia['clasificacion_manual'])
-                # Convertir a lista de tuplas para iterar en el template
-                datos_guia['clasificacion_manual_items'] = list(datos_guia['clasificacion_manual'].items())
-            except (json.JSONDecodeError, TypeError):
-                logger.error(f"Error decodificando clasificacion_manual para guía {codigo_guia}")
-                datos_guia['clasificacion_manual_items'] = []
-        
-        if datos_guia.get('clasificacion_automatica'):
-            try:
-                # Decodificar el JSON a un diccionario Python
-                datos_guia['clasificacion_automatica'] = json.loads(datos_guia['clasificacion_automatica'])
-                # Preparar dos formatos para el template
-                datos_guia['clasificacion_automatica_items'] = [(k, v.get('porcentaje', 0) if isinstance(v, dict) else v) 
-                                                             for k, v in datos_guia['clasificacion_automatica'].items() 
-                                                             if k != 'total_racimos']
-                
-                # Calcular el total de racimos a partir de los datos si no existe
-                if 'total_racimos' not in datos_guia['clasificacion_automatica']:
-                    total_racimos = sum(v.get('cantidad', 0) for v in datos_guia['clasificacion_automatica'].values() 
-                                     if isinstance(v, dict))
-                    datos_guia['clasificacion_automatica']['total_racimos'] = total_racimos
-                
-                logger.info(f"Datos de clasificación automática procesados correctamente: {datos_guia['clasificacion_automatica']}")
-            except (json.JSONDecodeError, TypeError, AttributeError) as e:
-                logger.error(f"Error decodificando clasificacion_automatica para guía {codigo_guia}: {str(e)}")
-                datos_guia['clasificacion_automatica_items'] = []
-        
-        # Agregar el total de racimos detectados si está disponible en clasificacion_consolidada
-        if 'total_racimos_detectados' not in datos_guia and datos_guia.get('clasificacion_automatica', {}).get('total_racimos'):
-            datos_guia['total_racimos_detectados'] = datos_guia['clasificacion_automatica'].get('total_racimos', 0)
-        
-        # Obtener también clasificación consolidada si existe en la BD
+            flash(f"No se encontraron datos para la guía: {codigo_guia}", "error")
+            # Consider redirecting to a more appropriate page if needed, e.g., dashboard or search
+            return render_template('error.html', message=f"Guía {codigo_guia} no encontrada"), 404
+
+        # --- Fetch and Merge Classification Data ---
         try:
-            conn_detail = sqlite3.connect(DB_PATH) # Use DB_PATH
-            cursor_detail = conn_detail.cursor() # Define cursor here
-            cursor_detail.execute("""
-                SELECT total_racimos_detectados, clasificacion_consolidada 
-                FROM clasificaciones 
-                WHERE codigo_guia = ?
-            """, (codigo_guia,))
-            consolidado = cursor_detail.fetchone()
-            conn_detail.close() # Close connection
-            if consolidado:
-                datos_guia['total_racimos_detectados'] = consolidado[0]
-                if consolidado[1]:
-                    datos_guia['clasificacion_consolidada'] = json.loads(consolidado[1])
-                    logger.info(f"Datos consolidados cargados para guía {codigo_guia}: {datos_guia['clasificacion_consolidada']}")
-        except Exception as e:
-            logger.error(f"Error obteniendo datos consolidados: {str(e)}")
-            if 'conn_detail' in locals() and conn_detail:
-                 conn_detail.close()
+            clasificacion_data = get_clasificacion_by_codigo_guia(codigo_guia)
+            if clasificacion_data:
+                logger.info(f"Clasificación encontrada para {codigo_guia}")
+                
+                # Merge manual classification (ensure it's a dict)
+                clasificacion_manual = clasificacion_data.get('clasificacion_manual')
+                if isinstance(clasificacion_manual, str):
+                    try:
+                        datos_guia['clasificacion_manual'] = json.loads(clasificacion_manual)
+                    except json.JSONDecodeError:
+                        logger.warning(f"Could not decode clasificacion_manual JSON string for {codigo_guia}")
+                        datos_guia['clasificacion_manual'] = {} # Default to empty dict on error
+                elif isinstance(clasificacion_manual, dict):
+                    datos_guia['clasificacion_manual'] = clasificacion_manual
+                else:
+                     datos_guia['clasificacion_manual'] = {} # Default if missing or wrong type
+
+                # Merge automatic/consolidated classification if needed by the template
+                # Example: Merging consolidated if it exists
+                clasificacion_consolidada = clasificacion_data.get('clasificacion_consolidada')
+                if isinstance(clasificacion_consolidada, str):
+                     try:
+                         datos_guia['clasificacion_consolidada'] = json.loads(clasificacion_consolidada)
+                     except json.JSONDecodeError:
+                         datos_guia['clasificacion_consolidada'] = {}
+                elif isinstance(clasificacion_consolidada, dict):
+                     datos_guia['clasificacion_consolidada'] = clasificacion_consolidada
+                
+                # Also merge simple automatic classification fields if available and needed
+                clasificacion_automatica = clasificacion_data.get('clasificacion_automatica')
+                if isinstance(clasificacion_automatica, str):
+                     try:
+                         datos_guia['clasificacion_automatica'] = json.loads(clasificacion_automatica)
+                     except json.JSONDecodeError:
+                         datos_guia['clasificacion_automatica'] = {}
+                elif isinstance(clasificacion_automatica, dict):
+                     datos_guia['clasificacion_automatica'] = clasificacion_automatica
+
+                # Merge classification timestamp if available
+                datos_guia['fecha_clasificacion'] = clasificacion_data.get('fecha_clasificacion', datos_guia.get('fecha_clasificacion'))
+                datos_guia['hora_clasificacion'] = clasificacion_data.get('hora_clasificacion', datos_guia.get('hora_clasificacion'))
+
+            else:
+                logger.warning(f"No se encontró clasificación para {codigo_guia}. Se usarán valores por defecto.")
+                # Ensure default empty dicts if no classification found
+                datos_guia.setdefault('clasificacion_manual', {})
+                datos_guia.setdefault('clasificacion_consolidada', {})
+                datos_guia.setdefault('clasificacion_automatica', {})
+
+        except Exception as classif_error:
+            logger.error(f"Error obteniendo o procesando datos de clasificación para {codigo_guia}: {str(classif_error)}")
+            # Ensure default empty dicts on error
+            datos_guia.setdefault('clasificacion_manual', {})
+            datos_guia.setdefault('clasificacion_consolidada', {})
+            datos_guia.setdefault('clasificacion_automatica', {})
+        # --- End Fetch and Merge ---
+
+        # Generar QR para la guía si no existe
+        qr_filename = f'qr_guia_{codigo_guia}.png'
+        qr_folder = current_app.config.get('QR_FOLDER', os.path.join(current_app.static_folder, 'qr'))
+        os.makedirs(qr_folder, exist_ok=True) # Ensure QR folder exists
+        qr_path = os.path.join(qr_folder, qr_filename)
         
-        # Para depuración
-        logger.info(f"Datos de guía para {codigo_guia}:")
-        logger.info(f"Claves disponibles: {', '.join(datos_guia.keys())}")
-        for clave, valor in datos_guia.items():
-            if clave not in ['clasificacion_manual', 'clasificacion_automatica', 'clasificacion_consolidada'] and valor:
-                logger.info(f"  - {clave}: {valor}")
-        
-        return render_template('detalle_proveedor.html', 
-                              datos_guia=datos_guia,
-                              codigo_guia=codigo_guia,
-                              qr_code=qr_code,
-                              now_timestamp=now_timestamp)
-        
+        qr_code_url = url_for('static', filename=f'qr/{qr_filename}') # Default URL
+
+        if not os.path.exists(qr_path):
+            try:
+                # Use the central guide URL for the QR code data
+                qr_data = url_for('misc.ver_guia_centralizada', codigo_guia=codigo_guia, _external=True)
+                utils.generar_qr(qr_data, qr_path)
+                logger.info(f"QR generado para {codigo_guia} en {qr_path}")
+            except Exception as qr_err:
+                 logger.error(f"Error generando QR para {codigo_guia}: {str(qr_err)}")
+                 # Provide a fallback or default QR if generation fails
+                 qr_code_url = url_for('static', filename='images/default_qr.png') 
+
+        # Timestamp para el footer
+        now_timestamp = datetime.now(pytz.timezone('America/Bogota')).strftime('%d/%m/%Y %H:%M:%S %Z')
+
+        # Preparar contexto para la plantilla
+        context = {
+            'datos_guia': datos_guia,
+            'qr_code': qr_code_url,
+            'now_timestamp': now_timestamp,
+        }
+
+        return render_template('detalle_proveedor.html', **context)
+
     except Exception as e:
-        logger.error(f"Error al mostrar detalle del proveedor: {str(e)}")
-        flash(f"Error al cargar los detalles: {str(e)}", "error")
-        return render_template('error.html', mensaje=f"Error al mostrar detalle: {str(e)}"), 500
+        logger.error(f"Error al mostrar detalle de proveedor para guía {codigo_guia}: {str(e)}")
+        logger.error(traceback.format_exc())
+        flash(f"Error al mostrar detalles: {str(e)}", "error")
+        return render_template('error.html', message=f"Error al mostrar detalles: {str(e)}")
 
 @bp.route('/dashboard')
 def dashboard():
