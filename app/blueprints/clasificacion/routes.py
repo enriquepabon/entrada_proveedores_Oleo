@@ -4303,6 +4303,10 @@ def get_clasificacion_by_codigo_guia(codigo_guia):
                     clasificacion['clasificacion_automatica'] = json.loads(clasificacion['clasificacion_automatica'])
                 except json.JSONDecodeError:
                     clasificacion['clasificacion_automatica'] = {}
+                # Limpiar Nones después de cargar desde JSON
+                if isinstance(clasificacion.get('clasificacion_automatica'), dict):
+                    clasificacion['clasificacion_automatica'] = clean_classification_dict(clasificacion['clasificacion_automatica'])
+                    logger.info(f"Limpiado clasificacion_automatica tras carga DB: {clasificacion['clasificacion_automatica']}")
                     
             # Si clasificacion_manual_json existe, convertirlo y asignarlo a clasificacion_manual
             if 'clasificacion_manual_json' in clasificacion and clasificacion['clasificacion_manual_json']:
@@ -4312,7 +4316,11 @@ def get_clasificacion_by_codigo_guia(codigo_guia):
                 except json.JSONDecodeError:
                     logger.error(f"Error decodificando clasificacion_manual_json: {clasificacion['clasificacion_manual_json']}")
                     clasificacion['clasificacion_manual'] = {}
-                    
+                # Limpiar Nones después de cargar desde JSON
+                if isinstance(clasificacion.get('clasificacion_manual'), dict):
+                     clasificacion['clasificacion_manual'] = clean_classification_dict(clasificacion['clasificacion_manual'])
+                     logger.info(f"Limpiado clasificacion_manual tras carga DB: {clasificacion['clasificacion_manual']}")
+            
             return clasificacion
         return None
     except sqlite3.Error as e:
