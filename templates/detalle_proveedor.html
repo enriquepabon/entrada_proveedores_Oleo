@@ -241,23 +241,23 @@
                         </tr>
                         <tr>
                             <td>Verdes</td>
-                            <td>{% if datos_guia.clasificacion_manual and datos_guia.clasificacion_manual.verde != None and datos_guia.clasificacion_manual.verde != 'None' and datos_guia.clasificacion_manual.verde != '' %}{{ datos_guia.clasificacion_manual.verde }}%{% else %}No disponible{% endif %}</td>
+                            <td>{% set val = datos_guia.clasificacion_manual.get('Verdes') %}{% if val is not none and val|string not in ['None', ''] %}{{ val }}%{% else %}No disponible{% endif %}</td>
                         </tr>
                         <tr>
                             <td>Sobremaduros</td>
-                            <td>{% if datos_guia.clasificacion_manual and datos_guia.clasificacion_manual.sobremaduro != None and datos_guia.clasificacion_manual.sobremaduro != 'None' and datos_guia.clasificacion_manual.sobremaduro != '' %}{{ datos_guia.clasificacion_manual.sobremaduro }}%{% else %}No disponible{% endif %}</td>
+                            <td>{% set val = datos_guia.clasificacion_manual.get('Sobremaduros') %}{% if val is not none and val|string not in ['None', ''] %}{{ val }}%{% else %}No disponible{% endif %}</td>
                         </tr>
                         <tr>
                             <td>Daño Corona</td>
-                            <td>{% if datos_guia.clasificacion_manual and datos_guia.clasificacion_manual.danio_corona != None and datos_guia.clasificacion_manual.danio_corona != 'None' and datos_guia.clasificacion_manual.danio_corona != '' %}{{ datos_guia.clasificacion_manual.danio_corona }}%{% else %}No disponible{% endif %}</td>
+                            <td>{% set val = datos_guia.clasificacion_manual.get('Daño Corona') %}{% if val is not none and val|string not in ['None', ''] %}{{ val }}%{% else %}No disponible{% endif %}</td>
                         </tr>
                         <tr>
                             <td>Pedúnculo Largo</td>
-                            <td>{% if datos_guia.clasificacion_manual and datos_guia.clasificacion_manual.pendunculo_largo != None and datos_guia.clasificacion_manual.pendunculo_largo != 'None' and datos_guia.clasificacion_manual.pendunculo_largo != '' %}{{ datos_guia.clasificacion_manual.pendunculo_largo }}%{% else %}No disponible{% endif %}</td>
+                            <td>{% set val = datos_guia.clasificacion_manual.get('Pedúnculo Largo') %}{% if val is not none and val|string not in ['None', ''] %}{{ val }}%{% else %}No disponible{% endif %}</td>
                         </tr>
                         <tr>
                             <td>Podridos</td>
-                            <td>{% if datos_guia.clasificacion_manual and datos_guia.clasificacion_manual.podrido != None and datos_guia.clasificacion_manual.podrido != 'None' and datos_guia.clasificacion_manual.podrido != '' %}{{ datos_guia.clasificacion_manual.podrido }}%{% else %}No disponible{% endif %}</td>
+                            <td>{% set val = datos_guia.clasificacion_manual.get('Podridos') %}{% if val is not none and val|string not in ['None', ''] %}{{ val }}%{% else %}No disponible{% endif %}</td>
                         </tr>
                     </table>
                 </div>
@@ -271,34 +271,47 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% if datos_guia.clasificacion_consolidada %}
+                            {% set auto_data_found = false %}
+                            {# Prioritize consolidated data if it exists and is a dictionary #}
+                            {% if datos_guia.clasificacion_consolidada and datos_guia.clasificacion_consolidada is mapping %}
                                 {% for tipo, datos in datos_guia.clasificacion_consolidada.items() %}
                                     {% if tipo|lower != 'maduro' %} {# Skip 'Maduro' #}
-                                    <tr>
-                                        <td>{{ tipo|replace('_', ' ')|capitalize }}</td>
-                                        <td>{{ datos.porcentaje }}%</td>
-                                    </tr>
+                                        {% set percentage = datos.get('porcentaje') %}
+                                        {% if percentage is not none %}
+                                            <tr>
+                                                <td>{{ tipo|replace('_', ' ')|capitalize }}</td>
+                                                <td>{{ percentage }}%</td>
+                                            </tr>
+                                            {% set auto_data_found = true %}
+                                        {% endif %}
                                     {% endif %}
                                 {% endfor %}
+                            {# Fallback to automatic data if consolidated is not suitable #}
                             {% elif datos_guia.clasificacion_automatica and datos_guia.clasificacion_automatica is mapping %}
                                 {% for tipo, datos in datos_guia.clasificacion_automatica.items() %}
-                                    {% if tipo != 'total_racimos' and tipo|lower != 'maduro' and datos is mapping %} {# Skip 'Maduro' and 'total_racimos' #}
-                                    <tr>
-                                        <td>{{ tipo|replace('_', ' ')|capitalize }}</td>
-                                        <td>{{ datos.porcentaje|default(0) }}%</td>
-                                    </tr>
+                                    {% if tipo|lower != 'maduro' and tipo != 'total_racimos' %} {# Skip 'Maduro' and 'total_racimos' #}
+                                        {% set percentage = None %}
+                                        {# Check if value is a dict with 'porcentaje' #}
+                                        {% if datos is mapping and datos.get('porcentaje') is not none %}
+                                            {% set percentage = datos.get('porcentaje') %}
+                                        {# Check if value itself is the percentage (simpler structure) #}
+                                        {% elif datos is number or (datos is string and datos|replace('.', '', 1)|isdigit) %}
+                                             {% set percentage = datos %}
+                                        {% endif %}
+                                        
+                                        {% if percentage is not none %}
+                                        <tr>
+                                            <td>{{ tipo|replace('_', ' ')|capitalize }}</td>
+                                            <td>{{ percentage }}%</td>
+                                        </tr>
+                                        {% set auto_data_found = true %}
+                                        {% endif %}
                                     {% endif %}
                                 {% endfor %}
-                            {% elif datos_guia.clasificacion_automatica_items %}
-                                {% for tipo, valor in datos_guia.clasificacion_automatica_items %}
-                                    {% if tipo|lower != 'maduro' %} {# Skip 'Maduro' #}
-                                    <tr>
-                                        <td>{{ tipo|capitalize }}</td>
-                                        <td>{% if valor is not none and valor|string != 'None' and valor|string != '' %}{{ valor }}%{% else %}No disponible{% endif %}</td>
-                                    </tr>
-                                    {% endif %}
-                                {% endfor %}
-                            {% else %}
+                            {% endif %}
+
+                            {# Message if no automatic data was displayed #}
+                            {% if not auto_data_found %}
                                 <tr>
                                     <td colspan="2" class="text-center">No hay datos de clasificación automática disponibles.</td>
                                 </tr>
