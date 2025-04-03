@@ -4271,6 +4271,7 @@ def get_clasificacion_by_codigo_guia(codigo_guia):
     Returns:
         dict: Datos de la clasificación o None si no se encuentra
     """
+    conn = None # Initialize conn to None before the try block
     try:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
