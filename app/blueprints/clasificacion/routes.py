@@ -25,6 +25,7 @@ from app.blueprints.clasificacion.utils import normalize_image_path, find_annota
 from jinja2 import TemplateNotFound
 from io import BytesIO
 import numpy as np
+import pytz
 
 # Configurar logging
 logger = logging.getLogger(__name__)
@@ -721,10 +722,7 @@ def registrar_clasificacion_api():
             'nombre_proveedor': datos_guia.get('nombre_proveedor') or datos_guia.get('nombre'),
             'cantidad_racimos': datos_guia.get('cantidad_racimos') or datos_guia.get('racimos'),
             'peso_bruto': datos_guia.get('peso_bruto'),
-            'fecha_registro': datetime.now().strftime('%d/%m/%Y'),
-            'hora_registro': datetime.now().strftime('%H:%M:%S'),
-            'fecha_clasificacion': datetime.now().strftime('%d/%m/%Y'),
-            'hora_clasificacion': datetime.now().strftime('%H:%M:%S'),
+            'timestamp_clasificacion_utc': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'), # Usar timestamp UTC
             'verdes': float(verdes),
             'sobremaduros': float(sobremaduros),
             'dano_corona': float(dano_corona),

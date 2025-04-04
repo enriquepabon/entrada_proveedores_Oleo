@@ -144,15 +144,17 @@ def completar_registro_salida():
                 flash("Guía no encontrada", "error")
                 return redirect(url_for('misc.index'))
         
-        # Convertir fecha y hora a UTC
+        # Convertir fecha y hora a UTC y formatear
         fecha_hora_actual_utc = datetime.utcnow()
-        fecha_actual = fecha_hora_actual_utc.strftime('%d/%m/%Y')
-        hora_actual = fecha_hora_actual_utc.strftime('%H:%M:%S')
+        # fecha_actual = fecha_hora_actual_utc.strftime('%d/%m/%Y') # Formato antiguo
+        # hora_actual = fecha_hora_actual_utc.strftime('%H:%M:%S')   # Formato antiguo
+        timestamp_utc = fecha_hora_actual_utc.strftime('%Y-%m-%d %H:%M:%S') # Nuevo formato UTC
         
         # Actualizar datos de la guía
         datos_actualizados = {
-            'fecha_salida': fecha_actual,
-            'hora_salida': hora_actual,
+            # 'fecha_salida': fecha_actual, # Campo antiguo
+            # 'hora_salida': hora_actual,   # Campo antiguo
+            'timestamp_salida_utc': timestamp_utc, # Nuevo campo UTC
             'comentarios_salida': comentarios,
             'estado_actual': 'proceso_completado',
             'estado_salida': 'Completado',
@@ -176,20 +178,27 @@ def completar_registro_salida():
                     # Actualizar registro existente
                     cursor.execute("""
                         UPDATE salidas 
-                        SET fecha_salida = ?, hora_salida = ?, comentarios_salida = ?, estado = ?
+                        # SET fecha_salida = ?, hora_salida = ?, comentarios_salida = ?, estado = ?
+                        SET timestamp_salida_utc = ?, comentarios_salida = ?, estado = ?
                         WHERE codigo_guia = ?
-                    """, (fecha_actual, hora_actual, comentarios, 'completado', codigo_guia))
+                    """, (
+                        # fecha_actual, hora_actual, # Valores antiguos
+                        timestamp_utc, # Valor UTC
+                        comentarios, 'completado', codigo_guia)
+                    )
                 else:
                     # Insertar nuevo registro
                     cursor.execute("""
-                        INSERT INTO salidas (codigo_guia, codigo_proveedor, nombre_proveedor, fecha_salida, hora_salida, comentarios_salida)
-                        VALUES (?, ?, ?, ?, ?, ?)
+                        # INSERT INTO salidas (codigo_guia, codigo_proveedor, nombre_proveedor, fecha_salida, hora_salida, comentarios_salida)
+                        INSERT INTO salidas (codigo_guia, codigo_proveedor, nombre_proveedor, timestamp_salida_utc, comentarios_salida)
+                        VALUES (?, ?, ?, ?, ?)
                     """, (
                         codigo_guia, 
                         datos_guia.get('codigo_proveedor', ''),
                         datos_guia.get('nombre_proveedor', ''),
-                        fecha_actual,
-                        hora_actual,
+                        # fecha_actual, # Valor antiguo
+                        # hora_actual,  # Valor antiguo
+                        timestamp_utc, # Valor UTC
                         comentarios
                     ))
                 
@@ -205,8 +214,9 @@ def completar_registro_salida():
                     if datos_actualizados_completos:
                         # Asegurarse de que los datos de salida estén incluidos
                         datos_actualizados_completos.update({
-                            'fecha_salida': fecha_actual,
-                            'hora_salida': hora_actual,
+                            # 'fecha_salida': fecha_actual, # Campo antiguo
+                            # 'hora_salida': hora_actual,   # Campo antiguo
+                            'timestamp_salida_utc': timestamp_utc, # Nuevo campo UTC
                             'comentarios_salida': comentarios,
                             'estado_actual': 'proceso_completado',
                             'estado_salida': 'Completado',

@@ -17,6 +17,7 @@ from app.utils.common import CommonUtils as Utils
 from app.blueprints.misc.routes import allowed_file, ALLOWED_EXTENSIONS, PLACA_WEBHOOK_URL, PESAJE_WEBHOOK_URL
 import sqlite3
 import pytz
+from app.utils.image_processing import process_plate_image
 
 # Configurar logging
 logger = logging.getLogger(__name__)
@@ -32,6 +33,15 @@ codigos_autorizacion = {}
 
 # Configuración para el webhook de autorización (puedes ajustar esto según necesites)
 AUTORIZACION_WEBHOOK_URL = "https://hook.us2.make.com/py29fwgfrehp9il45832acotytu8xr5s"
+
+# Define timezones if not already globally defined
+# Assuming they might be needed here as well, or rely on Utils
+UTC = pytz.utc
+
+# --- Utility functions potentially replacing get_bogota_datetime ---
+def get_utc_timestamp_str():
+    """Generates the current UTC timestamp as a string."""
+    return datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
 
 def get_bogota_datetime():
     """
@@ -376,8 +386,9 @@ def registrar_peso_directo():
     try:
         utils = current_app.config.get('utils', Utils(current_app))
         
-        # Obtener timestamp UTC
-        timestamp_utc = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+        # Generar timestamp UTC
+        timestamp_utc = get_utc_timestamp_str()
+        logger.info(f"Generado timestamp UTC para registrar_peso_directo: {timestamp_utc}")
         
         # Determinar si los datos vienen como JSON o como FormData
         if request.is_json:
@@ -583,8 +594,7 @@ def registrar_peso_virtual():
             'nombre_proveedor': nombre_proveedor or '',
             'peso_bruto': peso_bruto,
             'tipo_pesaje': 'virtual',
-            'fecha_pesaje': fecha_pesaje,
-            'hora_pesaje': hora_pesaje,
+            'timestamp_pesaje_utc': timestamp_utc,
             'imagen_pesaje': imagen_path or '',
             'codigo_guia_transporte_sap': codigo_guia_transporte_sap or datos_guia.get('codigo_guia_transporte_sap', '')
         }
@@ -600,8 +610,7 @@ def registrar_peso_virtual():
             datos_guia.update({
                 'peso_bruto': peso_bruto,
                 'tipo_pesaje': 'virtual',
-                'fecha_pesaje': fecha_pesaje,
-                'hora_pesaje': hora_pesaje
+                'timestamp_pesaje_utc': timestamp_utc
             })
             
             if codigo_guia_transporte_sap:
@@ -1116,55 +1125,28 @@ def procesar_pesaje_directo():
         # Inicializar Utils dentro del contexto de la aplicación
         utils = current_app.config.get('utils', Utils(current_app))
         
-        # Obtener fecha y hora en zona horaria de Bogotá
-        fecha_actual, hora_actual = get_bogota_datetime()
+        # Generar timestamp UTC
+        timestamp_utc = get_utc_timestamp_str()
+        logger.info(f"Generado timestamp UTC para procesar pesaje directo: {timestamp_utc}")
         
-        # Verificar que haya un archivo cargado
-        if 'imagen' not in request.files:
-            logger.error("No se envió archivo de imagen para pesaje directo")
-            return jsonify({"success": False, "message": "No se envió archivo de imagen"}), 400
-            
-        image_file = request.files['imagen']
+        # Obtener datos del formulario
         codigo_guia = request.form.get('codigo_guia')
+        peso_bruto = request.form.get('peso_bruto')
+        tipo_pesaje = request.form.get('tipo_pesaje', 'directo')
+        image_filename = request.form.get('image_filename')
+        codigo_sap = request.form.get('codigo_guia_transporte_sap')
         
-        if not image_file:
-            logger.error("No se seleccionó archivo de imagen para pesaje directo")
-            return jsonify({"success": False, "message": "No se seleccionó archivo de imagen"}), 400
-            
-        if not codigo_guia:
-            logger.error("No se proporcionó código de guía para pesaje directo")
-            return jsonify({"success": False, "message": "No se proporcionó código de guía"}), 400
+        if not codigo_guia or not peso_bruto or not tipo_pesaje or not image_filename:
+            logger.error("Datos incompletos para procesar pesaje directo")
+            return jsonify({"success": False, "message": "Datos incompletos para procesar pesaje directo"}), 400
         
         # Guardar imagen temporalmente
-        image_filename = secure_filename(f"peso_{codigo_guia}_{int(time.time())}.jpg")
         image_path = os.path.join(current_app.config['UPLOAD_FOLDER'], image_filename)
-        image_file.save(image_path)
-        
-        # Extraer el código del proveedor del codigo_guia
-        codigo_proveedor = None
-        
-        # Si el código de guía contiene un guion, podría seguir el formato FECHA-CODIGO
-        if '-' in codigo_guia:
-            codigo_proveedor = codigo_guia.split('-')[1]
-        # Si el código de guía contiene un guion bajo, podría seguir el formato CODIGO_FECHA_HORA
-        elif '_' in codigo_guia:
-            codigo_proveedor = codigo_guia.split('_')[0]
-        else:
-            codigo_proveedor = codigo_guia
-            
-        # Intentar obtener datos de registro
-        try:
-            # Obtener datos de registro para extraer código de proveedor
-            datos_registro = utils.get_datos_registro(codigo_guia)
-            if datos_registro and 'codigo_proveedor' in datos_registro and datos_registro['codigo_proveedor']:
-                codigo_proveedor = datos_registro['codigo_proveedor']
-        except Exception as e:
-            logger.warning(f"Error al obtener código proveedor de registro: {str(e)}")
         
         # Enviar al webhook de Make para procesamiento
         with open(image_path, 'rb') as f:
             files = {'file': (image_filename, f, 'multipart/form-data')}
-            data = {'codigo_proveedor': codigo_proveedor}
+            data = {'codigo_proveedor': codigo_sap}
             logger.info(f"Enviando imagen al webhook: {PESAJE_WEBHOOK_URL}")
             response = requests.post(PESAJE_WEBHOOK_URL, files=files, data=data)
         

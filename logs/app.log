@@ -1,8 +1,25 @@
-2025-04-03 10:54:56,116 - __main__ - INFO - misc.ver_guia_centralizada: /guia-centralizada/<path:codigo_guia>
-2025-04-03 10:54:56,117 - __main__ - INFO - misc.ver_guia_alternativa: /guia-alt/<codigo_guia>
-2025-04-03 10:54:56,117 - __main__ - INFO - misc.guardar_captura_tabla: /guardar_captura_tabla
-2025-04-03 10:54:56,117 - __main__ - INFO - misc.ver_detalle_proveedor: /ver_detalle_proveedor/<codigo_guia>
-2025-04-03 10:54:56,117 - __main__ - INFO - misc.dashboard: /dashboard
-2025-04-03 10:54:56,117 - __main__ - INFO - misc.dashboard_stats: /api/dashboard/stats
-2025-04-03 10:54:56,117 - __main__ - INFO - misc.buscar_guias: /api/buscar_guias
-2025-04-03 10:54:56,117 - __main__ - INFO - Iniciando servidor Flask...
+2025-04-03 19:17:01,580 - __main__ - INFO - salida.completar_registro_salida: /salida/completar_registro_salida
+2025-04-03 19:17:01,581 - __main__ - INFO - salida.ver_resultados_salida: /salida/ver_resultados_salida/<codigo_guia>
+2025-04-03 19:17:01,582 - __main__ - INFO - salida.debug_logs: /salida/debug_logs
+2025-04-03 19:17:01,582 - __main__ - INFO - admin.migrar_registros: /admin/admin/migrar-registros
+2025-04-03 19:17:01,582 - __main__ - INFO - api.test_webhook: /api/test_webhook
+2025-04-03 19:17:01,582 - __main__ - INFO - api.test_revalidation: /api/test_revalidation
+2025-04-03 19:17:01,582 - __main__ - INFO - api.verificar_placa: /api/verificar_placa
+2025-04-03 19:17:01,582 - __main__ - INFO - api.get_dashboard_proveedores: /api/api/dashboard/proveedores
+2025-04-03 19:17:01,582 - __main__ - INFO - misc.serve_guia: /guias/<filename>
+2025-04-03 19:17:01,582 - __main__ - INFO - misc.upload_file: /
+2025-04-03 19:17:01,582 - __main__ - INFO - misc.reprocess_plate: /reprocess_plate
+2025-04-03 19:17:01,582 - __main__ - INFO - misc.revalidation_results: /revalidation_results
+2025-04-03 19:17:01,582 - __main__ - INFO - misc.revalidation_success: /revalidation_success
+2025-04-03 19:17:01,582 - __main__ - INFO - misc.ver_resultados_pesaje: /ver_resultados_pesaje/<codigo_guia>
+2025-04-03 19:17:01,582 - __main__ - INFO - misc.process_validated_data: /process_validated_data
+2025-04-03 19:17:01,582 - __main__ - INFO - misc.generar_pdf_registro: /generar_pdf_registro/<codigo_guia>
+2025-04-03 19:17:01,584 - __main__ - INFO - misc.generar_pdf_pesaje: /generar_pdf_pesaje/<codigo_guia>
+2025-04-03 19:17:01,584 - __main__ - INFO - misc.ver_guia_centralizada: /guia-centralizada/<path:codigo_guia>
+2025-04-03 19:17:01,584 - __main__ - INFO - misc.ver_guia_alternativa: /guia-alt/<codigo_guia>
+2025-04-03 19:17:01,584 - __main__ - INFO - misc.guardar_captura_tabla: /guardar_captura_tabla
+2025-04-03 19:17:01,584 - __main__ - INFO - misc.ver_detalle_proveedor: /ver_detalle_proveedor/<codigo_guia>
+2025-04-03 19:17:01,585 - __main__ - INFO - misc.dashboard: /dashboard
+2025-04-03 19:17:01,585 - __main__ - INFO - misc.dashboard_stats: /api/dashboard/stats
+2025-04-03 19:17:01,585 - __main__ - INFO - misc.buscar_guias: /api/buscar_guias
+2025-04-03 19:17:01,585 - __main__ - INFO - Iniciando servidor Flask...

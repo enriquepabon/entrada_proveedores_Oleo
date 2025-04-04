@@ -326,10 +326,17 @@ def store_clasificacion(clasificacion_data, fotos=None):
             'codigo_guia': clasificacion_data.get('codigo_guia'),
             'codigo_proveedor': clasificacion_data.get('codigo_proveedor'),
             'nombre_proveedor': clasificacion_data.get('nombre_proveedor'),
-            'fecha_clasificacion': clasificacion_data.get('fecha_clasificacion'),
-            'hora_clasificacion': clasificacion_data.get('hora_clasificacion'),
+            # 'fecha_clasificacion': clasificacion_data.get('fecha_clasificacion'), # Eliminar fecha local
+            # 'hora_clasificacion': clasificacion_data.get('hora_clasificacion'),   # Eliminar hora local
+            'timestamp_clasificacion_utc': clasificacion_data.get('timestamp_clasificacion_utc'), # Añadir timestamp UTC
             'observaciones': clasificacion_data.get('observaciones'),
-            'estado': clasificacion_data.get('estado', 'activo')
+            'estado': clasificacion_data.get('estado', 'activo'),
+            # Incluir también los campos numéricos si están disponibles
+            'verde_manual': clasificacion_data.get('verdes'), 
+            'sobremaduro_manual': clasificacion_data.get('sobremaduros'),
+            'danio_corona_manual': clasificacion_data.get('dano_corona'),
+            'pendunculo_largo_manual': clasificacion_data.get('pedunculo_largo'),
+            'podrido_manual': clasificacion_data.get('podridos')
         }
         
         # Procesar clasificación manual
@@ -361,14 +368,21 @@ def store_clasificacion(clasificacion_data, fotos=None):
             except json.JSONDecodeError:
                 clasificacion_automatica = {}
         
-        # Guardar las clasificaciones como JSON
-        datos_a_guardar['clasificacion_manual'] = json.dumps(clasificacion_manual)
-        datos_a_guardar['clasificacion_automatica'] = json.dumps(clasificacion_automatica)
+        # Guardar las clasificaciones como JSON (renombrado para evitar conflicto)
+        datos_a_guardar['clasificacion_manual_json'] = json.dumps(clasificacion_manual)
+        datos_a_guardar['clasificacion_automatica_json'] = json.dumps(clasificacion_automatica)
+
+        # Eliminar los campos originales que ahora están en JSON para evitar duplicidad
+        # datos_a_guardar.pop('clasificacion_manual', None)
+        # datos_a_guardar.pop('clasificacion_automatica', None)
+
+        # Filtrar claves None antes de construir la consulta
+        datos_filtrados = {k: v for k, v in datos_a_guardar.items() if v is not None}
         
         # Construir la consulta SQL
-        campos = ', '.join(datos_a_guardar.keys())
-        placeholders = ', '.join(['?' for _ in datos_a_guardar])
-        valores = list(datos_a_guardar.values())
+        campos = ', '.join(datos_filtrados.keys())
+        placeholders = ', '.join(['?' for _ in datos_filtrados])
+        valores = list(datos_filtrados.values())
         
         # Intentar insertar primero
         try:
@@ -378,12 +392,12 @@ def store_clasificacion(clasificacion_data, fotos=None):
             """, valores)
         except sqlite3.IntegrityError:
             # Si ya existe, actualizar
-            set_clause = ', '.join([f"{k} = ?" for k in datos_a_guardar.keys()])
+            set_clause = ', '.join([f"{k} = ?" for k in datos_filtrados.keys()])
             cursor.execute(f"""
                 UPDATE clasificaciones
                 SET {set_clause}
                 WHERE codigo_guia = ?
-            """, valores + [datos_a_guardar['codigo_guia']])
+            """, valores + [datos_filtrados['codigo_guia']])
         
         conn.commit()
         
@@ -393,7 +407,7 @@ def store_clasificacion(clasificacion_data, fotos=None):
                 cursor.execute("""
                     INSERT INTO fotos_clasificacion (codigo_guia, ruta_foto, numero_foto)
                     VALUES (?, ?, ?)
-                """, (datos_a_guardar['codigo_guia'], foto_path, i + 1))
+                """, (datos_filtrados['codigo_guia'], foto_path, i + 1))
             conn.commit()
         
         return True
@@ -569,31 +583,41 @@ def store_pesaje_neto(pesaje_data):
                       (pesaje_data.get('codigo_guia'),))
         existing = cursor.fetchone()
         
+        # Preparar datos excluyendo claves None y la clave primaria para INSERT/UPDATE
+        datos_filtrados = {k: v for k, v in pesaje_data.items() if v is not None and k != 'id'}
+        # Asegurarse de incluir el timestamp UTC y excluir los viejos
+        datos_filtrados['timestamp_pesaje_neto_utc'] = datos_filtrados.pop('timestamp_pesaje_neto_utc', None) # Ensure it exists
+        datos_filtrados.pop('fecha_pesaje_neto', None) # Remove old field
+        datos_filtrados.pop('hora_pesaje_neto', None)  # Remove old field
+        
+        # Filtrar nuevamente por si el timestamp UTC era None
+        datos_finales = {k: v for k, v in datos_filtrados.items() if v is not None}
+
         if existing:
             # Actualizar el registro existente
             update_cols = []
             params = []
             
-            for key, value in pesaje_data.items():
+            for key, value in datos_finales.items():
                 if key != 'codigo_guia':  # Excluir la clave primaria
                     update_cols.append(f"{key} = ?")
                     params.append(value)
             
             # Agregar el parámetro para WHERE
-            params.append(pesaje_data.get('codigo_guia'))
+            params.append(datos_finales.get('codigo_guia'))
             
             update_query = f"UPDATE pesajes_neto SET {', '.join(update_cols)} WHERE codigo_guia = ?"
             cursor.execute(update_query, params)
-            logger.info(f"Actualizado registro de pesaje neto para guía: {pesaje_data.get('codigo_guia')}")
+            logger.info(f"Actualizado registro de pesaje neto para guía: {datos_finales.get('codigo_guia')}")
         else:
             # Insertar nuevo registro
-            columns = ', '.join(pesaje_data.keys())
-            placeholders = ', '.join(['?' for _ in pesaje_data])
-            values = list(pesaje_data.values())
+            columns = ', '.join(datos_finales.keys())
+            placeholders = ', '.join(['?' for _ in datos_finales])
+            values = list(datos_finales.values())
             
             insert_query = f"INSERT INTO pesajes_neto ({columns}) VALUES ({placeholders})"
             cursor.execute(insert_query, values)
-            logger.info(f"Insertado nuevo registro de pesaje neto para guía: {pesaje_data.get('codigo_guia')}")
+            logger.info(f"Insertado nuevo registro de pesaje neto para guía: {datos_finales.get('codigo_guia')}")
         
         conn.commit()
         return True
