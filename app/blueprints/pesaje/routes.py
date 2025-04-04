@@ -1137,15 +1137,29 @@ def procesar_pesaje_directo():
         codigo_guia = request.form.get('codigo_guia')
         peso_bruto = request.form.get('peso_bruto')
         tipo_pesaje = request.form.get('tipo_pesaje', 'directo')
-        image_filename = request.form.get('image_filename')
+        # image_filename = request.form.get('image_filename') # Ya no se espera como form data
         codigo_sap = request.form.get('codigo_guia_transporte_sap')
-        
-        if not codigo_guia or not peso_bruto or not tipo_pesaje or not image_filename:
-            logger.error("Datos incompletos para procesar pesaje directo")
-            return jsonify({"success": False, "message": "Datos incompletos para procesar pesaje directo"}), 400
+
+        # Verificar archivo de imagen cargado
+        if 'imagen' not in request.files:
+            logger.error("No se envió archivo de imagen para pesaje directo")
+            return jsonify({"success": False, "message": "No se envió archivo de imagen"}), 400
+        image_file = request.files['imagen']
+        if not image_file or image_file.filename == '':
+            logger.error("No se seleccionó archivo de imagen o está vacío para pesaje directo")
+            return jsonify({"success": False, "message": "No se seleccionó archivo de imagen o está vacío"}), 400
+
+        # Generar nombre de archivo seguro
+        image_filename = secure_filename(f"peso_{codigo_guia}_{int(time.time())}.jpg")
+
+        # Validar otros datos
+        if not codigo_guia or not peso_bruto or not tipo_pesaje:
+            logger.error("Datos incompletos para procesar pesaje directo (faltan código, peso o tipo)")
+            return jsonify({"success": False, "message": "Datos incompletos para procesar pesaje directo (faltan código, peso o tipo)"}), 400
         
         # Guardar imagen temporalmente
         image_path = os.path.join(current_app.config['UPLOAD_FOLDER'], image_filename)
+        image_file.save(image_path) # Guardar el archivo cargado
         
         # Enviar al webhook de Make para procesamiento
         with open(image_path, 'rb') as f:
