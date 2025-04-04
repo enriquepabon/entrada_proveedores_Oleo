@@ -107,7 +107,7 @@ def get_pesajes_bruto(filtros=None):
                 if pesajes_exists:
                     # Build and execute query for tiquetes.db
                     # Fetch results
-                    query = "SELECT p.* FROM pesajes_bruto p" # Simplified example
+                    query = "SELECT p.*, p.timestamp_pesaje_utc "
                     params = []
                     # Add JOINs and filters as needed (similar to original code)
                     # ... 
@@ -173,7 +173,8 @@ def get_pesaje_bruto_by_codigo_guia(codigo_guia):
                 
                 # Query pesajes_bruto first
                 if pesajes_exists:
-                    query = "SELECT p.* "
+                    query = "SELECT p.*, p.timestamp_pesaje_utc "
+                    
                     # Conditionally add image_filename if entry_records exists
                     if entry_exists:
                          # Check if image_filename column exists in entry_records

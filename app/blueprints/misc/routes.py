@@ -473,6 +473,23 @@ def ver_resultados_pesaje(codigo_guia):
         
         current_app.logger.info(f"Datos estandarizados para {codigo_guia}: código_proveedor={codigo_proveedor}, nombre_proveedor={nombre_proveedor}, racimos={cantidad_racimos}")
         
+        # TODO (Plan Timestamps): Convertir timestamp_pesaje_utc a local para mostrar
+        fecha_pesaje_local = "N/A"
+        hora_pesaje_local = "N/A"
+        timestamp_utc_str = pesaje_data.get('timestamp_pesaje_utc')
+        if timestamp_utc_str:
+            try:
+                dt_utc = datetime.strptime(timestamp_utc_str, "%Y-%m-%d %H:%M:%S")
+                dt_utc = UTC.localize(dt_utc)
+                dt_bogota = dt_utc.astimezone(BOGOTA_TZ)
+                fecha_pesaje_local = dt_bogota.strftime('%d/%m/%Y')
+                hora_pesaje_local = dt_bogota.strftime('%H:%M:%S')
+            except (ValueError, TypeError) as e:
+                current_app.logger.warning(f"Could not parse timestamp_pesaje_utc '{timestamp_utc_str}' for {codigo_guia}: {e}")
+                # Fallback to potentially incorrect old values if parsing fails, or keep N/A
+                fecha_pesaje_local = pesaje_data.get('fecha_pesaje', 'N/A') # Old field fallback
+                hora_pesaje_local = pesaje_data.get('hora_pesaje', 'N/A')   # Old field fallback
+        
         # Variables para la plantilla
         template_data = {
             'codigo_guia': codigo_guia,
@@ -480,8 +497,10 @@ def ver_resultados_pesaje(codigo_guia):
             'nombre_proveedor': nombre_proveedor,
             'peso_bruto': pesaje_data.get('peso_bruto', 'N/A'),
             'tipo_pesaje': pesaje_data.get('tipo_pesaje', 'N/A'),
-            'fecha_pesaje': pesaje_data.get('fecha_pesaje', 'N/A'),
-            'hora_pesaje': pesaje_data.get('hora_pesaje', 'N/A'),
+            # 'fecha_pesaje': pesaje_data.get('fecha_pesaje', 'N/A'), # OLD FIELD
+            # 'hora_pesaje': pesaje_data.get('hora_pesaje', 'N/A'),   # OLD FIELD
+            'fecha_pesaje': fecha_pesaje_local, # Use converted local date
+            'hora_pesaje': hora_pesaje_local,   # Use converted local time
             'imagen_pesaje': pesaje_data.get('imagen_pesaje', ''),
             'transportador': transportista,
             'placa': placa,

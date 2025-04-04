@@ -428,6 +428,12 @@ def registrar_peso_directo():
         codigo_proveedor = datos_existentes.get('codigo_proveedor') or datos_existentes.get('codigo')
         nombre_proveedor = datos_existentes.get('nombre_proveedor') or datos_existentes.get('nombre')
         
+        # Get SAP code: Prioritize session, then existing data, then None
+        # The webhook response in procesar_pesaje_directo stored it in the session
+        codigo_sap = session.get('codigo_guia_transporte_sap', datos_existentes.get('codigo_guia_transporte_sap', None))
+        if not codigo_sap or codigo_sap == 'No registrada': # Handle empty strings or default placeholders
+            codigo_sap = None
+        
         # Preparar datos para almacenar
         datos_pesaje = {
             'codigo_guia': codigo_guia,
@@ -437,8 +443,11 @@ def registrar_peso_directo():
             'tipo_pesaje': 'directo',
             'timestamp_pesaje_utc': timestamp_utc,
             'imagen_pesaje': imagen_pesaje or '',
-            'codigo_guia_transporte_sap': datos_existentes.get('codigo_guia_transporte_sap', '')
+            'codigo_guia_transporte_sap': codigo_sap # Use the prioritized value
         }
+        
+        # Remove the SAP code from session after using it (good practice)
+        session.pop('codigo_guia_transporte_sap', None)
         
         # Almacenar en la base de datos
         from db_operations import store_pesaje_bruto
@@ -447,17 +456,14 @@ def registrar_peso_directo():
         if result:
             logger.info(f"Peso registrado correctamente para {codigo_guia}: {peso_bruto}kg")
             
-            # Actualizar datos en la guía
-            datos_existentes.update({
-                'peso_bruto': peso_bruto,
-                'tipo_pesaje': 'directo',
-                'timestamp_pesaje_utc': timestamp_utc
-            })
-            
-            if datos_pesaje['codigo_guia_transporte_sap']:
+            # Ensure the SAP code used for saving is also updated in datos_existentes
+            if datos_pesaje.get('codigo_guia_transporte_sap'):
                 datos_existentes['codigo_guia_transporte_sap'] = datos_pesaje['codigo_guia_transporte_sap']
-                logger.info(f"Guía de transporte SAP {datos_pesaje['codigo_guia_transporte_sap']} almacenada para {codigo_guia}")
-                
+                logger.info(f"Guía de transporte SAP {datos_pesaje['codigo_guia_transporte_sap']} preparada para actualizar en guía para {codigo_guia}")
+            else:
+                # If no SAP code was found/used, ensure it's not present or set to a default in datos_existentes
+                datos_existentes['codigo_guia_transporte_sap'] = None # Or 'No registrada'
+            
             # Actualizar la guía
             utils.update_datos_guia(codigo_guia, datos_existentes)
             
@@ -977,8 +983,8 @@ def ver_resultados_pesaje(codigo_guia):
         # --- CONSULTAR PESAJES_BRUTO DIRECTAMENTE ---
         # Verificar que el pesaje esté completado consultando la DB
         peso_bruto_db = None
-        fecha_pesaje_db = None
-        hora_pesaje_db = None
+        fecha_pesaje_local = "N/A"
+        hora_pesaje_local = "N/A"
         guia_sap_db = None
         try:
             # Usar la ruta configurada en la aplicación Flask
@@ -987,7 +993,7 @@ def ver_resultados_pesaje(codigo_guia):
             cursor_check = conn_check.cursor()
             logger.info(f"Consultando pesajes_bruto en '{db_path}' para {codigo_guia}")
             cursor_check.execute("""
-                SELECT peso_bruto, fecha_pesaje, hora_pesaje, codigo_guia_transporte_sap 
+                SELECT peso_bruto, timestamp_pesaje_utc, codigo_guia_transporte_sap 
                 FROM pesajes_bruto 
                 WHERE codigo_guia = ?
             """, (codigo_guia,))
@@ -996,14 +1002,28 @@ def ver_resultados_pesaje(codigo_guia):
 
             if pesaje_result:
                 peso_bruto_db = pesaje_result[0]
-                fecha_pesaje_db = pesaje_result[1]
-                hora_pesaje_db = pesaje_result[2]
-                guia_sap_db = pesaje_result[3]
-                logger.info(f"Pesaje bruto encontrado en DB para {codigo_guia}: Peso={peso_bruto_db}, Fecha={fecha_pesaje_db}, Hora={hora_pesaje_db}, SAP={guia_sap_db}")
+                timestamp_utc_str = pesaje_result[1]
+                guia_sap_db = pesaje_result[2]
+                logger.info(f"Pesaje bruto encontrado en DB para {codigo_guia}: Peso={peso_bruto_db}, TimestampUTC={timestamp_utc_str}, SAP={guia_sap_db}")
+
+                # --- Convert timestamp to local --- 
+                if timestamp_utc_str:
+                    try:
+                        dt_utc = datetime.strptime(timestamp_utc_str, "%Y-%m-%d %H:%M:%S")
+                        dt_utc = UTC.localize(dt_utc)
+                        dt_bogota = dt_utc.astimezone(BOGOTA_TZ)
+                        fecha_pesaje_local = dt_bogota.strftime('%d/%m/%Y')
+                        hora_pesaje_local = dt_bogota.strftime('%H:%M:%S')
+                    except (ValueError, TypeError) as e:
+                        logger.warning(f"Could not parse timestamp_pesaje_utc '{timestamp_utc_str}' in pesaje/routes: {e}")
+                        # Fallback if needed
+                        fecha_pesaje_local = "Err Fmt"
+                        hora_pesaje_local = "Err Fmt"
+
                 # Actualizar datos_guia con valores frescos de la DB
                 datos_guia['peso_bruto'] = peso_bruto_db
-                datos_guia['fecha_pesaje'] = fecha_pesaje_db
-                datos_guia['hora_pesaje'] = hora_pesaje_db
+                datos_guia['fecha_pesaje'] = fecha_pesaje_local
+                datos_guia['hora_pesaje'] = hora_pesaje_local
                 datos_guia['codigo_guia_transporte_sap'] = guia_sap_db
             else:
                 logger.warning(f"No se encontró registro en pesajes_bruto para {codigo_guia}")
@@ -1036,43 +1056,6 @@ def ver_resultados_pesaje(codigo_guia):
             logger.info(f"Generando QR para acceso a resultados de pesaje: {qr_url}")
             utils.generar_qr(qr_url, qr_path)
 
-        # --- Explicitly fetch Racimos from entry_records DB ---
-        # Initialize with value from datos_guia as default or 'No registrado' if completely missing
-        #racimos_from_db = datos_guia.get('cantidad_racimos', datos_guia.get('racimos', 'No registrado'))
-        #logger.debug(f"Initial racimos value for {codigo_guia} from datos_guia: {racimos_from_db}")
-
-        #try:
-            # Usar la ruta configurada en la aplicación Flask para buscar racimos
-            #db_path_racimos = current_app.config['TIQUETES_DB_PATH']
-            #conn_racimos = sqlite3.connect(db_path_racimos) # Use the correct path variable
-            #cursor_racimos = conn_racimos.cursor()
-            # Fetch 'cantidad_racimos' from entry_records using the specific codigo_guia
-            #logger.info(f"Querying racimos in '{db_path_racimos}' for codigo_guia: {codigo_guia}") # Update log message
-            #cursor_racimos.execute("SELECT cantidad_racimos FROM entry_records WHERE codigo_guia = ?", (codigo_guia,))
-            #racimos_result = cursor_racimos.fetchone()
-            #conn_racimos.close()
-
-            # Update if a valid result is found in the database
-            #if racimos_result and racimos_result[0] and str(racimos_result[0]).strip() not in ('No disponible', 'N/A', '', 'None', None):
-                #racimos_from_db = str(racimos_result[0]).strip() # Ensure it's a string and clean
-                #logger.info(f"Successfully fetched and updated racimos from DB for {codigo_guia}: {racimos_from_db}")
-            #elif racimos_result:
-                 # Log if record found but value is invalid
-                 #logger.warning(f"Record found for {codigo_guia}, but racimos value ('{racimos_result[0]}') is invalid/empty. Keeping value: {racimos_from_db}")
-            #else:
-                 # Log if no record was found at all for this codigo_guia
-                 #logger.warning(f"No record found in entry_records for racimos lookup using codigo_guia: {codigo_guia}. Keeping value: {racimos_from_db}")
-
-        #except sqlite3.Error as db_err:
-            #logger.error(f"DB error fetching racimos for {codigo_guia}: {db_err}")
-            # Ensure racimos_from_db has a value even on DB error
-            #if 'racimos_from_db' not in locals(): racimos_from_db = 'Error DB'
-        #except Exception as e:
-             #logger.error(f"Unexpected error fetching racimos for {codigo_guia}: {e}")
-             # Ensure racimos_from_db has a value on other errors
-             #if 'racimos_from_db' not in locals(): racimos_from_db = 'Error General'
-        # --- End fetching Racimos ---
-
         # Preparar datos para el template
         imagen_pesaje = datos_guia.get('imagen_pesaje')
         if imagen_pesaje and not imagen_pesaje.startswith('/'):
@@ -1095,17 +1078,17 @@ def ver_resultados_pesaje(codigo_guia):
             'datos_guia': datos_guia,
             'tipo_pesaje': datos_guia.get('tipo_pesaje', 'N/A'),
             'peso_bruto': datos_guia.get('peso_bruto', 'N/A'),
-            'fecha_pesaje': datos_guia.get('fecha_pesaje', 'N/A'),
-            'hora_pesaje': datos_guia.get('hora_pesaje', 'N/A'),
+            'fecha_pesaje': fecha_pesaje_local,
+            'hora_pesaje': hora_pesaje_local,
             'comentarios': datos_guia.get('comentarios_pesaje', ''),
             'fotos_pesaje': datos_guia.get('fotos_pesaje', []),
             'codigo_proveedor': datos_guia.get('codigo_proveedor', datos_guia.get('codigo', 'No disponible')),
             'nombre_proveedor': datos_guia.get('nombre_agricultor', datos_guia.get('nombre_proveedor', 'No disponible')),
             'transportador': datos_guia.get('transportador', 'No disponible'),
             'placa': datos_guia.get('placa', 'No disponible'),
-            'racimos': datos_guia.get('cantidad_racimos', datos_guia.get('racimos', 'No registrado')), # Use value directly from datos_guia
+            'racimos': datos_guia.get('cantidad_racimos', datos_guia.get('racimos', 'No registrado')),
             'guia_sap': datos_guia.get('codigo_guia_transporte_sap', datos_guia.get('guia_sap', 'No registrada')),
-            'imagen_pesaje': imagen_pesaje, # Use the potentially corrected URL
+            'imagen_pesaje': imagen_pesaje,
             'qr_code': url_for('static', filename=f'qr/{qr_filename}'),
             'verificacion_placa': verificacion_placa,
             'now_timestamp': now_timestamp
@@ -1152,11 +1135,11 @@ def procesar_pesaje_directo():
         # Generar nombre de archivo seguro
         image_filename = secure_filename(f"peso_{codigo_guia}_{int(time.time())}.jpg")
 
-        # Validar otros datos
-        if not codigo_guia or not peso_bruto or not tipo_pesaje:
-            logger.error("Datos incompletos para procesar pesaje directo (faltan código, peso o tipo)")
-            return jsonify({"success": False, "message": "Datos incompletos para procesar pesaje directo (faltan código, peso o tipo)"}), 400
-        
+        # Ensure codigo_guia is present before proceeding
+        if not codigo_guia:
+            logger.error("Código de guía es requerido para procesar pesaje directo.")
+            return jsonify({"success": False, "message": "Código de guía es requerido."}), 400
+            
         # Guardar imagen temporalmente
         image_path = os.path.join(current_app.config['UPLOAD_FOLDER'], image_filename)
         image_file.save(image_path) # Guardar el archivo cargado

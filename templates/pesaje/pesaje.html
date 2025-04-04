@@ -354,6 +354,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const btnProcesar = document.getElementById('btn_procesar');
     let pesoCapturado = null;
     let imagenActual = null;
+    let fotoBascula = null;
+    let sapCodeFromValidation = null;
     
     // Función para capturar imagen con la cámara
     async function capturarImagen() {
@@ -454,6 +456,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 pesoDetectadoContainer.style.display = 'block';
                 pesoCapturado = data.peso;
                 fotoBascula = imagenActual;
+                sapCodeFromValidation = data.codigo_guia_transporte_sap;
                 btnProcesar.style.display = 'block';
                 // alert('Validación exitosa. Peso detectado correctamente.');
             } else {
@@ -592,126 +595,96 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Modificar el manejador del botón procesar para incluir las fotos
     btnProcesar.addEventListener('click', async function() {
-        // Mantener el código existente
         const tipoPesaje = document.querySelector('input[name="tipo_pesaje"]:checked').value;
-        let peso;
-        
-        if (tipoPesaje === 'foto') {
-            peso = pesoCapturado;
-        } else if (tipoPesaje === 'manual') {
-            peso = document.getElementById('peso_virtual').value;
-        } else {
-            // Para el caso de pesaje directo, todavía no implementado
-            alert('Esta funcionalidad aún no está disponible.');
-            return;
-        }
-        
-        if (!peso) {
-            alert('Por favor, capture o ingrese el peso');
-            return;
-        }
-        
+        let pesoBruto;
+        let endpointUrl;
+        const formData = new FormData();
+        formData.append('codigo_guia', '{{ datos.codigo_guia }}');
+
+        // Mostrar el overlay de carga con mensaje personalizado
+        const loadingContent = document.querySelector('.loading-content');
+        const loadingTitle = loadingContent.querySelector('h2');
+        const loadingText = loadingContent.querySelector('p');
+        loadingTitle.textContent = 'Procesando peso...';
+        loadingText.textContent = 'Por favor espere mientras registramos el peso.';
+        mostrarCarga(true);
+
         try {
-            // Mostrar el overlay de carga con mensaje personalizado
-            const loadingContent = document.querySelector('.loading-content');
-            const loadingTitle = loadingContent.querySelector('h2');
-            const loadingText = loadingContent.querySelector('p');
-            loadingTitle.textContent = 'Procesando peso...';
-            loadingText.textContent = 'Por favor espere mientras registramos el peso.';
-            mostrarCarga(true);
+            if (tipoPesaje === 'foto') {
+                pesoBruto = pesoCapturado; // Use the weight from validation
+                if (!pesoBruto) {
+                    alert('Error: No se ha validado un peso para la foto.');
+                    mostrarCarga(false);
+                    return;
+                }
+                if (!fotoBascula) { // fotoBascula should be set when validation succeeds
+                    alert('Error: No se ha validado una imagen de báscula.');
+                    mostrarCarga(false);
+                    return;
+                }
+                formData.append('peso_bruto', pesoBruto);
+                formData.append('tipo_pesaje', 'directo'); // Explicitly set type for backend
+                formData.append('imagen', fotoBascula); // Use the validated image
+                if (sapCodeFromValidation) {
+                    formData.append('codigo_guia_transporte_sap', sapCodeFromValidation);
+                }
+                endpointUrl = '/pesaje/registrar_peso_directo'; // Endpoint for direct registration
 
-            // Mapeo de los nuevos valores a los valores antiguos para compatibilidad con el backend
-            const mapTipoPesaje = {
-                'foto': 'directo',
-                'manual': 'virtual',
-                'directo': 'bascula' // Cuando esté implementado, podría necesitar su propio valor
-            };
+            } else if (tipoPesaje === 'manual') {
+                pesoBruto = document.getElementById('peso_virtual').value;
+                 if (!pesoBruto) {
+                    alert('Por favor, ingrese el peso manual.');
+                    mostrarCarga(false);
+                    return;
+                }
+                // Ensure authorization was completed if required
+                if (pasoPesoVirtual.style.display === 'none') {
+                     alert('Por favor, complete el proceso de autorización para el pesaje manual.');
+                     mostrarCarga(false);
+                     return;
+                }
+                formData.append('peso_bruto', pesoBruto);
+                formData.append('tipo_pesaje', 'virtual'); // Explicitly set type
+                // Add justification if needed by the endpoint
+                formData.append('justificacion', document.getElementById('justificacion').value);
+                endpointUrl = '/pesaje/registrar_peso_virtual'; // Endpoint for virtual registration
 
-            // Comprobar si hay fotos para decidir cómo enviar los datos
-            let hayFotos = false;
+            } else { // tipoPesaje === 'directo' (Báscula)
+                alert('La funcionalidad de Pesaje Directo desde báscula aún no está implementada.');
+                mostrarCarga(false);
+                return;
+            }
+
+            // Agregar las fotos de soporte si existen
             for (let i = 1; i <= 4; i++) {
                 if (fotosSoporte[`foto${i}`]) {
-                    hayFotos = true;
-                    break;
+                    formData.append(`foto_soporte_${i}`, fotosSoporte[`foto${i}`]);
                 }
             }
-            
-            let response;
-            const tipo = mapTipoPesaje[tipoPesaje];
-            
-            if (hayFotos) {
-                // Usar FormData si hay fotos
-                const formData = new FormData();
-                formData.append('codigo_guia', '{{ datos.codigo_guia }}');
-                formData.append('peso_bruto', peso);
-                
-                // Agregar las fotos
-                for (let i = 1; i <= 4; i++) {
-                    if (fotosSoporte[`foto${i}`]) {
-                        formData.append(`foto_soporte_${i}`, fotosSoporte[`foto${i}`]);
-                    }
-                }
-                
-                // Usar el endpoint correcto para cada tipo de pesaje - modificamos para usar los endpoints que existen
-                if (tipo === 'directo') {
-                    // Para tipo 'directo', siempre usamos FormData para poder incluir archivos
-                    const formData = new FormData();
-                    formData.append('codigo_guia', '{{ datos.codigo_guia }}');
-                    formData.append('peso_bruto', peso);
-                    
-                    // Agregar fotos de soporte si existen
-                    if (fotosSoporte) {
-                        for (let i = 1; i <= Object.keys(fotosSoporte).length; i++) {
-                            if (fotosSoporte[`foto${i}`]) {
-                                formData.append(`foto_soporte_${i}`, fotosSoporte[`foto${i}`]);
-                            }
-                        }
-                    }
-                    
-                    // Agregar foto de báscula si existe
-                    if (fotoBascula) {
-                        formData.append('foto_bascula', fotoBascula);
-                    }
-                    
-                    response = await fetch('/pesaje/registrar_peso_directo', {
-                        method: 'POST',
-                        body: formData
-                    });
-                } else if (tipo === 'virtual') {
-                    response = await fetch('/pesaje/registrar_peso_virtual', {
-                        method: 'POST',
-                        body: formData
-                    });
-                } else {
-                    // Para 'bascula' u otros tipos futuros
-                    response = await fetch(`/pesaje/registrar_peso_${tipo}`, {
-                        method: 'POST',
-                        body: formData
-                    });
-                }
-            } else {
-                // Si no hay fotos, usamos FormData simple para todos los tipos
-                const formData = new FormData();
-                formData.append('codigo_guia', '{{ datos.codigo_guia }}');
-                formData.append('peso_bruto', peso);
-                
-                response = await fetch(`/pesaje/registrar_peso_${tipo}`, {
-                    method: 'POST',
-                    body: formData
-                });
-            }
-            
+
+            // Realizar la solicitud fetch
+            const response = await fetch(endpointUrl, {
+                method: 'POST',
+                body: formData
+            });
+
             const data = await response.json();
+
             if (data.success) {
                 // Redireccionar a la URL proporcionada por el servidor
                 if (data.redirect_url) {
                     window.location.href = data.redirect_url;
-                } else if (data.redirect) {
+                } else if (data.redirect) { // Handle older 'redirect' key if still used
                     window.location.href = data.redirect;
+                } else {
+                    // Fallback or show success message if no redirect provided
+                    alert(data.message || 'Peso registrado correctamente, pero no se proporcionó redirección.');
+                    window.location.href = '/'; // Example fallback redirect
                 }
             } else {
-                alert(data.message);
+                alert(data.message || 'Error al registrar el peso.');
             }
+
         } catch (error) {
             console.error(error);
             alert('Error al procesar el peso: ' + error.message);
@@ -719,9 +692,6 @@ document.addEventListener('DOMContentLoaded', function() {
             // Ocultar el overlay de carga
             mostrarCarga(false);
             // Restaurar el mensaje original del overlay
-            const loadingContent = document.querySelector('.loading-content');
-            const loadingTitle = loadingContent.querySelector('h2');
-            const loadingText = loadingContent.querySelector('p');
             loadingTitle.textContent = 'Procesando validación...';
             loadingText.textContent = 'Por favor espere mientras validamos la foto.';
         }
