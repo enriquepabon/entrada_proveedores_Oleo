@@ -534,8 +534,12 @@ def registrar_peso_virtual():
             return jsonify({'success': False, 'message': 'Faltan datos requeridos: código de guía y peso bruto'}), 400
         
         # Inicializar Utils dentro del contexto de la aplicación
-        utils = Utils(current_app)
-        
+        utils = current_app.config.get('utils', Utils(current_app))
+
+        # Generar timestamp UTC
+        timestamp_utc = get_utc_timestamp_str()
+        logger.info(f"Generado timestamp UTC para pesaje virtual: {timestamp_utc}")
+
         # Obtener datos existentes (si los hay)
         datos_guia = utils.get_datos_guia(codigo_guia) or {}
         
