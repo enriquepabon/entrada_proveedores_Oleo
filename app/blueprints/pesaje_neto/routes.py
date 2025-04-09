@@ -192,7 +192,7 @@ def registrar_peso_neto_directo():
         
         logger.info("Procesando solicitud de registro de peso neto directo")
         
-        # Obtener fecha y hora en zona horaria de Bogotá - REEMPLAZAR
+        # Obtener fecha y hora en zona horaria de Bogotá - REMOVED
         # fecha_actual, hora_actual = get_bogota_datetime()
         timestamp_utc = get_utc_timestamp_str() # USAR UTC
         
@@ -253,8 +253,7 @@ def registrar_peso_neto_directo():
                 cursor.execute("""
                     UPDATE pesajes_neto 
                     SET peso_tara = ?, peso_neto = ?, peso_producto = ?, 
-                        # fecha_pesaje_neto = ?, hora_pesaje_neto = ?, 
-                        timestamp_pesaje_neto_utc = ?, # USAR UTC
+                        timestamp_pesaje_neto_utc = ?,
                         tipo_pesaje_neto = ?, comentarios = ?, respuesta_sap = ?, 
                         peso_bruto = ?
                     WHERE codigo_guia = ?
@@ -262,9 +261,7 @@ def registrar_peso_neto_directo():
                     peso_tara,
                     peso_neto,
                     peso_producto,
-                    # fecha_actual, # Eliminar fecha local
-                    # hora_actual,  # Eliminar hora local
-                    timestamp_utc, # USAR UTC
+                    timestamp_utc,
                     'directo',
                     comentarios,
                     respuesta_sap,
@@ -276,18 +273,15 @@ def registrar_peso_neto_directo():
                 cursor.execute("""
                     INSERT INTO pesajes_neto (
                         codigo_guia, peso_tara, peso_neto, peso_producto, 
-                        # fecha_pesaje_neto, hora_pesaje_neto, tipo_pesaje_neto, 
-                        timestamp_pesaje_neto_utc, tipo_pesaje_neto, # USAR UTC
+                        timestamp_pesaje_neto_utc, tipo_pesaje_neto,
                         comentarios, respuesta_sap, codigo_proveedor, nombre_proveedor, peso_bruto
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     codigo_guia,
                     peso_tara,
                     peso_neto,
                     peso_producto,
-                    # fecha_actual, # Eliminar fecha local
-                    # hora_actual,  # Eliminar hora local
-                    timestamp_utc, # USAR UTC
+                    timestamp_utc,
                     'directo',
                     comentarios,
                     respuesta_sap,
@@ -320,9 +314,7 @@ def registrar_peso_neto_directo():
             'peso_neto': peso_neto,
             'peso_producto': peso_producto,
             'tipo_pesaje_neto': 'directo',
-            # 'fecha_pesaje_neto': fecha_actual, # Eliminar fecha local
-            # 'hora_pesaje_neto': hora_actual,  # Eliminar hora local
-            'timestamp_pesaje_neto_utc': timestamp_utc, # USAR UTC
+            'timestamp_pesaje_neto_utc': timestamp_utc,
             'comentarios_neto': comentarios,
             'respuesta_sap': respuesta_sap,
             'pesaje_neto_completado': True
@@ -435,7 +427,7 @@ def registrar_peso_neto():
         else:
              raise ValueError("El peso bruto no está disponible para calcular el peso neto.")
 
-        # Obtener fecha y hora en zona horaria de Bogotá - REEMPLAZAR
+        # Obtener fecha y hora en zona horaria de Bogotá - REMOVED
         # fecha_actual, hora_actual = get_bogota_datetime()
         timestamp_utc = get_utc_timestamp_str() # USAR UTC
 
@@ -445,8 +437,8 @@ def registrar_peso_neto():
             'peso_tara': peso_tara,
             'peso_neto': peso_neto,
             'peso_producto': peso_producto,
-            # 'fecha_pesaje_neto': fecha_actual, # Eliminar fecha local
-            # 'hora_pesaje_neto': hora_actual,  # Eliminar hora local
+            # 'fecha_pesaje_neto': fecha_actual, # REMOVED local date/time
+            # 'hora_pesaje_neto': hora_actual,  # REMOVED local date/time
             'timestamp_pesaje_neto_utc': timestamp_utc, # USAR UTC
             'tipo_pesaje_neto': data.get('tipo_pesaje_neto', 'formulario'), # Indicar origen
             'comentarios': data.get('comentarios', ''),

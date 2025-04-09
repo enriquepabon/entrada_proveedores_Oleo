@@ -118,24 +118,6 @@
         </div>
     </div>
 
-    <!-- DEBUG: Datos pasados al formulario -->
-    <div id="debug-data-passed" style="display:none; background-color: #f5f5f5; padding: 10px; border-radius: 5px; margin-top: 15px;">
-        <h6>DEBUG - Datos pasados al formulario:</h6>
-        {% if nombre_proveedor is defined %}
-        <p><strong>Nombre del proveedor:</strong> {{ nombre_proveedor }}</p>
-        {% endif %}
-        {% if cantidad_racimos is defined %}
-        <p><strong>Cantidad de racimos:</strong> {{ cantidad_racimos }}</p>
-        {% endif %}
-        {% if codigo_proveedor is defined %}
-        <p><strong>Código del proveedor:</strong> {{ codigo_proveedor }}</p>
-        {% endif %}
-    </div>
-    <script>
-        // Activar solo en desarrollo
-        document.getElementById('debug-data-passed').style.display = 'block';
-    </script>
-
     <form id="main-form" method="POST" action="{{ url_for('clasificacion.registrar_clasificacion') }}" enctype="multipart/form-data" class="needs-validation" novalidate>
         <!-- Loading Overlay -->
         <div id="loadingOverlay" class="loading-overlay">
@@ -313,54 +295,14 @@
         </div>
 
         <!-- Sección de Resultados -->
-        <div class="classification-section">
-            <h5 class="card-header mb-3">Resultados</h5>
-            <div class="row">
-                <div class="col-md-6">
-                    <div class="card mb-3">
-                        <div class="card-header">
-                            <h6 class="mb-0">Resultados Automáticos</h6>
-                        </div>
-                        <div class="card-body">
-                            <div id="resultados-automaticos">
-                                <p>Los resultados se mostrarán aquí después de procesar las imágenes.</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="card mb-3">
-                        <div class="card-header">
-                            <h6 class="mb-0">Resultados Manuales</h6>
-                        </div>
-                        <div class="card-body">
-                            <div id="resultados-manuales">
-                                <p>Los resultados se mostrarán aquí después de ingresar datos.</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <!-- Eliminada según el plan -->
         
         <!-- Botones de acción -->
         <div class="classification-section">
             <div class="d-flex justify-content-end gap-2 mt-3">
                 <button type="button" id="btn-cancelar" class="btn btn-secondary me-2">Cancelar</button>
-                <button type="submit" id="btn-guardar" class="btn btn-success">Procesar Clasificación</button>
-                <!-- Botón de prueba para depuración -->
-                <button type="button" id="btn-debug" class="btn btn-info">Test Redirect</button>
-                
-                <!-- Formulario alternativo para envío directo -->
-                <form id="direct-form" action="{{ url_for('clasificacion.registrar_clasificacion_api') }}" method="post" enctype="multipart/form-data" class="d-none">
-                    <input type="hidden" name="codigo_guia" value="{{ codigo_guia }}">
-                    <input type="hidden" id="direct-verdes" name="verdes" value="0">
-                    <input type="hidden" id="direct-sobremaduros" name="sobremaduros" value="0"> 
-                    <input type="hidden" id="direct-dano_corona" name="dano_corona" value="0">
-                    <input type="hidden" id="direct-pedunculo_largo" name="pedunculo_largo" value="0">
-                    <input type="hidden" id="direct-podridos" name="podridos" value="0">
-                    <button type="submit" id="direct-submit" class="btn btn-primary">Enviar Directo</button>
-                </form>
+                <button type="submit" id="btn-guardar" class="btn btn-success">Guardar Fotos y Clasificación Manual</button>
+                <!-- Botones de prueba eliminados -->
             </div>
         </div>
     </form>
@@ -384,11 +326,8 @@
     document.addEventListener("DOMContentLoaded", function() {
         // Referencias a elementos
         const loadingOverlay = document.getElementById('loadingOverlay');
-        const btnProcesar = document.getElementById('btn-procesar');
         const btnGuardar = document.getElementById('btn-guardar');
         const btnCancelar = document.getElementById('btn-cancelar');
-        const checkAutomatica = document.getElementById('clasificacionAutomatica');
-        const checkManual = document.getElementById('clasificacionManual');
         
         // Botones y elementos de cámara para cada foto
         for (let i = 1; i <= 3; i++) {
@@ -404,7 +343,8 @@
             let stream = null;
             
             // Evento para abrir la cámara
-            btnCamara.addEventListener('click', async () => {
+            btnCamara.addEventListener('click', async (event) => {
+                event.preventDefault(); // Prevenir comportamiento por defecto (redirección)
                 try {
                     stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
                     video.srcObject = stream;
@@ -419,7 +359,8 @@
             });
             
             // Evento para capturar foto
-            btnCapturar.addEventListener('click', () => {
+            btnCapturar.addEventListener('click', (event) => {
+                event.preventDefault(); // Prevenir si estuviera dentro de un form
                 const canvas = document.createElement('canvas');
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
@@ -457,7 +398,8 @@
             });
             
             // Evento para retomar foto
-            btnRetomar.addEventListener('click', () => {
+            btnRetomar.addEventListener('click', (event) => {
+                event.preventDefault(); // Prevenir si estuviera dentro de un form
                 preview.classList.add('d-none');
                 btnRetomar.classList.add('d-none');
                 btnCamara.classList.remove('d-none');
@@ -489,165 +431,6 @@
                 }
             });
         }
-        
-        // Procesar imágenes (clasificación automática)
-        btnProcesar.addEventListener('click', () => {
-            const fotos = [];
-            let fotosValidas = true;
-            
-            for (let i = 1; i <= 3; i++) {
-                const fileInput = document.getElementById(`foto-${i}`);
-                if (fileInput.files && fileInput.files[0]) {
-                    fotos.push(fileInput.files[0]);
-                } else {
-                    fotosValidas = false;
-                    break;
-                }
-            }
-            
-            if (!fotosValidas) {
-                alert("Por favor, capture o seleccione todas las fotos antes de procesar.");
-                return;
-            }
-            
-            // Mostrar overlay de carga
-            loadingOverlay.style.display = 'flex';
-            
-            // Preparar formulario para envío
-            const formData = new FormData();
-            formData.append('codigo_guia', document.getElementById('codigo_guia').value);
-            
-            fotos.forEach((foto, index) => {
-                formData.append(`foto-${index + 1}`, foto);
-            });
-            
-            // Enviar al servidor para procesamiento
-            fetch('/clasificacion/procesar_automatico', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                // Ocultar overlay
-                loadingOverlay.style.display = 'none';
-                
-                if (data.success) {
-                    // Mostrar resultados
-                    document.getElementById('resultados-automaticos').innerHTML = `
-                        <p><strong>Verdes:</strong> ${data.resultados.verdes || '0'}</p>
-                        <p><strong>Sobremaduros:</strong> ${data.resultados.sobremaduros || '0'}</p>
-                        <p><strong>Daño Corona:</strong> ${data.resultados.dano_corona || '0'}</p>
-                        <p><strong>Pedúnculo Largo:</strong> ${data.resultados.pedunculo_largo || '0'}</p>
-                    `;
-                    
-                    // Opcionalmente, llenar los campos manuales con estos valores
-                    document.getElementById('verdes').value = data.resultados.verdes || '';
-                    document.getElementById('sobremaduros').value = data.resultados.sobremaduros || '';
-                    document.getElementById('dano_corona').value = data.resultados.dano_corona || '';
-                    document.getElementById('pedunculo_largo').value = data.resultados.pedunculo_largo || '';
-                } else {
-                    alert("Error en la clasificación automática: " + (data.message || "Error desconocido"));
-                }
-            })
-            .catch(error => {
-                loadingOverlay.style.display = 'none';
-                console.error('Error:', error);
-                alert("Error en la clasificación automática. Por favor, intente de nuevo.");
-            });
-        });
-        
-        // Guardar clasificación
-        btnGuardar.addEventListener('click', () => {
-            const codigoGuia = document.getElementById('codigo_guia').value;
-            const verdes = document.getElementById('verdes').value;
-            const sobremaduros = document.getElementById('sobremaduros').value;
-            const danoCorona = document.getElementById('dano_corona').value;
-            const pedunculoLargo = document.getElementById('pedunculo_largo').value;
-            const podridos = document.getElementById('podridos').value;
-            
-            if (!verdes && !sobremaduros) {
-                alert("Por favor, ingrese al menos los valores de racimos verdes y sobremaduros.");
-                return;
-            }
-            
-            // Mostrar overlay de carga
-            loadingOverlay.style.display = 'flex';
-            
-            // Preparar datos para envío
-            const formData = new FormData();
-            formData.append('codigo_guia', codigoGuia);
-            formData.append('verdes', verdes || '0');
-            formData.append('sobremaduros', sobremaduros || '0');
-            formData.append('dano_corona', danoCorona || '0');
-            formData.append('pedunculo_largo', pedunculoLargo || '0');
-            formData.append('podridos', podridos || '0');
-            
-            // Verificar y añadir las fotos
-            let hayFotos = false;
-            for (let i = 1; i <= 3; i++) {
-                const fileInput = document.getElementById(`foto-${i}`);
-                console.log(`Verificando foto ${i}:`, fileInput.files);
-                
-                if (fileInput.files && fileInput.files[0]) {
-                    const file = fileInput.files[0];
-                    console.log(`Añadiendo foto ${i}:`, file.name, file.size, file.type);
-                    formData.append(`foto-${i}`, file);
-                    hayFotos = true;
-                }
-            }
-            
-            if (!hayFotos) {
-                console.warn("No se encontraron archivos de fotos para enviar");
-            }
-            
-            // Mostrar todos los datos que se enviarán
-            console.log("Datos a enviar:");
-            for (let pair of formData.entries()) {
-                console.log(pair[0], pair[1]);
-            }
-            
-            // Enviar al servidor
-            fetch('/clasificacion/registrar_clasificacion', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => {
-                console.log("Estado de la respuesta:", response.status);
-                console.log("Headers de la respuesta:", response.headers);
-                
-                // Intentar obtener la redirección directamente si la respuesta es una redirección
-                if (response.redirected) {
-                    console.log("Redirección detectada:", response.url);
-                    window.location.href = response.url;
-                    return null; // No continuar con el procesamiento JSON
-                }
-                
-                return response.json().catch(e => {
-                    // Si no es JSON, manejar el error
-                    console.error("Error al parsear respuesta JSON:", e);
-                    return { success: false, message: "Error en la respuesta del servidor" };
-                });
-            })
-            .then(data => {
-                if (!data) return; // Si ya manejamos la redirección, salir
-                
-                loadingOverlay.style.display = 'none';
-                console.log("Respuesta del servidor:", data);
-                
-                if (data.success) {
-                    alert("Clasificación guardada correctamente");
-                    // Redirigir a la página de resultados
-                    window.location.href = data.redirect_url;
-                } else {
-                    alert("Error al guardar la clasificación: " + (data.message || "Error desconocido"));
-                }
-            })
-            .catch(error => {
-                loadingOverlay.style.display = 'none';
-                console.error('Error en la petición:', error);
-                alert("Error al guardar la clasificación. Por favor, intente de nuevo.");
-            });
-        });
         
         // Cancelar y volver a la página anterior
         btnCancelar.addEventListener('click', () => {
@@ -685,49 +468,48 @@
                 console.log("Podridos:", document.getElementById('podridos').value);
             }
             
-            // Continuar con el envío
-            this.submit();
+            // --- Mover la confirmación y preparación aquí --- 
+            if (confirm('¿Está seguro de guardar la clasificación manual y las fotos?')) {
+                // Asegurarse de que los valores numéricos vacíos se conviertan a cero antes de enviar
+                document.getElementById('verdes').value = document.getElementById('verdes').value || "0";
+                document.getElementById('sobremaduros').value = document.getElementById('sobremaduros').value || "0";
+                document.getElementById('dano_corona').value = document.getElementById('dano_corona').value || "0";
+                document.getElementById('pedunculo_largo').value = document.getElementById('pedunculo_largo').value || "0";
+                document.getElementById('podridos').value = document.getElementById('podridos').value || "0";
+                
+                // Mostrar los valores que se van a enviar (opcional, para debug)
+                console.log("Valores manuales a enviar:", { 
+                    verdes: document.getElementById('verdes').value,
+                    sobremaduros: document.getElementById('sobremaduros').value,
+                    dano_corona: document.getElementById('dano_corona').value,
+                    pedunculo_largo: document.getElementById('pedunculo_largo').value,
+                    podridos: document.getElementById('podridos').value
+                });
+                console.log("Archivos a enviar:", {
+                    foto1: document.getElementById('foto-1').files.length > 0 ? document.getElementById('foto-1').files[0].name : 'Ninguno',
+                    foto2: document.getElementById('foto-2').files.length > 0 ? document.getElementById('foto-2').files[0].name : 'Ninguno',
+                    foto3: document.getElementById('foto-3').files.length > 0 ? document.getElementById('foto-3').files[0].name : 'Ninguno',
+                });
+
+                // Si confirma, permitir que el evento submit continúe su curso natural
+                // NO llamar a this.submit() aquí, simplemente no prevenir el default.
+            } else {
+                 // Si cancela, prevenir el envío
+                console.log("Envío cancelado por el usuario.");
+                // No es necesario llamar a preventDefault aquí explícitamente
+                // porque ya se llamó al inicio del handler. 
+                // PERO, para mayor claridad, podríamos quitar el preventDefault() inicial
+                // y ponerlo solo aquí. Vamos a probar así:
+                // Quitamos el e.preventDefault() inicial y lo ponemos aquí.
+                // e.preventDefault(); // <-- Si se cancela, sí prevenimos.
+                // *** REVISIÓN: Mejor dejar el preventDefault() al inicio y NO hacer nada más aquí si cancela.
+                // El flujo se detendrá porque no se continúa.
+            }
+            // --- FIN de la lógica movida ---
         });
     });
 
     document.addEventListener('DOMContentLoaded', function() {
-        // Manejo de checkboxes para mostrar/ocultar secciones
-        const checkAutomatica = document.getElementById('clasificacionAutomatica');
-        const checkManual = document.getElementById('clasificacionManual');
-        const seccionFotos = document.getElementById('seccionFotos');
-        const seccionClasificacionManual = document.getElementById('seccionClasificacionManual');
-        const alerta = document.getElementById('clasificacionAlerta');
-        
-        function actualizarSecciones() {
-            // Mostrar/ocultar sección de fotos
-            if (checkAutomatica.checked) {
-                seccionFotos.classList.remove('d-none');
-            } else {
-                seccionFotos.classList.add('d-none');
-            }
-            
-            // Mostrar/ocultar sección de clasificación manual
-            if (checkManual.checked) {
-                seccionClasificacionManual.classList.remove('d-none');
-            } else {
-                seccionClasificacionManual.classList.add('d-none');
-            }
-            
-            // Mostrar/ocultar alerta si ningún checkbox está seleccionado
-            if (!checkAutomatica.checked && !checkManual.checked) {
-                alerta.classList.remove('d-none');
-            } else {
-                alerta.classList.add('d-none');
-            }
-        }
-        
-        // Inicializar estado de secciones
-        actualizarSecciones();
-        
-        // Escuchar cambios en los checkboxes
-        checkAutomatica.addEventListener('change', actualizarSecciones);
-        checkManual.addEventListener('change', actualizarSecciones);
-        
         // Manejar el botón Cancelar
         document.getElementById('btn-cancelar').addEventListener('click', function() {
             if (confirm('¿Está seguro de cancelar la clasificación? Los datos no guardados se perderán.')) {
@@ -735,329 +517,46 @@
             }
         });
         
-        // Manejar el botón Procesar Clasificación
-        document.getElementById('btn-guardar').addEventListener('click', function() {
-            // Validar que al menos una clasificación esté seleccionada
+        // Manejar el botón Guardar Fotos y Clasificación Manual
+        document.getElementById('btn-guardar').addEventListener('click', function(event) {
+            // Validar que al menos una clasificación esté seleccionada -> YA NO ES NECESARIO
+            /*
             if (!checkAutomatica.checked && !checkManual.checked) {
                 alerta.classList.remove('d-none');
                 return;
             }
+            */
+           
+            // Prevenir el envío inmediato del formulario para poder hacer la confirmación
+            event.preventDefault();
             
-            // Confirmar antes de procesar
-            if (confirm('¿Está seguro de procesar la clasificación?')) {
-                procesarClasificacion();
+            // Confirmar antes de guardar
+            if (confirm('¿Está seguro de guardar la clasificación manual y las fotos?')) {
+                // Asegurarse de que los valores numéricos vacíos se conviertan a cero antes de enviar
+                document.getElementById('verdes').value = document.getElementById('verdes').value || "0";
+                document.getElementById('sobremaduros').value = document.getElementById('sobremaduros').value || "0";
+                document.getElementById('dano_corona').value = document.getElementById('dano_corona').value || "0";
+                document.getElementById('pedunculo_largo').value = document.getElementById('pedunculo_largo').value || "0";
+                document.getElementById('podridos').value = document.getElementById('podridos').value || "0";
+
+                // Si confirma, enviar el formulario programáticamente
+                document.getElementById('main-form').submit(); 
+                // Originalmente llamaba a procesarClasificacion(), pero ahora queremos el submit directo
+                // procesarClasificacion();
             }
         });
+        
+        /* COMENTADO: La función procesarClasificacion ya no se llama directamente desde el botón guardar
+           y contenía lógica compleja de envío con fetch que no es necesaria ahora.
+           Se deja comentada por si se requiere recuperar alguna parte de su lógica.
         
         async function procesarClasificacion() {
             // Mostrar indicador de carga
-            mostrarCarga(true);
-            console.log('Iniciando proceso de clasificación');
-            
-            try {
-                // Estrategia #1: Envío directo del formulario
-                try {
-                    // Método más simple y directo - enviar el formulario principal
-                    console.log('MÉTODO 1: Intentando submit directo del formulario principal');
-                    
-                    // Verificar si hay imágenes para subir
-                    const hayImagenes = verificarImagenes();
-                    console.log('¿Hay imágenes para subir?', hayImagenes);
-                    
-                    // Transferir datos de formulario manual al formulario principal si es necesario
-                    if (checkManual.checked) {
-                        // Buscar o crear los campos en el formulario principal
-                        const agregarCampoOculto = (id, valor) => {
-                            let input = document.querySelector(`#main-form input[name=${id}]`);
-                            if (!input) {
-                                input = document.createElement('input');
-                                input.type = 'hidden';
-                                input.name = id;
-                                document.getElementById('main-form').appendChild(input);
-                            }
-                            input.value = document.getElementById(id)?.value || valor || '0';
-                        };
-                        
-                        // Agregar campos
-                        agregarCampoOculto('verdes', '0');
-                        agregarCampoOculto('sobremaduros', '0');
-                        agregarCampoOculto('dano_corona', '0');
-                        agregarCampoOculto('pedunculo_largo', '0');
-                        agregarCampoOculto('podridos', '0');
-                        console.log('Campos de clasificación manual transferidos al formulario principal');
-                    }
-                    
-                    // Transferir archivos de imagen al formulario principal si es necesario
-                    if (checkAutomatica.checked && hayImagenes) {
-                        for (let i = 1; i <= 3; i++) {
-                            const fileInput = document.getElementById(`foto-${i}`);
-                            if (fileInput.files.length > 0) {
-                                console.log(`Preparando archivo para foto-${i}:`, fileInput.files[0].name);
-                                
-                                // Verificar si ya existe un input para este archivo en el formulario principal
-                                let inputPrincipal = document.querySelector(`#main-form input[name=foto-${i}]`);
-                                if (!inputPrincipal) {
-                                    // Crear un nuevo input de archivo en el formulario principal
-                                    const dt = new DataTransfer();
-                                    dt.items.add(fileInput.files[0]);
-                                    
-                                    inputPrincipal = document.createElement('input');
-                                    inputPrincipal.type = 'file';
-                                    inputPrincipal.name = `foto-${i}`;
-                                    inputPrincipal.style.display = 'none';
-                                    inputPrincipal.files = dt.files;
-                                    document.getElementById('main-form').appendChild(inputPrincipal);
-                                    console.log(`Input de archivo foto-${i} creado y añadido al formulario principal`);
-                                }
-                            } else {
-                                console.log(`No hay archivo seleccionado para foto-${i}`);
-                            }
-                        }
-                    }
-                    
-                    // Submit directo
-                    console.log('Enviando formulario principal');
-                    document.getElementById('main-form').submit();
-                    return; // Si llega aquí, la navegación ya habrá comenzado
-                } catch (submitError) {
-                    console.error('Error con submit directo:', submitError);
-                    // Continuar con otros métodos
-                }
-                
-                // Estrategia #2: Fetch API con FormData
-                // Crear objeto FormData para enviar datos
-                const formData = new FormData();
-                const codigoGuia = document.getElementById('codigo_guia').value;
-                formData.append('codigo_guia', codigoGuia);
-                console.log('MÉTODO 2: Intentando con Fetch API. Código guía:', codigoGuia);
-                
-                // Agregar datos de clasificación manual si está seleccionada
-                if (checkManual.checked) {
-                    formData.append('verdes', document.getElementById('verdes').value || '0');
-                    formData.append('sobremaduros', document.getElementById('sobremaduros').value || '0');
-                    formData.append('dano_corona', document.getElementById('dano_corona').value || '0');
-                    formData.append('pedunculo_largo', document.getElementById('pedunculo_largo').value || '0');
-                    formData.append('podridos', document.getElementById('podridos').value || '0');
-                    console.log('Datos clasificación manual agregados a FormData');
-                }
-                
-                // Agregar fotos si clasificación automática está seleccionada
-                let fotosAgregadas = 0;
-                if (checkAutomatica.checked) {
-                    for (let i = 1; i <= 3; i++) {
-                        const fileInput = document.getElementById(`foto-${i}`);
-                        if (fileInput.files.length > 0) {
-                            const file = fileInput.files[0];
-                            console.log(`Agregando archivo foto-${i} a FormData:`, file.name, 'tipo:', file.type, 'tamaño:', file.size);
-                            formData.append(`foto-${i}`, file);
-                            fotosAgregadas++;
-                        } else {
-                            console.log(`No hay archivo para foto-${i}`);
-                        }
-                    }
-                    console.log(`${fotosAgregadas} fotos agregadas a FormData`);
-                    
-                    // Verificar el contenido del FormData (solo para depuración)
-                    for (let [key, value] of formData.entries()) {
-                        if (value instanceof File) {
-                            console.log(`FormData contiene: ${key} = File(${value.name}, ${value.type}, ${value.size} bytes)`);
-                        } else {
-                            console.log(`FormData contiene: ${key} = ${value}`);
-                        }
-                    }
-                }
-                
-                // Intentos de envío - primero con fetch, luego con formulario directo
-                try {
-                    // Intentar primero con fetch
-                    console.log('Intentando envío con fetch');
-                    
-                    // URL para enviar
-                    const url = "{{ url_for('clasificacion.registrar_clasificacion') }}";
-                    console.log('Enviando request a:', url);
-                    
-                    // Enviar datos al servidor
-                    const response = await fetch(url, {
-                        method: 'POST',
-                        body: formData
-                    });
-                    
-                    console.log('Respuesta recibida, status:', response.status);
-                    
-                    if (response.redirected) {
-                        console.log('Redirección detectada a:', response.url);
-                        window.location.href = response.url;
-                        return;
-                    }
-                    
-                    // Intentar obtener respuesta como JSON
-                    let data;
-                    try {
-                        data = await response.json();
-                        console.log('Datos de respuesta JSON:', data);
-                    } catch (jsonError) {
-                        console.log('Respuesta no es JSON, procesando como texto');
-                        const text = await response.text();
-                        console.log('Texto de respuesta (primeros 100 caracteres):', text.substring(0, 100));
-                        
-                        // Si la respuesta parece ser HTML, podría ser una redirección
-                        if (text.includes('<!DOCTYPE html>') || text.includes('<html>')) {
-                            console.log('Respuesta parece ser HTML, intentando redirección manual');
-                            window.location.href = `/clasificacion/ver_resultados_clasificacion/${codigoGuia}`;
-                            return;
-                        }
-                        
-                        // Si llegamos aquí, mostrar un mensaje y continuar
-                        console.log('Respuesta no reconocida, continuando con estrategia de redirección');
-                        window.location.href = `/clasificacion/ver_resultados_clasificacion/${codigoGuia}`;
-                        return;
-                    }
-                    
-                    // Ocultar indicador de carga
-                    mostrarCarga(false);
-                    
-                    // Si llegamos aquí, el fetch funcionó
-                    // Procesar la respuesta como antes
-                    if (data && data.success) {
-                        if (data.redirect_url) {
-                            console.log('Redirigiendo a:', data.redirect_url);
-                            try {
-                                // Intentar primero con la URL generada por url_for
-                                window.location.href = data.redirect_url;
-                                
-                                // Si después de 1 segundo seguimos en la misma página, probar con URL directa
-                                setTimeout(function() {
-                                    if (window.location.pathname.includes('/clasificacion/')) {
-                                        console.log('Redirección con redirect_url no funcionó. Probando URL directa.');
-                                        const directUrl = `/clasificacion/ver_resultados_clasificacion/${codigoGuia}`;
-                                        console.log('URL directa:', directUrl);
-                                        window.location.href = directUrl;
-                                    }
-                                }, 1000);
-                            } catch (redirectError) {
-                                console.error('Error en redirección:', redirectError);
-                                // Intentar con URL directa como fallback
-                                window.location.href = `/clasificacion/ver_resultados_clasificacion/${codigoGuia}`;
-                            }
-                        } else {
-                            // No hay información de redirección, usar la URL directa
-                            const directUrl = `/clasificacion/ver_resultados_clasificacion/${codigoGuia}`;
-                            console.log('Usando URL directa para redirección:', directUrl);
-                            window.location.href = directUrl;
-                        }
-                    } else {
-                        // Error en la respuesta JSON
-                        console.error('Error en respuesta JSON:', data);
-                        alert('Error al procesar la clasificación. Por favor, intente nuevamente.');
-                    }
-                } catch (fetchError) {
-                    console.error('Error con fetch API:', fetchError);
-                    // Si falla fetch, intentar con formulario directo
-                    document.getElementById('main-form').submit();
-                }
-            } catch (error) {
-                console.error('Error general:', error);
-                alert('Error al procesar la clasificación');
-                mostrarCarga(false);
-            }
-        }
-        
-        // Función para verificar si hay imágenes seleccionadas
-        function verificarImagenes() {
-            let hayImagenes = false;
-            for (let i = 1; i <= 3; i++) {
-                const fileInput = document.getElementById(`foto-${i}`);
-                if (fileInput && fileInput.files && fileInput.files.length > 0) {
-                    hayImagenes = true;
-                    console.log(`Imagen ${i} seleccionada:`, fileInput.files[0].name);
-                }
+// ... existing code ...
             }
             return hayImagenes;
         }
-
-        // Test URL generation
-        document.addEventListener('DOMContentLoaded', function() {
-            const codigoGuia = document.getElementById('codigo_guia').value;
-            console.log('Current codigo_guia:', codigoGuia);
-            
-            // Test URL construction
-            const testUrl = `/clasificacion/ver_resultados_clasificacion/${codigoGuia}`;
-            console.log('Test URL for redirection:', testUrl);
-            
-            // Add event listener to the save button for additional debugging
-            document.getElementById('btn-guardar').addEventListener('click', function() {
-                console.log('Procesar Clasificación button clicked');
-            });
-            
-            // Add event listener for debug button
-            document.getElementById('btn-debug').addEventListener('click', function() {
-                console.log('Debug button clicked');
-                const codigo = document.getElementById('codigo_guia').value;
-                
-                // First try the debug route
-                fetch(`/clasificacion/debug_redirect/${codigo}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        console.log('Debug route response:', data);
-                        alert(`Debug info:\nRedirect URL: ${data.redirect_url}\nDirect URL: ${data.direct_url}`);
-                        
-                        // Try direct navigation
-                        if (confirm('¿Intentar navegar a la página de resultados?')) {
-                            window.location.href = data.redirect_url;
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error with debug route:', error);
-                        alert('Error with debug route: ' + error);
-                    });
-            });
-
-            // Add event listener for debug button
-            document.getElementById('btn-debug').addEventListener('click', function() {
-                console.log('Debug button clicked');
-                const codigo = document.getElementById('codigo_guia').value;
-                
-                // First try the debug route
-                fetch(`/clasificacion/debug_redirect/${codigo}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        console.log('Debug route response:', data);
-                        alert(`Debug info:\nRedirect URL: ${data.redirect_url}\nDirect URL: ${data.direct_url}`);
-                        
-                        // Try direct navigation
-                        if (confirm('¿Intentar navegar a la página de resultados?')) {
-                            window.location.href = data.redirect_url;
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error with debug route:', error);
-                        alert('Error with debug route: ' + error);
-                    });
-            });
-            
-            // Alternate method using standard form submission
-            function usarFormularioDirecto() {
-                // Get values from original form
-                if (document.getElementById('verdes')) {
-                    document.getElementById('direct-verdes').value = document.getElementById('verdes').value || '0';
-                    document.getElementById('direct-sobremaduros').value = document.getElementById('sobremaduros').value || '0';
-                    document.getElementById('direct-dano_corona').value = document.getElementById('dano_corona').value || '0';
-                    document.getElementById('direct-pedunculo_largo').value = document.getElementById('pedunculo_largo').value || '0';
-                    document.getElementById('direct-podridos').value = document.getElementById('podridos').value || '0';
-                }
-                
-                // Submit the direct form
-                document.getElementById('direct-form').classList.remove('d-none');
-                document.getElementById('direct-submit').click();
-            }
-            
-            // Add failsafe to process button
-            document.getElementById('btn-guardar').addEventListener('dblclick', function(event) {
-                event.preventDefault();
-                console.log('Double-click on process button - using direct form');
-                usarFormularioDirecto();
-            });
-        });
+        */
     });
 </script>
 {% endblock %} 

@@ -163,11 +163,25 @@ class CommonUtils:
                 SELECT 
                     e.*, 
                     pb.peso_bruto, pb.timestamp_pesaje_utc, pb.tipo_pesaje, pb.codigo_guia_transporte_sap, 
-                    c.fecha_clasificacion, c.hora_clasificacion, c.clasificacion_manual, c.clasificacion_automatica,
+                    c.timestamp_clasificacion_utc, 
+                    c.clasificacion_manual_json, 
+                    c.clasificacion_automatica_json,
+                    c.verde_manual, 
+                    c.sobremaduro_manual, 
+                    c.danio_corona_manual, 
+                    c.pendunculo_largo_manual, 
+                    c.podrido_manual, 
+                    c.verde_automatico,
+                    c.sobremaduro_automatico,
+                    c.danio_corona_automatico,
+                    c.pendunculo_largo_automatico,
+                    c.podrido_automatico,
+                    c.total_racimos_detectados,
+                    c.clasificacion_consolidada,
                     pn.peso_tara, pn.peso_neto, pn.peso_producto, 
-                    pn.fecha_pesaje as fecha_pesaje_neto_db, pn.hora_pesaje as hora_pesaje_neto_db,
+                    pn.timestamp_pesaje_neto_utc,
                     pn.tipo_pesaje_neto, pn.comentarios as comentarios_neto, pn.respuesta_sap,
-                    s.fecha_salida, s.hora_salida, s.comentarios_salida
+                    s.timestamp_salida_utc, s.comentarios_salida
                 FROM entry_records e
                 LEFT JOIN pesajes_bruto pb ON e.codigo_guia = pb.codigo_guia
                 LEFT JOIN clasificaciones c ON e.codigo_guia = c.codigo_guia
@@ -177,82 +191,33 @@ class CommonUtils:
             """
             
             cursor.execute(query, (codigo_guia,))
-            row = cursor.fetchone()
+            result = cursor.fetchone()
 
-            if not row:
+            # Log the raw database result
+            logger.info(f"--- get_datos_guia DB Raw Result for {codigo_guia}: {result} ---")
+            if result:
+                 logger.info(f"--- Raw Result Keys: {result.keys()} ---")
+                 # Explicitly log the timestamp value from the raw result
+                 try:
+                     raw_timestamp = result['timestamp_clasificacion_utc']
+                     logger.info(f"--- Raw Result timestamp_clasificacion_utc: {raw_timestamp} (Type: {type(raw_timestamp)}) ---")
+                 except IndexError:
+                     logger.warning("--- Column 'timestamp_clasificacion_utc' not found in raw DB result keys! Check SQL Query. ---")
+
+            if not result:
                 logger.warning(f"No entry_record found for codigo_guia: {codigo_guia}")
+                # Close connection before returning None
+                if conn:
+                    conn.close()
                 return None
 
-            # Log raw timestamp values retrieved from DB
-            logger.debug(f"Raw data for {codigo_guia} from DB - fecha_clasificacion: {row['fecha_clasificacion']}, hora_clasificacion: {row['hora_clasificacion']}")
-            logger.debug(f"Raw data for {codigo_guia} from DB - fecha_pesaje_neto_db: {row['fecha_pesaje_neto_db']}, hora_pesaje_neto_db: {row['hora_pesaje_neto_db']}")
-            
-            # Convert the row to a dictionary
-            datos_guia = dict(row)
-            logger.info(f"Datos combinados obtenidos para guía {codigo_guia}")
+            # Convert Row object to a mutable dictionary
+            datos_guia = dict(result)
+            # Log after conversion to dict
+            logger.info(f"--- get_datos_guia Dict Conversion for {codigo_guia}: {datos_guia} ---")
+            logger.info(f"--- Dict timestamp_clasificacion_utc after conversion: {datos_guia.get('timestamp_clasificacion_utc')} ---")
 
-            # --- Timezone Conversion --- 
-            # Process entry record timestamp
-            # TODO (Plan Timestamps): Mover la conversión de zona horaria a la capa de vista/plantilla.
-            # Esta conversión está aquí temporalmente por compatibilidad con plantillas existentes.
-            # Ref: REFACTORING_PLAN.md
-            ts_registro_utc_str = datos_guia.get('timestamp_registro_utc')
-            fecha_registro_bogota = None
-            hora_registro_bogota = None
-            if ts_registro_utc_str:
-                try:
-                    # Parse the UTC timestamp string
-                    dt_utc = datetime.strptime(ts_registro_utc_str, "%Y-%m-%d %H:%M:%S")
-                    # Make it timezone aware (UTC)
-                    dt_utc = UTC.localize(dt_utc)
-                    # Convert to Bogota timezone
-                    dt_bogota = dt_utc.astimezone(BOGOTA_TZ)
-                    # Format into separate date and time strings
-                    fecha_registro_bogota = dt_bogota.strftime('%d/%m/%Y')
-                    hora_registro_bogota = dt_bogota.strftime('%H:%M:%S')
-                except ValueError as e:
-                    logger.warning(f"Could not parse timestamp_registro_utc '{ts_registro_utc_str}' for {codigo_guia}: {e}")
-            # Assign converted values (or None if parsing failed) back for compatibility
-            datos_guia['fecha_registro'] = fecha_registro_bogota
-            datos_guia['hora_registro'] = hora_registro_bogota
-            
-            # Process pesaje_bruto timestamp
-            # TODO (Plan Timestamps): Mover la conversión de zona horaria a la capa de vista/plantilla.
-            # Esta conversión está aquí temporalmente por compatibilidad con plantillas existentes.
-            # Ref: REFACTORING_PLAN.md
-            ts_pesaje_utc_str = datos_guia.get('timestamp_pesaje_utc')
-            fecha_pesaje_bogota = None
-            hora_pesaje_bogota = None
-            if ts_pesaje_utc_str:
-                try:
-                    # Parse the UTC timestamp string
-                    dt_utc = datetime.strptime(ts_pesaje_utc_str, "%Y-%m-%d %H:%M:%S")
-                    # Make it timezone aware (UTC)
-                    dt_utc = UTC.localize(dt_utc)
-                    # Convert to Bogota timezone
-                    dt_bogota = dt_utc.astimezone(BOGOTA_TZ)
-                    # Format into separate date and time strings
-                    fecha_pesaje_bogota = dt_bogota.strftime('%d/%m/%Y')
-                    hora_pesaje_bogota = dt_bogota.strftime('%H:%M:%S')
-                except ValueError as e:
-                    logger.warning(f"Could not parse timestamp_pesaje_utc '{ts_pesaje_utc_str}' for {codigo_guia}: {e}")
-            # Assign converted values (or None if parsing failed) back for compatibility
-            datos_guia['fecha_pesaje'] = fecha_pesaje_bogota
-            datos_guia['hora_pesaje'] = hora_pesaje_bogota
-            
-            # TODO (Plan Timestamps): Revisar y mover la conversión de zona horaria para clasificacion, pesaje_neto, salida.
-            datos_guia['fecha_clasificacion'], datos_guia['hora_clasificacion'] = format_datetime_bogota(
-                datos_guia.get('fecha_clasificacion'), datos_guia.get('hora_clasificacion')
-            )
-            datos_guia['fecha_pesaje_neto'], datos_guia['hora_pesaje_neto'] = format_datetime_bogota(
-                datos_guia.get('fecha_pesaje_neto_db'), datos_guia.get('hora_pesaje_neto_db')
-            )
-            datos_guia['fecha_salida'], datos_guia['hora_salida'] = format_datetime_bogota(
-                datos_guia.get('fecha_salida'), datos_guia.get('hora_salida')
-            )
-            # --- End Timezone Conversion ---
-
-            # --- Data Cleaning and Structuring ---
+            # --- Data Cleaning and Structuring --- 
             
             # Ensure provider fields are present and consistent
             datos_guia['codigo_proveedor'] = datos_guia.get('codigo_proveedor') or datos_guia.get('codigo') or (codigo_guia.split('_')[0] if '_' in codigo_guia else codigo_guia)
@@ -269,35 +234,58 @@ class CommonUtils:
             datos_guia['peso_tara'] = datos_guia.get('peso_tara')
             datos_guia['peso_neto'] = datos_guia.get('peso_neto')
             datos_guia['peso_producto'] = datos_guia.get('peso_producto')
-            datos_guia['fecha_pesaje_neto'] = datos_guia.get('fecha_pesaje_neto_db') # Use corrected alias
-            datos_guia['hora_pesaje_neto'] = datos_guia.get('hora_pesaje_neto_db') # Use corrected alias
             datos_guia['tipo_pesaje_neto'] = datos_guia.get('tipo_pesaje_neto')
             datos_guia['comentarios_neto'] = datos_guia.get('comentarios_neto')
             datos_guia['respuesta_sap'] = datos_guia.get('respuesta_sap')
 
-            datos_guia['fecha_salida'] = datos_guia.get('fecha_salida')
-            datos_guia['hora_salida'] = datos_guia.get('hora_salida')
-            # datos_guia['nota_salida'] = datos_guia.get('nota_salida') # Comment out attempt to access potentially non-existent key
             datos_guia['comentarios_salida'] = datos_guia.get('comentarios_salida')
 
-            # Process classification data (manual)
-            manual_data_str = datos_guia.get('clasificacion_manual')
-            manual_data = None
-            if manual_data_str:
+            # --- Procesar datos de clasificación manual --- 
+            clasif_manual_dict = {}
+            try:
+                # 1. Intentar leer desde la columna JSON
+                manual_json_str = datos_guia.get('clasificacion_manual_json')
+                if manual_json_str:
+                    logger.debug(f"Procesando clasificacion_manual_json para {codigo_guia}: {manual_json_str}")
+                    clasif_manual_dict = json.loads(manual_json_str)
+                else:
+                    logger.debug(f"Columna clasificacion_manual_json vacía para {codigo_guia}. Intentando columnas individuales.")
+                    # 2. Si JSON está vacío, intentar leer de columnas individuales (como respaldo)
+                    clasif_manual_dict = {
+                        'verdes': datos_guia.get('verde_manual'),
+                        'sobremaduros': datos_guia.get('sobremaduro_manual'),
+                        'danio_corona': datos_guia.get('danio_corona_manual'),
+                        'pedunculo_largo': datos_guia.get('pendunculo_largo_manual'),
+                        'podridos': datos_guia.get('podrido_manual')
+                    }
+                    # Filtrar valores None si se leyeron de columnas individuales
+                    clasif_manual_dict = {k: v for k, v in clasif_manual_dict.items() if v is not None}
+            except json.JSONDecodeError as json_err:
+                logger.error(f"Error decodificando clasificacion_manual_json para {codigo_guia}: {json_err}. Contenido: {manual_json_str}")
+                clasif_manual_dict = {} # Dejar vacío si hay error
+            except Exception as e:
+                 logger.error(f"Error inesperado procesando clasificación manual para {codigo_guia}: {e}")
+                 clasif_manual_dict = {}
+            
+            # Asegurar que el diccionario final exista y tenga las claves esperadas (con None si falta)
+            final_manual = {}
+            claves_esperadas = ['verdes', 'sobremaduros', 'danio_corona', 'pedunculo_largo', 'podridos']
+            for clave in claves_esperadas:
+                # Usar .get() para evitar KeyError si la clave no existe en clasif_manual_dict
+                valor = clasif_manual_dict.get(clave)
                 try:
-                    manual_data = json.loads(manual_data_str)
-                except json.JSONDecodeError:
-                    manual_data = {}
-            datos_guia['clasificacion_manual'] = {
-                'verde': manual_data.get('verdes') if manual_data else None,
-                'sobremaduro': manual_data.get('sobremaduros') if manual_data else None,
-                'danio_corona': manual_data.get('danio_corona') if manual_data else None,
-                'pendunculo_largo': manual_data.get('pendunculo_largo') if manual_data else None,
-                'podrido': manual_data.get('podridos') if manual_data else None
-            }
+                    # Intentar convertir a float, manejar None o string vacío
+                    final_manual[clave] = float(valor) if valor is not None and str(valor).strip() != '' else 0.0
+                except (ValueError, TypeError):
+                    logger.warning(f"No se pudo convertir el valor '{valor}' para '{clave}' a float en guía {codigo_guia}. Usando 0.0.")
+                    final_manual[clave] = 0.0 # Usar 0.0 si la conversión falla
+                    
+            datos_guia['clasificacion_manual'] = final_manual
+            logger.info(f"Clasificación manual procesada para {codigo_guia}: {datos_guia['clasificacion_manual']}")
+            # --- Fin Procesar datos de clasificación manual --- 
 
             # Process classification data (automatic)
-            auto_data_str = datos_guia.get('clasificacion_automatica')
+            auto_data_str = datos_guia.get('clasificacion_automatica_json')
             auto_data = None
             if auto_data_str:
                 try:
@@ -311,9 +299,52 @@ class CommonUtils:
                 'pendunculo_largo': auto_data.get('pendunculo_largo', {}).get('porcentaje') if auto_data else None,
                 'podrido': auto_data.get('podridos', {}).get('porcentaje') if auto_data else None
             }
-            # Add classification date/time if available
-            datos_guia['fecha_clasificacion'] = datos_guia.get('fecha_clasificacion')
-            datos_guia['hora_clasificacion'] = datos_guia.get('hora_clasificacion')
+            
+            # --- Convert Timestamps to Local Time (Bogota) ---
+            timestamp_fields = {
+                'registro': 'timestamp_registro_utc',
+                'pesaje': 'timestamp_pesaje_utc',
+                'clasificacion': 'timestamp_clasificacion_utc',
+                'pesaje_neto': 'timestamp_pesaje_neto_utc',
+                'salida': 'timestamp_salida_utc'
+            }
+            
+            for step, utc_field in timestamp_fields.items():
+                utc_timestamp_str = datos_guia.get(utc_field)
+                fecha_local = 'N/A'
+                hora_local = ''
+                
+                if utc_timestamp_str:
+                    try:
+                        # Parse the UTC timestamp string (assuming YYYY-MM-DD HH:MM:SS)
+                        utc_dt = UTC.localize(datetime.strptime(utc_timestamp_str, '%Y-%m-%d %H:%M:%S'))
+                        # Convert to Bogota timezone
+                        bogota_dt = utc_dt.astimezone(BOGOTA_TZ)
+                        # Format
+                        fecha_local = bogota_dt.strftime('%d/%m/%Y')
+                        hora_local = bogota_dt.strftime('%H:%M:%S')
+                    except (ValueError, TypeError) as e:
+                        logger.error(f"Error converting/formatting {utc_field} ('{utc_timestamp_str}') for {codigo_guia}: {e}")
+                        # Attempt fallback if format is DD/MM/YYYY HH:MM:SS
+                        try:
+                            naive_dt = datetime.strptime(utc_timestamp_str, '%d/%m/%Y %H:%M:%S')
+                            utc_dt = UTC.localize(naive_dt) # Assume it was UTC
+                            bogota_dt = utc_dt.astimezone(BOGOTA_TZ)
+                            fecha_local = bogota_dt.strftime('%d/%m/%Y')
+                            hora_local = bogota_dt.strftime('%H:%M:%S')
+                        except Exception:
+                            # Keep defaults if fallback also fails
+                            logger.warning(f"Fallback parsing failed for {utc_field} ('{utc_timestamp_str}')")
+                            fecha_local = 'Formato inválido'
+                            hora_local = ''
+                
+                # Assign formatted date/time to the dictionary
+                datos_guia[f'fecha_{step}'] = fecha_local
+                datos_guia[f'hora_{step}'] = hora_local
+
+            # --- Determine Current Status and Next Step --- 
+            estado_actual = 'pendiente'
+            siguiente_paso = 'entrada' # Default start
             
             # Final check for essential fields, setting defaults if needed
             essential_fields = ['placa', 'transportador', 'acarreo', 'cargo']
@@ -321,10 +352,10 @@ class CommonUtils:
                 if not datos_guia.get(field):
                     datos_guia[field] = 'No disponible'
             
-            # Log the final combined data for debugging
-            # Be careful logging potentially sensitive data in production
-            # logger.debug(f"Final combined datos_guia for {codigo_guia}: {datos_guia}")
-
+            # Log the final dictionary before returning
+            logger.info(f"--- get_datos_guia Final Dict Before Return for {codigo_guia}: {datos_guia} ---")
+            logger.info(f"--- Final Dict timestamp_clasificacion_utc before return: {datos_guia.get('timestamp_clasificacion_utc')} ---")
+            
             return datos_guia
 
         except KeyError as ke:

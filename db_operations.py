@@ -318,105 +318,101 @@ def store_clasificacion(clasificacion_data, fotos=None):
     """
     conn = None
     try:
+        logger.info(f"--- store_clasificacion called with data: {clasificacion_data} ---")
+        
         db_path = current_app.config['TIQUETES_DB_PATH']
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
-        
-        # Preparar datos de clasificación manual y automática
-        datos_a_guardar = {
-            'codigo_guia': clasificacion_data.get('codigo_guia'),
-            'codigo_proveedor': clasificacion_data.get('codigo_proveedor'),
-            'nombre_proveedor': clasificacion_data.get('nombre_proveedor'),
-            # 'fecha_clasificacion': clasificacion_data.get('fecha_clasificacion'), # Eliminar fecha local
-            # 'hora_clasificacion': clasificacion_data.get('hora_clasificacion'),   # Eliminar hora local
-            'timestamp_clasificacion_utc': clasificacion_data.get('timestamp_clasificacion_utc'), # Añadir timestamp UTC
-            'observaciones': clasificacion_data.get('observaciones'),
-            'estado': clasificacion_data.get('estado', 'activo'),
-            # Incluir también los campos numéricos si están disponibles
-            'verde_manual': clasificacion_data.get('verdes'), 
-            'sobremaduro_manual': clasificacion_data.get('sobremaduros'),
-            'danio_corona_manual': clasificacion_data.get('dano_corona'),
-            'pendunculo_largo_manual': clasificacion_data.get('pedunculo_largo'),
-            'podrido_manual': clasificacion_data.get('podridos')
-        }
-        
-        # Procesar clasificación manual
-        clasificacion_manual = clasificacion_data.get('clasificacion_manual', {})
-        if isinstance(clasificacion_manual, str):
-            try:
-                clasificacion_manual = json.loads(clasificacion_manual)
-            except json.JSONDecodeError:
-                clasificacion_manual = {}
-        
-        # También procesar campo clasificaciones por compatibilidad
-        clasificaciones = clasificacion_data.get('clasificaciones', {})
-        if isinstance(clasificaciones, str):
-            try:
-                clasificaciones = json.loads(clasificaciones)
-            except json.JSONDecodeError:
-                clasificaciones = {}
-                
-        # Si clasificacion_manual está vacío pero clasificaciones tiene datos, usarlos
-        if not clasificacion_manual and clasificaciones:
-            clasificacion_manual = clasificaciones
-            logger.info(f"Usando datos de 'clasificaciones' como 'clasificacion_manual' para {clasificacion_data.get('codigo_guia')}")
-        
-        # Procesar clasificación automática
-        clasificacion_automatica = clasificacion_data.get('clasificacion_automatica', {})
-        if isinstance(clasificacion_automatica, str):
-            try:
-                clasificacion_automatica = json.loads(clasificacion_automatica)
-            except json.JSONDecodeError:
-                clasificacion_automatica = {}
-        
-        # Guardar las clasificaciones como JSON (renombrado para evitar conflicto)
-        datos_a_guardar['clasificacion_manual_json'] = json.dumps(clasificacion_manual)
-        datos_a_guardar['clasificacion_automatica_json'] = json.dumps(clasificacion_automatica)
 
-        # Eliminar los campos originales que ahora están en JSON para evitar duplicidad
-        # datos_a_guardar.pop('clasificacion_manual', None)
-        # datos_a_guardar.pop('clasificacion_automatica', None)
+        # --- CORRECCIÓN: Simplificar la preparación de datos --- 
+        # Usar directamente el diccionario recibido, filtrando solo None al final.
+        datos_para_sql = clasificacion_data.copy()
+        codigo_guia = datos_para_sql.get('codigo_guia')
 
-        # Filtrar claves None antes de construir la consulta
-        datos_filtrados = {k: v for k, v in datos_a_guardar.items() if v is not None}
+        if not codigo_guia:
+            logger.error("Cannot store classification without 'codigo_guia'. Aborting.")
+            return False
+
+        # Quitar valores None ANTES de construir el SQL
+        datos_finales = {k: v for k, v in datos_para_sql.items() if v is not None}
         
-        # Construir la consulta SQL
-        campos = ', '.join(datos_filtrados.keys())
-        placeholders = ', '.join(['?' for _ in datos_filtrados])
-        valores = list(datos_filtrados.values())
-        
-        # Intentar insertar primero
-        try:
-            cursor.execute(f"""
-                INSERT INTO clasificaciones ({campos})
-                VALUES ({placeholders})
-            """, valores)
-        except sqlite3.IntegrityError:
-            # Si ya existe, actualizar
-            set_clause = ', '.join([f"{k} = ?" for k in datos_filtrados.keys()])
-            cursor.execute(f"""
-                UPDATE clasificaciones
-                SET {set_clause}
-                WHERE codigo_guia = ?
-            """, valores + [datos_filtrados['codigo_guia']])
-        
+        logger.info(f"--- store_clasificacion - Datos finales para SQL: {datos_finales} ---")
+        # --- FIN CORRECCIÓN ---
+            
+        # Check if record exists
+        cursor.execute("SELECT id FROM clasificaciones WHERE codigo_guia = ?", (codigo_guia,))
+        existing = cursor.fetchone()
+
+        if existing:
+            # UPDATE logic
+            # Excluir codigo_guia de los campos a actualizar
+            update_fields = {k: v for k, v in datos_finales.items() if k != 'codigo_guia'}
+            if not update_fields:
+                logger.warning(f"No fields to update for existing classification {codigo_guia}. Skipping update.")
+            else:
+                set_clause = ', '.join([f"{k} = ?" for k in update_fields.keys()])
+                valores = list(update_fields.values()) + [codigo_guia] # Values for SET + WHERE
+                update_query = f"UPDATE clasificaciones SET {set_clause} WHERE codigo_guia = ?"
+                logger.info(f"Executing UPDATE for classification: {update_query} with values {valores}")
+                cursor.execute(update_query, valores)
+        else:
+            # INSERT logic
+            if not datos_finales:
+                 logger.error("No data available to insert for classification. Aborting.")
+                 return False
+                 
+            campos = ', '.join(datos_finales.keys())
+            placeholders = ', '.join(['?' for _ in datos_finales])
+            valores = list(datos_finales.values())
+            insert_query = f"INSERT INTO clasificaciones ({campos}) VALUES ({placeholders})"
+            logger.info(f"Executing INSERT for classification: {insert_query} with values {valores}")
+            cursor.execute(insert_query, valores)
+
         conn.commit()
-        
-        # Si hay fotos, guardarlas
+
+        # Guardar fotos si existen
         if fotos:
+            # Borrar fotos existentes para esta guía antes de insertar las nuevas
+            # para evitar duplicados si se re-guarda
+            logger.info(f"[DIAG][store_clasificacion] Intentando guardar {len(fotos)} fotos para guía: {codigo_guia}")
+            logger.info(f"[DIAG][store_clasificacion] Rutas a guardar: {fotos}")
+            logger.info(f"[DIAG][store_clasificacion] Borrando fotos existentes para {codigo_guia} antes de insertar nuevas.")
+            try:
+                cursor.execute("DELETE FROM fotos_clasificacion WHERE codigo_guia = ?", (codigo_guia,))
+                logger.info(f"[DIAG][store_clasificacion] Fotos antiguas borradas para {codigo_guia}.")
+            except sqlite3.Error as del_err:
+                 logger.error(f"[DIAG][store_clasificacion] Error borrando fotos antiguas para {codigo_guia}: {del_err}")
+                 # Considerar si continuar o devolver error aquí
+            
             for i, foto_path in enumerate(fotos):
-                cursor.execute("""
-                    INSERT INTO fotos_clasificacion (codigo_guia, ruta_foto, numero_foto)
-                    VALUES (?, ?, ?)
-                """, (datos_filtrados['codigo_guia'], foto_path, i + 1))
+                # Asegurarse que la ruta no sea None o vacía
+                if foto_path:
+                    logger.info(f"[DIAG][store_clasificacion] Insertando foto {i+1} para {codigo_guia}: {foto_path}")
+                    try:
+                        cursor.execute("""
+                            INSERT INTO fotos_clasificacion (codigo_guia, ruta_foto, numero_foto)
+                            VALUES (?, ?, ?)
+                        """, (codigo_guia, foto_path, i + 1))
+                        logger.info(f"[DIAG][store_clasificacion] Foto {i+1} insertada correctamente para {codigo_guia}.")
+                    except sqlite3.Error as insert_err:
+                         logger.error(f"[DIAG][store_clasificacion] Error insertando foto {i+1} ({foto_path}) para {codigo_guia}: {insert_err}")
+                else:
+                    logger.warning(f"[DIAG][store_clasificacion] Se omitió la inserción de la foto {i+1} para {codigo_guia} porque la ruta estaba vacía.")
             conn.commit()
+            logger.info(f"[DIAG][store_clasificacion] Commit realizado después de insertar fotos para {codigo_guia}.")
+        else:
+             logger.info(f"[DIAG][store_clasificacion] No se proporcionaron fotos para guardar para guía: {codigo_guia}")
         
+        logger.info(f"Successfully stored/updated classification for {codigo_guia}")
         return True
     except KeyError:
         logger.error("Error: 'TIQUETES_DB_PATH' no está configurada en la aplicación Flask.")
         return False
+    except sqlite3.Error as db_err:
+        logger.error(f"Database error in store_clasificacion for guide {clasificacion_data.get('codigo_guia')}: {db_err}")
+        return False
     except Exception as e:
-        logger.error(f"Error en store_clasificacion: {str(e)}")
+        logger.error(f"General error in store_clasificacion for guide {clasificacion_data.get('codigo_guia')}: {str(e)}")
         return False
     finally:
         if conn:
@@ -449,15 +445,15 @@ def get_clasificaciones(filtros=None):
             
             if filtros.get('fecha_desde') and filtros.get('fecha_hasta'):
                 try:
-                    fecha_desde = datetime.strptime(filtros['fecha_desde'], '%Y-%m-%d').strftime('%d/%m/%Y')
-                    fecha_hasta = datetime.strptime(filtros['fecha_hasta'], '%Y-%m-%d').strftime('%d/%m/%Y')
+                    # No reformatear, usar YYYY-MM-DD directamente
+                    fecha_desde = filtros['fecha_desde'] + ' 00:00:00'
+                    fecha_hasta = filtros['fecha_hasta'] + ' 23:59:59'
                     
-                    # Assuming fecha_registro column exists in clasificaciones
-                    conditions.append("fecha_clasificacion BETWEEN ? AND ?") # Use fecha_clasificacion
+                    # Usar timestamp_clasificacion_utc para el rango
+                    conditions.append("timestamp_clasificacion_utc BETWEEN ? AND ?")
                     params.extend([fecha_desde, fecha_hasta])
                 except Exception as e: 
-                    # Log error instead of just passing
-                    logger.warning(f"Error parsing date filter values: {e}. Skipping date filter.")
+                    logger.warning(f"Error processing date filter values: {e}. Skipping date filter.")
                 
             if filtros.get('codigo_proveedor'):
                 conditions.append("codigo_proveedor LIKE ?")
@@ -470,8 +466,8 @@ def get_clasificaciones(filtros=None):
             if conditions:
                 query += " WHERE " + " AND ".join(conditions)
         
-        # Ordenar por fecha y hora más reciente (using fecha_clasificacion)
-        query += " ORDER BY fecha_clasificacion DESC, hora_clasificacion DESC"
+        # Ordenar por timestamp UTC más reciente
+        query += " ORDER BY timestamp_clasificacion_utc DESC"
         
         cursor.execute(query, params)
         
@@ -527,10 +523,18 @@ def get_clasificacion_by_codigo_guia(codigo_guia):
             clasificacion = {key: row[key] for key in row.keys()}
             
             # Obtener fotos asociadas (using main connection cursor is fine here)
-            cursor.execute("SELECT ruta_foto FROM fotos_clasificacion WHERE codigo_guia = ? ORDER BY numero_foto", 
-                         (codigo_guia,))
-            fotos = [foto_row[0] for foto_row in cursor.fetchall()]
-            clasificacion['fotos'] = fotos
+            logger.info(f"[DIAG][get_clasificacion] Buscando fotos para guía: {codigo_guia}")
+            try:
+                cursor.execute("SELECT ruta_foto FROM fotos_clasificacion WHERE codigo_guia = ? ORDER BY numero_foto", 
+                             (codigo_guia,))
+                fotos_raw = cursor.fetchall() # Obtener todas las filas crudas
+                logger.info(f"[DIAG][get_clasificacion] Consulta de fotos ejecutada para {codigo_guia}. Resultado crudo: {fotos_raw}")
+                fotos = [foto_row[0] for foto_row in fotos_raw] # Extraer la ruta
+                clasificacion['fotos'] = fotos
+                logger.info(f"[DIAG][get_clasificacion] Rutas de fotos encontradas y asignadas para {codigo_guia}: {fotos}")
+            except sqlite3.Error as фото_err:
+                 logger.error(f"[DIAG][get_clasificacion] Error al consultar fotos para {codigo_guia}: {фото_err}")
+                 clasificacion['fotos'] = [] # Asignar lista vacía en caso de error
             
             # Si clasificaciones es una cadena JSON, convertirla a lista
             if isinstance(clasificacion.get('clasificaciones'), str):
@@ -659,12 +663,15 @@ def get_pesajes_neto(filtros=None):
             
             if filtros.get('fecha_desde') and filtros.get('fecha_hasta'):
                 try:
-                    fecha_desde = datetime.strptime(filtros['fecha_desde'], '%Y-%m-%d').strftime('%d/%m/%Y')
-                    fecha_hasta = datetime.strptime(filtros['fecha_hasta'], '%Y-%m-%d').strftime('%d/%m/%Y')
-                    conditions.append("fecha_pesaje BETWEEN ? AND ?")
+                    # No reformatear, usar YYYY-MM-DD directamente
+                    fecha_desde = filtros['fecha_desde'] + ' 00:00:00'
+                    fecha_hasta = filtros['fecha_hasta'] + ' 23:59:59'
+                    
+                    # Usar timestamp_pesaje_neto_utc para el rango
+                    conditions.append("timestamp_pesaje_neto_utc BETWEEN ? AND ?")
                     params.extend([fecha_desde, fecha_hasta])
                 except Exception as e: 
-                    logger.warning(f"Error parsing date filter values: {e}. Skipping date filter.")
+                    logger.warning(f"Error processing date filter values: {e}. Skipping date filter.")
             if filtros.get('codigo_guia'):
                 conditions.append("codigo_guia LIKE ?")
                 params.append(f"%{filtros['codigo_guia']}%")
@@ -677,31 +684,15 @@ def get_pesajes_neto(filtros=None):
             if conditions:
                 query += " WHERE " + " AND ".join(conditions)
                 
+        # Ordenar por timestamp UTC más reciente en SQL
+        query += " ORDER BY timestamp_pesaje_neto_utc DESC"
+                
         cursor.execute(query, params)
         
         pesajes = []
         for row in cursor.fetchall():
             pesaje = {key: row[key] for key in row.keys()}
             pesajes.append(pesaje)
-        
-        # Función para convertir fecha y hora en un objeto datetime
-        def parse_datetime_str(pesaje):
-            try:
-                date_str = pesaje.get('fecha_pesaje_neto', pesaje.get('fecha_pesaje', '01/01/1970'))
-                time_str = pesaje.get('hora_pesaje_neto', pesaje.get('hora_pesaje', '00:00:00'))
-                if '/' in date_str: 
-                    day, month, year = map(int, date_str.split('/'))
-                    date_obj = datetime(year, month, day)
-                else: 
-                    date_obj = datetime.strptime(date_str, '%Y-%m-%d')
-                hours, minutes, seconds = map(int, time_str.split(':'))
-                return datetime(date_obj.year, date_obj.month, date_obj.day, hours, minutes, seconds)
-            except Exception as e: 
-                logger.error(f"Error parsing date/time for pesaje neto: {e}") 
-                return datetime(1970, 1, 1) 
-            
-        # Ordenar por fecha y hora parseadas en orden descendente (más recientes primero)
-        pesajes.sort(key=parse_datetime_str, reverse=True)
         
         return pesajes
     except KeyError:

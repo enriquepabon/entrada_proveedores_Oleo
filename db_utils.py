@@ -251,26 +251,6 @@ def get_entry_record_by_guide_code(codigo_guia):
             # Convert row to dictionary
             record = {key: row[key] for key in row.keys()}
 
-            # --- Add Timezone Conversion for entry record timestamp ---
-            # TODO (Plan Timestamps): Mover la conversión de zona horaria a la capa de vista/plantilla.
-            # Esta conversión está aquí temporalmente por compatibilidad con plantillas existentes.
-            # Ref: REFACTORING_PLAN.md
-            ts_registro_utc_str = record.get('timestamp_registro_utc')
-            fecha_registro_bogota = None
-            hora_registro_bogota = None
-            if ts_registro_utc_str:
-                try:
-                    dt_utc = datetime.strptime(ts_registro_utc_str, "%Y-%m-%d %H:%M:%S")
-                    dt_utc = UTC.localize(dt_utc)
-                    dt_bogota = dt_utc.astimezone(BOGOTA_TZ)
-                    fecha_registro_bogota = dt_bogota.strftime('%d/%m/%Y')
-                    hora_registro_bogota = dt_bogota.strftime('%H:%M:%S')
-                except ValueError as e:
-                    logger.warning(f"Could not parse timestamp_registro_utc '{ts_registro_utc_str}' for {codigo_guia} in db_utils: {e}")
-            record['fecha_registro'] = fecha_registro_bogota
-            record['hora_registro'] = hora_registro_bogota
-            # --- End Timezone Conversion ---
-            
             # Parse modified_fields if it's stored as string
             if record.get('modified_fields') and isinstance(record['modified_fields'], str):
                 try:
@@ -291,8 +271,8 @@ def get_entry_record_by_guide_code(codigo_guia):
             # Handle new timestamp field and remove old ones if present
             if not record.get('timestamp_registro_utc'):
                 record['timestamp_registro_utc'] = '1970-01-01 00:00:00' # Default timestamp
-            record.pop('fecha_registro', None)
-            record.pop('hora_registro', None)
+            # record.pop('fecha_registro', None) # Keep this commented or remove
+            # record.pop('hora_registro', None) # Keep this commented or remove
 
             # Process provider code (same logic as get_entry_records)
             if record.get('codigo_proveedor') and record['codigo_proveedor'] != 'No disponible':

@@ -1,15 +1,62 @@
-{% macro datos_clasificacion_manual(clasificacion_manual) %}
-<div class="info-section">
-    <div class="section-title">Resultados de Clasificación Manual</div>
-    {% if clasificacion_manual %}
-        {% for categoria, valor in clasificacion_manual.items() %}
-        <div class="clasificacion-item">
-            <div class="clasificacion-titulo">{{ categoria|title }}</div>
-            <div class="clasificacion-valor">{{ valor }}</div>
-        </div>
-        {% endfor %}
+{% macro datos_clasificacion_manual(clasificacion_manual, cantidad_racimos) %}
+<div class="info-section manual-classification-table">
+    <h6 class="section-title mb-3">Resultados de Clasificación Manual</h6>
+    {% if clasificacion_manual and clasificacion_manual is mapping %}
+        {# Determinar el tamaño de la muestra basado en la cantidad de racimos #}
+        {% set cantidad_racimos_int = cantidad_racimos | default(0) | int %}
+        {% if cantidad_racimos_int >= 1000 %}
+            {% set total_muestra = 100 %}
+            {% set texto_muestra = "(Muestra de 100)" %}
+        {% else %}
+            {% set total_muestra = 28 %}
+            {% set texto_muestra = "(Muestra de 28)" %}
+        {% endif %}
+        
+        {% set total_conteo_manual = clasificacion_manual.values() | map('float') | sum %}
+
+        <table class="table table-sm table-striped table-bordered">
+            <thead class="table-light">
+                <tr>
+                    <th>Categoría</th>
+                    <th>Cantidad</th>
+                    <th>Porcentaje (%)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for categoria, valor in clasificacion_manual.items() %}
+                {% set valor_float = valor | default(0) | float %}
+                <tr>
+                    <td>{{ categoria | replace('_', ' ') | title }}</td>
+                    <td>{{ valor_float | round(2) }}</td>
+                    <td>
+                        {% if total_muestra > 0 %}
+                            {{ ((valor_float / total_muestra) * 100) | round(1) }}
+                        {% else %}
+                            0.0 {# O N/A si prefieres #}
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot class="table-light">
+                <tr>
+                    <td><strong>Total Muestra {{ texto_muestra }}</strong></td>
+                    <td><strong>{{ total_conteo_manual | round(2) }}</strong></td> {# Muestra el conteo real #}
+                    <td>
+                        {% if total_muestra > 0 %}
+                            {# Calcular porcentaje total sobre la muestra #}
+                            <strong>{{ ((total_conteo_manual / total_muestra) * 100) | round(1) }}%</strong>
+                        {% else %}
+                             <strong>0.0%</strong>
+                        {% endif %}
+                    </td>
+                </tr>
+            </tfoot>
+        </table>
     {% else %}
-        <p>No hay datos de clasificación manual registrados.</p>
+        <div class="alert alert-secondary" role="alert">
+            No hay datos de clasificación manual registrados.
+        </div>
     {% endif %}
 </div>
 {% endmacro %}

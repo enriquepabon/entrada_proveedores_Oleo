@@ -583,10 +583,6 @@ def registrar_peso_virtual():
             nombre_proveedor = "No disponible"
             logger.warning("Nombre de proveedor no disponible")
         
-        # Capturar fecha y hora actuales
-        fecha_pesaje = datetime.now().strftime('%d/%m/%Y')
-        hora_pesaje = datetime.now().strftime('%H:%M:%S')
-        
         # Verificar si hay una guía de transporte SAP disponible
         codigo_guia_transporte_sap = request.form.get('codigo_guia_transporte_sap')
         if not codigo_guia_transporte_sap and request.is_json:
@@ -983,8 +979,6 @@ def ver_resultados_pesaje(codigo_guia):
         # --- CONSULTAR PESAJES_BRUTO DIRECTAMENTE ---
         # Verificar que el pesaje esté completado consultando la DB
         peso_bruto_db = None
-        fecha_pesaje_local = "N/A"
-        hora_pesaje_local = "N/A"
         guia_sap_db = None
         try:
             # Usar la ruta configurada en la aplicación Flask
@@ -1000,13 +994,18 @@ def ver_resultados_pesaje(codigo_guia):
             pesaje_result = cursor_check.fetchone()
             conn_check.close()
 
+            # --- RESTORE: Initialize local date/time variables --- 
+            fecha_pesaje_local = "N/A"
+            hora_pesaje_local = "N/A"
+            timestamp_utc_str = None
+
             if pesaje_result:
                 peso_bruto_db = pesaje_result[0]
-                timestamp_utc_str = pesaje_result[1]
-                guia_sap_db = pesaje_result[2]
+                timestamp_utc_str = pesaje_result[1] # Get UTC timestamp string
+                guia_sap_db = pesaje_result[2]       # Get SAP code
                 logger.info(f"Pesaje bruto encontrado en DB para {codigo_guia}: Peso={peso_bruto_db}, TimestampUTC={timestamp_utc_str}, SAP={guia_sap_db}")
 
-                # --- Convert timestamp to local --- 
+                # --- RESTORE: Convert timestamp to local --- 
                 if timestamp_utc_str:
                     try:
                         dt_utc = datetime.strptime(timestamp_utc_str, "%Y-%m-%d %H:%M:%S")
@@ -1022,6 +1021,7 @@ def ver_resultados_pesaje(codigo_guia):
 
                 # Actualizar datos_guia con valores frescos de la DB
                 datos_guia['peso_bruto'] = peso_bruto_db
+                # --- RESTORE: Use converted local date/time --- 
                 datos_guia['fecha_pesaje'] = fecha_pesaje_local
                 datos_guia['hora_pesaje'] = hora_pesaje_local
                 datos_guia['codigo_guia_transporte_sap'] = guia_sap_db

@@ -745,8 +745,16 @@ def process_validated_data():
                 datos_registro['nota'] = webhook_data.get('nota', webhook_data.get('Nota', '')) # Add the note here
                 
                 # Guardar en la base de datos
-                db_utils.store_entry_record(datos_registro)
-                logger.info(f"Datos guardados en la base de datos para código guía: {codigo_guia}")
+                if db_utils.store_entry_record(datos_registro):
+                    logger.info(f"Datos guardados en la base de datos para código guía: {codigo_guia}")
+                else:
+                    logger.error(f"FALLO al guardar datos en la base de datos para {codigo_guia}. Abortando.")
+                    # Si la base de datos falla, es un error crítico
+                    return jsonify({
+                        "status": "error",
+                        "message": f"Error crítico: no se pudieron guardar los datos del registro en la base de datos para {codigo_guia}"
+                    }), 500
+                    
             except Exception as db_error:
                 logger.error(f"Error guardando en la base de datos: {str(db_error)}")
                 logger.error(traceback.format_exc())
@@ -993,7 +1001,61 @@ def ver_guia_centralizada(codigo_guia):
         # Obtener datos de la guía
         datos_guia = utils.get_datos_guia(codigo_guia)
         logger.info(f"Datos de guía obtenidos: {datos_guia}")
-        
+
+        # >> ADD CHECK FOR NONE HERE <<
+        if datos_guia is None:
+            logger.error(f"No se encontraron datos para la guía {codigo_guia} al renderizar la vista centralizada.")
+            flash(f"Error: No se encontraron datos para la guía especificada ({codigo_guia}). Puede que haya sido eliminada o nunca existió.", "danger")
+            # Redirect to a safe page, like the main list or index
+            return redirect(url_for('entrada.lista_entradas')) # Or misc.index or another suitable route
+
+        # --- INICIO: Conversión de Timestamps UTC a Bogotá para Template --- 
+        if datos_guia:
+            from datetime import datetime
+            import pytz
+            BOGOTA_TZ = pytz.timezone('America/Bogota')
+            UTC = pytz.utc
+
+            timestamp_fields = {
+                'timestamp_registro_utc': ('fecha_registro', 'hora_registro'),
+                'timestamp_pesaje_utc': ('fecha_pesaje', 'hora_pesaje'),
+                'timestamp_clasificacion_utc': ('fecha_clasificacion', 'hora_clasificacion'),
+                'timestamp_pesaje_neto_utc': ('fecha_pesaje_neto', 'hora_pesaje_neto'),
+                'timestamp_salida_utc': ('fecha_salida', 'hora_salida')
+            }
+
+            for utc_field, (local_date_field, local_time_field) in timestamp_fields.items():
+                utc_timestamp_str = datos_guia.get(utc_field)
+                # --- DEBUG LOGGING START ---
+                logger.info(f"Processing timestamp for {utc_field}: Value='{utc_timestamp_str}' (Type: {type(utc_timestamp_str)})")
+                # --- DEBUG LOGGING END ---
+                fecha_local = None
+                hora_local = None
+                if utc_timestamp_str:
+                    try:
+                        # Parsear el string UTC y localizarlo como UTC
+                        dt_utc = datetime.strptime(utc_timestamp_str, "%Y-%m-%d %H:%M:%S")
+                        dt_utc = UTC.localize(dt_utc)
+                        # Convertir a Bogotá
+                        dt_local = dt_utc.astimezone(BOGOTA_TZ)
+                        # Formatear
+                        fecha_local = dt_local.strftime('%d/%m/%Y')
+                        hora_local = dt_local.strftime('%H:%M:%S')
+                        # --- DEBUG LOGGING START ---
+                        logger.info(f"Successfully converted {utc_field}: Fecha={fecha_local}, Hora={hora_local}")
+                        # --- DEBUG LOGGING END ---
+                    except (ValueError, TypeError) as e:
+                        # --- DEBUG LOGGING START ---
+                        logger.warning(f"FAILED to parse/convert timestamp '{utc_timestamp_str}' for field {utc_field} in ver_guia_centralizada: {e}")
+                        # --- DEBUG LOGGING END ---
+                # else: # Add log if the string is None or empty
+                    # logger.info(f"Skipping conversion for {utc_field} because value is None or empty.")
+                
+                # Añadir los campos formateados directamente a datos_guia
+                datos_guia[local_date_field] = fecha_local
+                datos_guia[local_time_field] = hora_local
+        # --- FIN: Conversión de Timestamps UTC a Bogotá para Template ---
+
         # Verificar y corregir la ruta de la imagen si es necesario
         if datos_guia and datos_guia.get('image_filename'):
             logger.info(f"Nombre de archivo de imagen encontrado: {datos_guia['image_filename']}")
@@ -1105,21 +1167,25 @@ def ver_guia_centralizada(codigo_guia):
                     logger.info(f"Pesaje neto encontrado en datos_guia para {codigo_guia}")
             
             # NUEVO: Verificar si existe registro de salida para la guía
-            cursor.execute("SELECT fecha_salida, hora_salida, comentarios_salida FROM salidas WHERE codigo_guia = ?", (codigo_guia,))
+            # Seleccionar timestamp UTC en lugar de fecha/hora local
+            cursor.execute("SELECT timestamp_salida_utc, comentarios_salida FROM salidas WHERE codigo_guia = ?", (codigo_guia,))
             result = cursor.fetchone()
             salida_completada = False
             if result:
-                fecha_salida = result[0]
-                hora_salida = result[1]
-                comentarios_salida = result[2]
+                timestamp_utc = result[0]
+                # fecha_salida = result[0] # Remover variable antigua
+                # hora_salida = result[1] # Remover variable antigua
+                comentarios_salida = result[1] # Indice ahora es 1
                 
-                if fecha_salida and hora_salida:
+                # Verificar si el timestamp existe
+                if timestamp_utc:
                     salida_completada = True
-                    logger.info(f"Encontrado registro de salida para {codigo_guia}: fecha={fecha_salida}, hora={hora_salida}")
+                    logger.info(f"Encontrado registro de salida para {codigo_guia}: timestamp={timestamp_utc}")
                     
                     # Actualizar datos_guia con esta información
-                    datos_guia['fecha_salida'] = fecha_salida
-                    datos_guia['hora_salida'] = hora_salida
+                    datos_guia['timestamp_salida_utc'] = timestamp_utc
+                    # datos_guia['fecha_salida'] = fecha_salida # Remover asignación antigua
+                    # datos_guia['hora_salida'] = hora_salida # Remover asignación antigua
                     datos_guia['comentarios_salida'] = comentarios_salida
                     datos_guia['estado_salida'] = 'Completado'
                     datos_guia['estado_final'] = 'completado'
@@ -1132,10 +1198,15 @@ def ver_guia_centralizada(codigo_guia):
             logger.error(f"Error verificando datos en tabla: {str(e)}")
 
         # --- INICIO LÓGICA PEPA --- (Moved outside the exception block)
-        es_pepa = False
-        racimos_valor = str(datos_guia.get('cantidad_racimos', datos_guia.get('racimos', ''))).strip().lower()
-        if racimos_valor == 'pepa':
-            es_pepa = True
+        # CORRECCIÓN Attribute Error: Manejar el caso donde tipo_fruta puede ser None
+        tipo_fruta_str = datos_guia.get('tipo_fruta') or '' # Paso 1: Asegurar que sea string
+        es_pepa = tipo_fruta_str.strip().upper() == 'PEPA' # Paso 2: Calcular es_pepa
+        
+        # Se eliminó la comprobación basada en racimos_valor, usar solo tipo_fruta
+        # racimos_valor = str(datos_guia.get('cantidad_racimos', datos_guia.get('racimos', ''))).strip().lower()
+        # if racimos_valor == 'pepa':
+        
+        if es_pepa:
             logger.info(f"Guía {codigo_guia} es de PEPA. Omitiendo clasificación.")
             # Marcar clasificación como completada/omitida para el flujo
             clasificacion_completada = True # Update local variable if used later
@@ -1155,201 +1226,108 @@ def ver_guia_centralizada(codigo_guia):
 
         # Recalcular estado_info basado en los datos actualizados (importante DESPUÉS de la lógica PEPA)
         # Re-import locally to try and resolve UnboundLocalError
-        from app.utils.common import get_estado_guia
-        estado_info = get_estado_guia(codigo_guia)
-        logger.info(f"Estado Info recalculado (post-pepa check): {estado_info}")
+        # ELIMINADO: Se construirá estado_info manualmente
+        # from app.utils.common import get_estado_guia
+        # estado_info = get_estado_guia(codigo_guia)
+        # logger.info(f"Estado Info recalculado (post-pepa check): {estado_info}")
+        
+        # --- CONSTRUIR estado_info MANUALMENTE --- (Mover construcción aquí después de lógica PEPA)
+        clasificacion_registrada = datos_guia.get('clasificacion_completada', False) # Usar el valor posiblemente actualizado por PEPA
+        pesaje_neto_completado = bool(datos_guia.get('timestamp_pesaje_neto_utc') or 
+                                    (datos_guia.get('peso_neto') is not None and 
+                                     str(datos_guia.get('peso_neto')).lower() not in ['pendiente', 'n/a', '']))
+        salida_completada = bool(datos_guia.get('timestamp_salida_utc'))
 
-        # Logging detallado para diagnóstico del problema
-        logger.info(f"----- DATOS GUÍA CENTRALIZADA PRE-ESTADO ({codigo_guia}) -----")
-        logger.info(f"Estado actual: {datos_guia.get('estado_actual')}")
-        logger.info(f"Estado clasificación: {datos_guia.get('estado_clasificacion')}")
-        logger.info(f"Clasificación completada: {datos_guia.get('clasificacion_completada')}")
-        logger.info(f"Clasificación verificada directamente: {clasificacion_completada}")
-        logger.info(f"Pesaje neto completado: {datos_guia.get('pesaje_neto_completado', pesaje_neto_completado)}")
-        logger.info(f"Salida completada: {datos_guia.get('estado_salida') == 'Completado' or salida_completada}")
-        logger.info(f"Fecha salida: {datos_guia.get('fecha_salida', 'No disponible')}")
-        logger.info(f"Hora salida: {datos_guia.get('hora_salida', 'No disponible')}")
-        
-        # Verificar si existen valores críticos en datos_guia
-        if 'pasos_completados' in datos_guia:
-            logger.info(f"Pasos completados: {datos_guia['pasos_completados']}")
-            if 'clasificacion' not in datos_guia['pasos_completados'] and clasificacion_completada:
-                logger.info("Agregando clasificación a pasos_completados")
-                datos_guia['pasos_completados'].append('clasificacion')
-            if 'pesaje_neto' not in datos_guia['pasos_completados'] and pesaje_neto_completado:
-                logger.info("Agregando pesaje_neto a pasos_completados")
-                datos_guia['pasos_completados'].append('pesaje_neto')
-            if 'salida' not in datos_guia['pasos_completados'] and salida_completada:
-                logger.info("Agregando salida a pasos_completados")
-                datos_guia['pasos_completados'].append('salida')
-        elif clasificacion_completada and pesaje_neto_completado and salida_completada:
-            logger.info("Creando pasos_completados con clasificación, pesaje_neto y salida")
-            datos_guia['pasos_completados'] = ['entrada', 'pesaje', 'clasificacion', 'pesaje_neto', 'salida']
-        elif clasificacion_completada and pesaje_neto_completado:
-            logger.info("Creando pasos_completados con clasificación y pesaje_neto")
-            datos_guia['pasos_completados'] = ['entrada', 'pesaje', 'clasificacion', 'pesaje_neto']
-        elif clasificacion_completada:
-            logger.info("Creando pasos_completados con clasificación")
-            datos_guia['pasos_completados'] = ['entrada', 'pesaje', 'clasificacion']
-        elif pesaje_neto_completado:
-            logger.info("Creando pasos_completados con pesaje_neto")
-            datos_guia['pasos_completados'] = ['entrada', 'pesaje', 'pesaje_neto']
-            
-        if 'datos_disponibles' in datos_guia:
-            logger.info(f"Datos disponibles: {datos_guia['datos_disponibles']}")
-            if 'clasificacion' not in datos_guia['datos_disponibles'] and clasificacion_completada:
-                logger.info("Agregando clasificación a datos_disponibles")
-                datos_guia['datos_disponibles'].append('clasificacion')
-            if 'pesaje_neto' not in datos_guia['datos_disponibles'] and pesaje_neto_completado:
-                logger.info("Agregando pesaje_neto a datos_disponibles")
-                datos_guia['datos_disponibles'].append('pesaje_neto')
-            if 'salida' not in datos_guia['datos_disponibles'] and salida_completada:
-                logger.info("Agregando salida a datos_disponibles")
-                datos_guia['datos_disponibles'].append('salida')
-        elif clasificacion_completada and pesaje_neto_completado and salida_completada:
-            logger.info("Creando datos_disponibles con clasificación, pesaje_neto y salida")
-            datos_guia['datos_disponibles'] = ['entrada', 'pesaje', 'clasificacion', 'pesaje_neto', 'salida']
-        elif clasificacion_completada and pesaje_neto_completado:
-            logger.info("Creando datos_disponibles con clasificación y pesaje_neto")
-            datos_guia['datos_disponibles'] = ['entrada', 'pesaje', 'clasificacion', 'pesaje_neto']
-        elif clasificacion_completada:
-            logger.info("Creando datos_disponibles con clasificación")
-            datos_guia['datos_disponibles'] = ['entrada', 'pesaje', 'clasificacion']
-        elif pesaje_neto_completado:
-            logger.info("Creando datos_disponibles con pesaje_neto")
-            datos_guia['datos_disponibles'] = ['entrada', 'pesaje', 'pesaje_neto']
-            
-        # Datos de fecha y hora de clasificación
-        logger.info(f"Fecha clasificación: {datos_guia.get('fecha_clasificacion', fecha_clasificacion)}")
-        logger.info(f"Hora clasificación: {datos_guia.get('hora_clasificacion', hora_clasificacion)}")
-        logger.info("----- FIN DATOS GUÍA CENTRALIZADA -----")
-        
-        # Intentar obtener registros de entrada
-        try:
-            entrada_records = db_utils.get_entry_records({'codigo_guia': codigo_guia})
-            logger.info(f"Registros de entrada obtenidos: {len(entrada_records) if entrada_records else 0}")
-        except Exception as e:
-            logger.error(f"Error obteniendo registros de entrada: {str(e)}")
-            entrada_records = []
-        
-        # Obtener información del estado actual
-        from app.utils.common import get_estado_guia
-        estado_info = get_estado_guia(codigo_guia)
-        
-        # Agregar timestamp para evitar caché en imágenes y recursos
-        now_timestamp = int(time.time())
-        current_year = datetime.now().year
-        
-        # Agregar información adicional para el template
-        datos_template = {
-            'estado_info': estado_info,
-            'datos_guia': datos_guia,
-            'codigo_guia': codigo_guia,
-            'now_timestamp': now_timestamp,
-            'current_year': current_year,
-            'template_version': '1.0.1',  # Agregar versión del template para depuración
-            'es_pepa': es_pepa, # Pasar la bandera a la plantilla
+        pasos_completados = ['entrada', 'pesaje']
+        if clasificacion_registrada: # Usar la variable local actualizada
+            pasos_completados.append('clasificacion')
+        if pesaje_neto_completado:
+            pasos_completados.append('pesaje_neto')
+        if salida_completada:
+            pasos_completados.append('salida')
+
+        siguiente_paso = None
+        descripcion = "Desconocido"
+        porcentaje_avance = 0
+
+        if 'salida' in pasos_completados:
+            descripcion = "Proceso completado"
+            siguiente_paso = None
+            porcentaje_avance = 100
+        elif 'pesaje_neto' in pasos_completados:
+            descripcion = "Pesaje neto completado, pendiente salida"
+            siguiente_paso = 'salida'
+            porcentaje_avance = 80
+        elif 'clasificacion' in pasos_completados: # Ya incluye el caso PEPA
+             # Si es PEPA, ya ajustamos la descripción antes, mantenerla
+             if es_pepa:
+                 descripcion = "PEPA registrada, pendiente pesaje neto"
+             else:
+                 descripcion = "Clasificación completada, pendiente pesaje neto"
+             siguiente_paso = 'pesaje_neto'
+             porcentaje_avance = 60
+        elif 'pesaje' in pasos_completados:
+            descripcion = "Pesaje bruto completado, pendiente clasificación"
+            siguiente_paso = 'clasificacion'
+            porcentaje_avance = 40
+        elif 'entrada' in pasos_completados:
+             descripcion = "Registro de entrada completado, pendiente pesaje bruto"
+             siguiente_paso = 'pesaje'
+             porcentaje_avance = 20
+        else:
+             descripcion = "Guía no encontrada o inválida"
+             siguiente_paso = 'entrada'
+             porcentaje_avance = 0
+             
+        estado_info = {
+            'pasos_completados': pasos_completados,
+            'siguiente_paso': siguiente_paso,
+            'descripcion': descripcion,
+            'porcentaje_avance': porcentaje_avance,
+            'datos_disponibles': pasos_completados # Usar los mismos por ahora
         }
+        datos_guia['estado_info'] = estado_info # Añadir al diccionario principal
+        # --- FIN CONSTRUCCIÓN estado_info ---
         
-        # Generar QR para acceder directamente a esta vista si no existe
-        qr_filename = f"qr_centralizado_{codigo_guia}.png"
-        qr_path = os.path.join(current_app.static_folder, 'qr', qr_filename)
-        
-        if not os.path.exists(qr_path):
-            # Generar URL para el QR (url actual)
-            qr_url = url_for('misc.ver_guia_centralizada', codigo_guia=codigo_guia, _external=True)
-            logger.info(f"Generando QR para acceso directo a vista centralizada: {qr_url}")
-            utils.generar_qr(qr_url, qr_path)
-            
-            # Eliminar QR anterior si existe
-            old_qr_filename = f"qr_guia_estado_{codigo_guia}.png"
-            old_qr_path = os.path.join(current_app.static_folder, 'qr', old_qr_filename)
-            if os.path.exists(old_qr_path):
-                try:
-                    logger.info(f"Eliminando QR antiguo: {old_qr_filename}")
-                    os.rename(old_qr_path, f"{old_qr_path}.old")
-                except Exception as e:
-                    logger.warning(f"No se pudo renombrar el QR antiguo: {str(e)}")
-        
-        datos_template['qr_url'] = url_for('static', filename=f'qr/{qr_filename}') + f'?v={now_timestamp}'
-        
-        # Si falta algún campo importante, registrarlo en el log
-        campos_importantes = ['codigo_proveedor', 'nombre_agricultor', 'nombre_proveedor', 'transportador', 'placa', 'racimos']
-        for campo in campos_importantes:
-            if campo not in datos_guia or datos_guia.get(campo) is None or datos_guia.get(campo) == 'None' or datos_guia.get(campo) == 'N/A':
-                logger.warning(f"Campo importante no encontrado en datos_guia: {campo}")
-                
-        # Log detallado para depuración de imagen
-        logger.info(f"Datos de imagen: image_filename={datos_guia.get('image_filename')}, "
-                   f"imagen_pesaje={datos_guia.get('imagen_pesaje')}, "
-                   f"imagen_pesaje_neto={datos_guia.get('imagen_pesaje_neto')}")
-        
-        # Verificar que la plantilla existe
-        template_path = os.path.join(current_app.template_folder, 'guia_centralizada.html')
-        template_abs_path = os.path.abspath(template_path)
-        
-        logger.error(f"DEBUG - Template folder: {current_app.template_folder}")
-        logger.error(f"DEBUG - Template path: {template_path}")
-        logger.error(f"DEBUG - Template absolute path: {template_abs_path}")
-        logger.error(f"DEBUG - Os.getcwd(): {os.getcwd()}")
-        logger.error(f"DEBUG - Checking if template exists: {os.path.exists(template_path)}")
-        
-        # Look for templates in multiple potential locations
-        potential_locations = [
-            os.path.join(current_app.template_folder, 'guia_centralizada.html'),
-            os.path.join(os.getcwd(), 'templates', 'guia_centralizada.html'),
-            os.path.join(os.getcwd(), 'app', 'templates', 'guia_centralizada.html'),
-            os.path.join(os.getcwd(), 'TiquetesApp', 'templates', 'guia_centralizada.html'),
-        ]
-        
-        for loc in potential_locations:
-            logger.error(f"DEBUG - Checking location: {loc} - Exists: {os.path.exists(loc)}")
-            
-        if not os.path.exists(template_path):
-            logger.error(f"¡ERROR CRÍTICO! No se encuentra la plantilla guia_centralizada.html en {current_app.template_folder}")
-            
-            # Try to use an alternative template if found
-            for loc in potential_locations:
-                if os.path.exists(loc):
-                    logger.error(f"DEBUG - Using alternative template location: {loc}")
-                    # Override the template rendering by manually reading the file and rendering it
-                    with open(loc, 'r', encoding='utf-8') as f:
-                        template_content = f.read()
-                    from jinja2 import Template
-                    template = Template(template_content)
-                    return template.render(**datos_template)
-                    
-            return render_template('error.html', message="Error: Plantilla no encontrada"), 500
-        
-        # Renderizar el template con todos los datos - FORZAR USO DE ESTA PLANTILLA
+        # Logging detallado para diagnóstico del problema
+        logger.info(f"----- DATOS GUÍA CENTRALIZADA PRE-ESTADO ({codigo_guia}) (Post Manual Build) -----")
+        logger.info(f"Estado Info Construido: {estado_info}")
+        logger.info(f"Es Pepa: {es_pepa}")
+        # ... (otros logs) ...
+
+        # Asegurar que clasificacion_manual sea un diccionario
+        if not isinstance(datos_guia.get('clasificacion_manual'), dict):
+            datos_guia['clasificacion_manual'] = {}
+
+        # Generar QR Code
         try:
-            # Intenta renderizar con la plantilla correcta
-            return render_template('guia_centralizada.html', **datos_template)
-        except Exception as template_error:
-            # Si hay un error en la renderización, registrarlo y probar con una plantilla de fallback
-            logger.error(f"Error al renderizar guia_centralizada.html: {str(template_error)}")
-            logger.error(traceback.format_exc())
-            
-            try:
-                # Intentar con una plantilla de fallback más simple
-                return render_template('error.html', 
-                                      message=f"Error al mostrar información centralizada de la guía: {str(template_error)}",
-                                      datos_adicionales={
-                                          'codigo_guia': codigo_guia,
-                                          'estado': estado_info.get('estado', 'desconocido'),
-                                          'descripcion': estado_info.get('descripcion', 'No disponible'),
-                                          'error_template': str(template_error)
-                                      })
-            except Exception as fallback_error:
-                # Si incluso la plantilla de fallback falla, devolver texto plano
-                logger.critical(f"Error en plantilla de fallback: {str(fallback_error)}")
-                return f"Error crítico de plantilla: {str(template_error)}", 500
+            from .routes import generar_qr_guia
+        except ImportError:
+            def generar_qr_guia(code): logger.error("generar_qr_guia no encontrada!"); return None
+            logger.error("No se pudo importar generar_qr_guia desde .routes")
+        qr_url = generar_qr_guia(codigo_guia)
+
+        # Renderizar la plantilla
+        return render_template(
+            'guia_centralizada.html',
+            datos_guia=datos_guia,
+            codigo_guia=codigo_guia,
+            qr_url=qr_url,
+            es_pepa=es_pepa,
+            estado_info=estado_info,
+            clasificacion_registrada=clasificacion_registrada,
+            pesaje_neto_completado=pesaje_neto_completado,
+            salida_completada=salida_completada,
+            manual_registrada = clasificacion_registrada, # Revisar esta lógica
+            now_timestamp=datetime.now().timestamp()
+        )
         
     except Exception as e:
-        logger.error(f"Error al mostrar vista centralizada para guía {codigo_guia}: {str(e)}")
+        # Contenido correcto del bloque except original
+        logger.error(f"Error en ver_guia_centralizada para {codigo_guia}: {str(e)}")
         logger.error(traceback.format_exc())
-        flash(f"Error al mostrar información centralizada de la guía: {str(e)}", "error")
-        return render_template('error.html', message=f"Error al mostrar información centralizada de la guía: {str(e)}")
+        flash("Ocurrió un error inesperado al cargar la guía.", "danger")
+        return redirect(url_for('entrada.lista_entradas')) # Redirige a una página segura
 
 
 @bp.route('/guia-alt/<codigo_guia>')

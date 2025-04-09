@@ -1,4 +1,4 @@
-from flask import render_template, request, redirect, url_for, session, jsonify, flash, send_file, make_response
+from flask import render_template, request, redirect, url_for, session, jsonify, flash, send_file, make_response, current_app
 import os
 import logging
 import traceback
@@ -66,7 +66,6 @@ def registro_salida(codigo_guia):
         ensure_salidas_schema()
         
         # Inicializar Utils dentro del contexto de la aplicación
-        from flask import current_app
         utils = Utils(current_app)
         
         # Obtener datos de la guía
@@ -105,7 +104,6 @@ def completar_registro_salida():
         ensure_salidas_schema()
         
         # Inicializar Utils dentro del contexto de la aplicación
-        from flask import current_app
         utils = Utils(current_app)
         
         # Determinar si los datos vienen como JSON o como formulario
@@ -146,14 +144,14 @@ def completar_registro_salida():
         
         # Convertir fecha y hora a UTC y formatear
         fecha_hora_actual_utc = datetime.utcnow()
-        # fecha_actual = fecha_hora_actual_utc.strftime('%d/%m/%Y') # Formato antiguo
-        # hora_actual = fecha_hora_actual_utc.strftime('%H:%M:%S')   # Formato antiguo
+        # fecha_actual = fecha_hora_actual_utc.strftime('%d/%m/%Y') # REMOVED
+        # hora_actual = fecha_hora_actual_utc.strftime('%H:%M:%S')   # REMOVED
         timestamp_utc = fecha_hora_actual_utc.strftime('%Y-%m-%d %H:%M:%S') # Nuevo formato UTC
         
         # Actualizar datos de la guía
         datos_actualizados = {
-            # 'fecha_salida': fecha_actual, # Campo antiguo
-            # 'hora_salida': hora_actual,   # Campo antiguo
+            # 'fecha_salida': fecha_actual, # REMOVED
+            # 'hora_salida': hora_actual,   # REMOVED
             'timestamp_salida_utc': timestamp_utc, # Nuevo campo UTC
             'comentarios_salida': comentarios,
             'estado_actual': 'proceso_completado',
@@ -177,28 +175,25 @@ def completar_registro_salida():
                 if existing:
                     # Actualizar registro existente
                     cursor.execute("""
-                        UPDATE salidas 
-                        # SET fecha_salida = ?, hora_salida = ?, comentarios_salida = ?, estado = ?
+                        UPDATE salidas
                         SET timestamp_salida_utc = ?, comentarios_salida = ?, estado = ?
                         WHERE codigo_guia = ?
                     """, (
-                        # fecha_actual, hora_actual, # Valores antiguos
-                        timestamp_utc, # Valor UTC
-                        comentarios, 'completado', codigo_guia)
-                    )
+                        timestamp_utc,  # Valor UTC
+                        comentarios,
+                        'completado',
+                        codigo_guia
+                    ))
                 else:
                     # Insertar nuevo registro
                     cursor.execute("""
-                        # INSERT INTO salidas (codigo_guia, codigo_proveedor, nombre_proveedor, fecha_salida, hora_salida, comentarios_salida)
                         INSERT INTO salidas (codigo_guia, codigo_proveedor, nombre_proveedor, timestamp_salida_utc, comentarios_salida)
                         VALUES (?, ?, ?, ?, ?)
                     """, (
-                        codigo_guia, 
+                        codigo_guia,
                         datos_guia.get('codigo_proveedor', ''),
                         datos_guia.get('nombre_proveedor', ''),
-                        # fecha_actual, # Valor antiguo
-                        # hora_actual,  # Valor antiguo
-                        timestamp_utc, # Valor UTC
+                        timestamp_utc,  # Valor UTC
                         comentarios
                     ))
                 
@@ -214,8 +209,8 @@ def completar_registro_salida():
                     if datos_actualizados_completos:
                         # Asegurarse de que los datos de salida estén incluidos
                         datos_actualizados_completos.update({
-                            # 'fecha_salida': fecha_actual, # Campo antiguo
-                            # 'hora_salida': hora_actual,   # Campo antiguo
+                            # 'fecha_salida': fecha_actual, # REMOVED
+                            # 'hora_salida': hora_actual,   # REMOVED
                             'timestamp_salida_utc': timestamp_utc, # Nuevo campo UTC
                             'comentarios_salida': comentarios,
                             'estado_actual': 'proceso_completado',
@@ -270,7 +265,6 @@ def ver_resultados_salida(codigo_guia):
     """
     try:
         # Inicializar Utils dentro del contexto de la aplicación
-        from flask import current_app
         utils = Utils(current_app)
         
         # Obtener datos de la guía
@@ -283,25 +277,28 @@ def ver_resultados_salida(codigo_guia):
         try:
             conn = sqlite3.connect('tiquetes.db')
             cursor = conn.cursor()
-            cursor.execute("SELECT fecha_salida, hora_salida, comentarios_salida FROM salidas WHERE codigo_guia = ?", (codigo_guia,))
+            # Seleccionar el timestamp UTC en lugar de fecha/hora locales
+            cursor.execute("SELECT timestamp_salida_utc, comentarios_salida FROM salidas WHERE codigo_guia = ?", (codigo_guia,))
             salida_data = cursor.fetchone()
             conn.close()
             
             if salida_data:
-                # Si tenemos datos en la tabla salidas, actualizamos los datos_guia
-                datos_guia['fecha_salida'] = salida_data[0]
-                datos_guia['hora_salida'] = salida_data[1]
-                datos_guia['comentarios_salida'] = salida_data[2]
+                # Asignar el timestamp UTC y comentarios
+                datos_guia['timestamp_salida_utc'] = salida_data[0]
+                # datos_guia['fecha_salida'] = salida_data[0] # Remover asignación antigua
+                # datos_guia['hora_salida'] = salida_data[1] # Remover asignación antigua
+                datos_guia['comentarios_salida'] = salida_data[1] # El índice ahora es 1 para comentarios
                 logger.info(f"Datos de salida encontrados en la tabla para {codigo_guia}: {salida_data}")
             else:
-                # Verificar en los datos_guia
-                if 'fecha_salida' not in datos_guia or not datos_guia['fecha_salida']:
+                # Verificar usando el timestamp UTC
+                if not datos_guia.get('timestamp_salida_utc'):
                     flash("El registro de salida no ha sido completado para esta guía.", "warning")
                     return redirect(url_for('salida.registro_salida', codigo_guia=codigo_guia))
         except Exception as db_error:
             logger.error(f"Error al verificar datos de salida en la base de datos: {str(db_error)}")
             # Si hay un error al verificar la base de datos, continuamos con los datos de guía normales
-            if 'fecha_salida' not in datos_guia or not datos_guia['fecha_salida']:
+            # Verificar usando el timestamp UTC
+            if not datos_guia.get('timestamp_salida_utc'):
                 flash("El registro de salida no ha sido completado para esta guía.", "warning")
                 return redirect(url_for('salida.registro_salida', codigo_guia=codigo_guia))
         

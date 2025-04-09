@@ -1222,6 +1222,30 @@ def ver_registro_entrada(codigo_guia):
     if registro:
         logger.info(f"Registro encontrado en la base de datos: {codigo_guia}")
     
+        # --- INICIO: Conversión de Timestamp UTC a Bogotá para Template ---
+        from datetime import datetime
+        import pytz
+        BOGOTA_TZ = pytz.timezone('America/Bogota')
+        UTC = pytz.utc
+
+        utc_timestamp_str = registro.get('timestamp_registro_utc')
+        fecha_local = None
+        hora_local = None
+        if utc_timestamp_str:
+            try:
+                dt_utc = datetime.strptime(utc_timestamp_str, "%Y-%m-%d %H:%M:%S")
+                dt_utc = UTC.localize(dt_utc)
+                dt_local = dt_utc.astimezone(BOGOTA_TZ)
+                fecha_local = dt_local.strftime('%d/%m/%Y')
+                hora_local = dt_local.strftime('%H:%M:%S')
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Could not parse/convert timestamp '{utc_timestamp_str}' in ver_registro_entrada: {e}")
+        
+        # Añadir los campos formateados al diccionario registro
+        registro['fecha_registro'] = fecha_local
+        registro['hora_registro'] = hora_local
+        # --- FIN: Conversión de Timestamp UTC a Bogotá para Template ---
+    
     # Si no se encontró en la base de datos, intentar obtenerlo del archivo
     if not registro:
         logger.info(f"Buscando registro en archivos: {codigo_guia}")

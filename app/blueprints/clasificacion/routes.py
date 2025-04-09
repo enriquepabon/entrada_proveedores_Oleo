@@ -26,9 +26,20 @@ from jinja2 import TemplateNotFound
 from io import BytesIO
 import numpy as np
 import pytz
+import db_operations # Importar directamente el módulo
+from threading import Thread
 
 # Configurar logging
 logger = logging.getLogger(__name__)
+
+# Define timezones
+BOGOTA_TZ = pytz.timezone('America/Bogota')
+UTC = pytz.utc
+
+# Define helper to get UTC timestamp
+def get_utc_timestamp_str():
+    """Generates the current UTC timestamp as a string."""
+    return datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S')
 
 # Intentar importar el SDK de Roboflow, pero proporcionar una interfaz alternativa si no está disponible
 try:
@@ -479,7 +490,7 @@ def prueba_clasificacion(codigo):
 @bp.route('/registrar_clasificacion', methods=['POST'])
 def registrar_clasificacion():
     """
-    Registra la clasificación manual de racimos.
+    Registra la clasificación manual de racimos y las fotos.
     """
     try:
         # Agregar logs detallados para depuración
@@ -488,16 +499,16 @@ def registrar_clasificacion():
         logger.info(f"Archivos recibidos: {list(request.files.keys())}")
         logger.info(f"Headers: {request.headers}")
         logger.info(f"Content-Type: {request.content_type}")
-        
+
         # Obtener los datos del formulario
         codigo_guia = request.form.get('codigo_guia')
         logger.info(f"Código guía extraído del formulario: {codigo_guia}")
-        
+
         if not codigo_guia:
             logger.error("No se proporcionó un código de guía")
             flash("Error: No se proporcionó un código de guía", "danger")
             return redirect(url_for('pesaje.lista_pesajes'))
-        
+
         # Crear directorios para imágenes y clasificaciones si no existen
         fotos_temp_dir = os.path.join(current_app.static_folder, 'fotos_racimos_temp')
         clasificaciones_dir = os.path.join(current_app.static_folder, 'clasificaciones')
@@ -506,7 +517,7 @@ def registrar_clasificacion():
         os.makedirs(clasificaciones_dir, exist_ok=True)
         os.makedirs(temp_clasificacion_dir, exist_ok=True)
         logger.info(f"Directorios creados o verificados: {fotos_temp_dir}, {clasificaciones_dir}, {temp_clasificacion_dir}")
-        
+
         # Obtener datos de la guía
         utils_instance = get_utils_instance()
         datos_guia = utils_instance.get_datos_guia(codigo_guia)
@@ -514,158 +525,114 @@ def registrar_clasificacion():
             logger.warning(f"No se encontraron datos para la guía: {codigo_guia}")
             flash("Error: No se encontraron datos para la guía especificada", "danger")
             return redirect(url_for('pesaje.lista_pesajes'))
-        
-        # Capturar todos los datos de clasificación manual
-        clasificacion_manual = {
-            'verdes': float(request.form.get('verdes', 0) or 0),
-            'maduros': float(request.form.get('maduros', 0) or 0),
-            'sobremaduros': float(request.form.get('sobremaduros', 0) or 0),
-            'danio_corona': float(request.form.get('dano_corona', 0) or 0),
-            'pendunculo_largo': float(request.form.get('pedunculo_largo', 0) or 0),
-            'podridos': float(request.form.get('podridos', 0) or 0)
-        }
-        
-        # Log para depuración
-        logger.info(f"Datos de clasificación manual: {clasificacion_manual}")
-        logger.info(f"Form data recibido: {request.form}")
-        
-        # Procesamiento de las fotos subidas
-        fotos_paths = []
-        timestamp = int(time.time())
-        
-        # Revisar y guardar las imágenes proporcionadas
-        logger.info("Revisando archivos de fotos enviados...")
-        logger.info(f"Claves de archivos: {list(request.files.keys())}")
-        
+
+        # Procesar y guardar fotos
+        rutas_fotos_guardadas = []
         for i in range(1, 4):
             key = f'foto-{i}'
             if key in request.files:
                 file = request.files[key]
-                logger.info(f"Encontrado archivo para {key}: {file.filename}")
-                
-                if file and file.filename:
-                    # Asegurar que el nombre del archivo sea seguro
-                    filename = secure_filename(file.filename)
-                    # Agregar timestamp al nombre para evitar problemas de caché
-                    base, ext = os.path.splitext(filename)
-                    # Guardar en formato con nombre consistente para que pueda ser encontrado después
-                    new_filename = f"temp_clasificacion_{codigo_guia}_{i}_{timestamp}{ext}"
-                    filepath = os.path.join(temp_clasificacion_dir, new_filename)
-                    logger.info(f"Guardando archivo {key} como: {new_filename}")
-                    file.save(filepath)
-                    fotos_paths.append(filepath)
-                    logger.info(f"Imagen {i} guardada en: {filepath}")
-                else:
-                    logger.info(f"El archivo {key} no tiene nombre de archivo o está vacío")
-            else:
-                logger.info(f"No se encontró el archivo {key} en la solicitud")
-        
-        # Si no hay fotos, registrar una advertencia
-        if not fotos_paths:
-            logger.warning(f"No se encontraron fotos para procesar en la solicitud para la guía {codigo_guia}")
-        
-        # Capturar observaciones
-        observaciones = request.form.get('observaciones', '')
-        
-        # Guardar la clasificación manual con timestamp
-        now = datetime.now()
-        fecha_clasificacion = now.strftime('%d/%m/%Y')
-        hora_clasificacion = now.strftime('%H:%M:%S')
-        
-        # Preparar la estructura de datos completa
-        clasificacion_data = {
-            'id': f"Clasificacion_{codigo_guia}",
-            'codigo_guia': codigo_guia,
-            'codigo_proveedor': datos_guia.get('codigo_proveedor') or datos_guia.get('codigo'),
-            'nombre_proveedor': datos_guia.get('nombre_proveedor') or datos_guia.get('nombre') or datos_guia.get('nombre_agricultor'),
-            'fecha_registro': fecha_clasificacion,
-            'hora_registro': hora_clasificacion,
-            'fecha_clasificacion': fecha_clasificacion,
-            'hora_clasificacion': hora_clasificacion,
-            'clasificacion_manual': clasificacion_manual,
-            'clasificaciones': clasificacion_manual,  # Agregar también como "clasificaciones" para compatibilidad
-            'observaciones': observaciones,
-            'estado': 'completado',
-            'total_racimos_detectados': sum(clasificacion_manual.values()),
-            'fotos': fotos_paths
+                if file and file.filename != '':
+                    # Corregido: llamada a allowed_file
+                    if es_archivo_imagen(file.filename): # Asumiendo que tienes una función similar a allowed_file llamada es_archivo_imagen
+                        # Generar nombre de archivo seguro
+                        base_filename, file_extension = os.path.splitext(file.filename)
+                        safe_base = secure_filename(base_filename)
+                        # Usar extensión original si es válida, si no, .jpg
+                        safe_extension = file_extension if file_extension.lower() in ['.jpg', '.jpeg', '.png', '.gif'] else '.jpg'
+                        filename = f"clasificacion_{codigo_guia}_{i}{safe_extension}"
+
+                        relative_dir = os.path.join('uploads', 'clasificacion', codigo_guia)
+                        save_dir = os.path.join(current_app.static_folder, relative_dir)
+                        os.makedirs(save_dir, exist_ok=True)
+                        save_path = os.path.join(save_dir, filename)
+                        file.save(save_path)
+
+                        relative_path = os.path.join(relative_dir, filename).replace('\\', '/')
+                        rutas_fotos_guardadas.append(relative_path)
+                        logger.info(f"Foto {i} guardada en: {save_path}, ruta relativa: {relative_path}")
+                    else:
+                         flash(f"Archivo no permitido para foto {i}: {file.filename}", "warning")
+                # Corregido: indentación y lógica del else
+                elif not file or file.filename == '':
+                     logger.info(f"No se proporcionó archivo válido para foto {i}.")
+            else: # Corregido: indentación del else que corresponde a `if key in request.files:`
+                logger.info(f"Campo de archivo '{key}' no encontrado en la solicitud.")
+        datos_guia['imagenes_clasificacion'] = rutas_fotos_guardadas
+
+        # Procesar datos de clasificación manual del formulario
+        clasificacion_manual_form = {
+            'verdes': float(request.form.get('verdes', 0)),
+            'sobremaduros': float(request.form.get('sobremaduros', 0)),
+            'dano_corona': float(request.form.get('dano_corona', 0)),
+            'pedunculo_largo': float(request.form.get('pedunculo_largo', 0)),
+            'podridos': float(request.form.get('podridos', 0))
         }
-        
-        # Si hay datos de clasificación automática, guardarlos también
-        usar_clasificacion_automatica = request.form.get('usar_clasificacion_automatica') is not None
-        if usar_clasificacion_automatica and 'clasificacion_automatica' in datos_guia:
-            clasificacion_data['clasificacion_automatica'] = datos_guia['clasificacion_automatica']
+        logger.info(f"Datos de clasificación manual leídos del formulario: {clasificacion_manual_form}")
+
+        # Obtener timestamp actual en UTC
+        # Corregido: indentación
+        timestamp_utc_str = get_utc_timestamp_str()
+        fecha_clasificacion = datetime.now(BOGOTA_TZ).strftime('%d/%m/%Y')
+        hora_clasificacion = datetime.now(BOGOTA_TZ).strftime('%H:%M:%S')
+
+        # --- INICIO: Preparar datos para Base de Datos ---
+        db_clasificacion_data = {
+            'codigo_guia': codigo_guia,
+            'codigo_proveedor': datos_guia.get('codigo_proveedor'),
+            'nombre_proveedor': datos_guia.get('nombre_proveedor'),
+            'timestamp_clasificacion_utc': timestamp_utc_str,
+            'verde_manual': clasificacion_manual_form.get('verdes'),
+            'sobremaduro_manual': clasificacion_manual_form.get('sobremaduros'),
+            'danio_corona_manual': clasificacion_manual_form.get('dano_corona'),
+            'pendunculo_largo_manual': clasificacion_manual_form.get('pedunculo_largo'),
+            'podrido_manual': clasificacion_manual_form.get('podridos'),
+            'clasificacion_manual_json': json.dumps(clasificacion_manual_form),
+            'estado': 'manual_registrada'
+        }
+        logger.info(f"Datos preparados para guardar en DB: {db_clasificacion_data}")
+
+        # Llamar a la función para guardar/actualizar en la DB
+        # Corregido: indentación del else
+        if not db_operations.store_clasificacion(db_clasificacion_data, fotos=rutas_fotos_guardadas):
+            flash("Error crítico: No se pudo guardar la clasificación manual en la base de datos.", "danger")
+            return redirect(url_for('clasificacion.clasificacion', codigo=codigo_guia))
         else:
-            clasificacion_data['clasificacion_automatica'] = {}
-        
-        # Guardar en archivo JSON
-        json_filename = f"clasificacion_{codigo_guia}.json"
-        json_path = os.path.join(clasificaciones_dir, json_filename)
-        
-        with open(json_path, 'w') as f:
-            json.dump(clasificacion_data, f, indent=4)
-        
-        logger.info(f"Clasificación guardada en archivo: {json_path}")
-        logger.info(f"Datos guardados en JSON: {clasificacion_data}")
-            
-        # Guardar en la base de datos si está disponible
-        try:
-            from db_operations import store_clasificacion
-            db_result = store_clasificacion({
-                'codigo_guia': codigo_guia,
-                'codigo_proveedor': clasificacion_data['codigo_proveedor'],
-                'nombre_proveedor': clasificacion_data['nombre_proveedor'],
-                'fecha_clasificacion': fecha_clasificacion,
-                'hora_clasificacion': hora_clasificacion,
-                'clasificacion_manual': json.dumps(clasificacion_manual),  # Guardar en campo correcto
-                'clasificaciones': json.dumps(clasificacion_manual),  # Mantener para compatibilidad
-                'observaciones': observaciones,
-                'estado': 'activo'
-            })
-            
-            if db_result:
-                logger.info(f"Clasificación guardada en base de datos para código_guia: {codigo_guia}")
-            else:
-                logger.warning(f"No se pudo guardar la clasificación en base de datos para código_guia: {codigo_guia}")
-        except Exception as db_error:
-            logger.error(f"Error al guardar en base de datos: {str(db_error)}")
-        
-        # Actualizar el estado en la guía
+            logger.info(f"Clasificación manual guardada en DB para guía: {codigo_guia}")
+        # --- FIN: Guardar en Base de Datos ---
+
+        # Actualizar el diccionario datos_guia para la generación del HTML (si aplica)
         datos_guia.update({
-            'clasificacion_completa': True,
             'fecha_clasificacion': fecha_clasificacion,
             'hora_clasificacion': hora_clasificacion,
-            'tipo_clasificacion': 'manual',
-            'clasificacion_manual': clasificacion_manual,
-            'estado_actual': 'clasificacion_completada'
+            'timestamp_clasificacion_utc': timestamp_utc_str,
+            'clasificacion_manual': clasificacion_manual_form,
+            'estado_actual': 'manual_registrada',
+            'estado_clasificacion': 'manual_registrada',
+            'clasificacion_completada': False # Marcar como no completada hasta que se procese
         })
-        
-        # Generar HTML actualizado
-        html_content = render_template(
-            'guia_template.html',
-            **datos_guia
-        )
-        
-        # Actualizar el archivo de la guía
-        guia_path = os.path.join(current_app.config['GUIAS_FOLDER'], f'guia_{codigo_guia}.html')
-        with open(guia_path, 'w', encoding='utf-8') as f:
-            f.write(html_content)
-        
-        # Redirigir a la página de resultados
-        flash("Clasificación guardada exitosamente", "success")
-        logger.info(f"Redireccionando a: clasificacion.ver_resultados_clasificacion con url_guia={codigo_guia}")
+
+        # Redirigir a la guía centralizada
+        flash("Clasificación manual guardada exitosamente", "success")
+        logger.info(f"Redireccionando a la guía centralizada: misc.ver_guia_centralizada con codigo_guia={codigo_guia}")
         try:
-            # En lugar de retornar un JSON, simplemente redirigir a la página de resultados
-            return redirect(url_for('clasificacion.ver_resultados_clasificacion', url_guia=codigo_guia))
+            return redirect(url_for('misc.ver_guia_centralizada', codigo_guia=codigo_guia))
         except Exception as redirect_error:
-            logger.error(f"Error en redirección: {str(redirect_error)}")
-            # Si hay error con url_for, intentar con URL directa
-            return redirect(f"/clasificacion/ver_resultados_clasificacion/{codigo_guia}")
-        
+            logger.error(f"Error en redirección a guía centralizada con url_for: {str(redirect_error)}")
+            return redirect(f"/guia-centralizada/{codigo_guia}") # Fallback URL
+
     except Exception as e:
         logger.error(f"Error al procesar clasificación: {str(e)}")
         logger.error(traceback.format_exc())
         flash(f"Error al procesar la clasificación: {str(e)}", "danger")
-        return redirect(url_for('clasificacion.clasificacion', codigo=codigo_guia))
+        # Ensure codigo_guia is available for redirect
+        codigo_guia_for_redirect = request.form.get('codigo_guia', None)
+        if codigo_guia_for_redirect:
+             return redirect(url_for('clasificacion.clasificacion', codigo=codigo_guia_for_redirect))
+        else:
+             # Fallback redirect if codigo_guia is missing somehow
+             return redirect(url_for('pesaje.lista_pesajes'))
+
 
 @bp.route('/registrar_clasificacion_api', methods=['POST'])
 def registrar_clasificacion_api():
@@ -748,8 +715,8 @@ def registrar_clasificacion_api():
             'pedunculo_largo': float(pedunculo_largo),
             'podridos': float(podridos)
         }
-        datos_guia['fecha_clasificacion'] = datetime.now().strftime('%d/%m/%Y')
-        datos_guia['hora_clasificacion'] = datetime.now().strftime('%H:%M:%S')
+        #datos_guia['fecha_clasificacion'] = datetime.now().strftime('%d/%m/%Y')
+        #datos_guia['hora_clasificacion'] = datetime.now().strftime('%H:%M:%S')
         datos_guia['imagenes_clasificacion'] = [os.path.join('uploads', 'clasificacion', os.path.basename(img)) for img in imagenes]
         utils_instance.update_datos_guia(codigo_guia, datos_guia)
         
@@ -800,744 +767,331 @@ def registrar_clasificacion_api():
 
 def process_images_with_roboflow(codigo_guia, fotos_paths, guia_fotos_dir, json_path):
     """
-    Procesa imágenes con Roboflow para detectar racimos y clasificarlos.
-    
+    Procesa una lista de imágenes con Roboflow (o modelo local) y guarda los resultados.
+
     Args:
-        codigo_guia: Código de la guía
-        fotos_paths: Lista de rutas a las fotos a procesar
-        guia_fotos_dir: Directorio donde se guardarán las fotos procesadas
-        json_path: Ruta al archivo JSON donde se guardarán los resultados
+        codigo_guia (str): El código de la guía.
+        fotos_paths (list): Lista de rutas a las imágenes.
+        guia_fotos_dir (str): Directorio para guardar fotos procesadas.
+        json_path (str): Ruta para guardar el archivo JSON con los resultados.
+
+    Returns:
+        dict: Diccionario con los datos de clasificación actualizados.
     """
-    try:
-        # Definir valores por defecto para las constantes
-        DEFAULT_API_KEY = ROBOFLOW_API_KEY  # Usar la constante global en lugar de hardcoded API key
-        DEFAULT_WORKSPACE_NAME = WORKSPACE_NAME  # Usar la constante global  
-        DEFAULT_WORKFLOW_ID = WORKFLOW_ID  # Usar la constante global
-        
-        # Definir valor por defecto para modelo_utilizado
-        modelo_utilizado = "No especificado"
-        
-        logger.info(f"Iniciando procesamiento de imágenes para guía: {codigo_guia}")
-        logger.info(f"Directorio de fotos: {guia_fotos_dir}")
-        logger.info(f"Archivo JSON para resultados: {json_path}")
-        
-        # Verificar que el directorio existe
-        if not os.path.exists(guia_fotos_dir):
-            logger.info(f"Creando directorio para fotos: {guia_fotos_dir}")
-            os.makedirs(guia_fotos_dir, exist_ok=True)
-        
-        # Verificar que el directorio de clasificaciones existe
-        clasificaciones_dir = os.path.dirname(json_path)
-        if not os.path.exists(clasificaciones_dir):
-            logger.info(f"Creando directorio para clasificaciones: {clasificaciones_dir}")
-            os.makedirs(clasificaciones_dir, exist_ok=True)
-        
-        # MODIFICACIÓN: En lugar de eliminar el archivo JSON existente, cargar los datos manuales si existen
-        existing_manual_classification = {}
-        if os.path.exists(json_path):
-            try:
-                logger.info(f"Archivo JSON existente encontrado: {json_path}")
-                # Leer el archivo JSON para extraer la clasificación manual
-                with open(json_path, 'r') as f:
-                    existing_data = json.load(f)
-                    if 'clasificacion_manual' in existing_data and existing_data['clasificacion_manual']:
-                        existing_manual_classification = existing_data['clasificacion_manual']
-                        logger.info(f"Preservando clasificación manual existente: {existing_manual_classification}")
-                    else:
-                        logger.info("No se encontró clasificación manual en el archivo JSON existente")
-                
-                # Crear un respaldo del archivo existente
-                backup_path = f"{json_path}.bak.{int(time.time())}"
-                shutil.copy2(json_path, backup_path)
-                logger.info(f"Archivo JSON respaldado como: {backup_path}")
-                
-                # Ahora sí podemos eliminar/sobreescribir el archivo original
-                os.remove(json_path)
-                logger.info("Archivo JSON eliminado correctamente para crear uno nuevo con datos actualizados.")
-            except Exception as e:
-                logger.error(f"Error al procesar archivo JSON existente: {str(e)}")
-                logger.error(traceback.format_exc())
-                # Si hay error, asegurarse de que existing_manual_classification esté inicializado
-                existing_manual_classification = {}
-        
-        # Inicializar clasificación con estructura nueva y limpia, pero preservando clasificación manual
-        clasificacion_data = {
-            'id': f"Clasificacion_{codigo_guia}",
-            'fecha_registro': datetime.now().strftime('%d/%m/%Y'),
-            'hora_registro': datetime.now().strftime('%H:%M:%S'),
-            'fotos': fotos_paths,
-            'estado': 'en_proceso',
-            'clasificacion_manual': existing_manual_classification,  # Usar los datos existentes
-            'clasificacion_automatica': {
-                'verdes': {'cantidad': 0, 'porcentaje': 0},
-                'maduros': {'cantidad': 0, 'porcentaje': 0},
-                'sobremaduros': {'cantidad': 0, 'porcentaje': 0},
-                'podridos': {'cantidad': 0, 'porcentaje': 0},
-                'danio_corona': {'cantidad': 0, 'porcentaje': 0},
-                'pendunculo_largo': {'cantidad': 0, 'porcentaje': 0}
-            },
-            'resultados_por_foto': {}
-        }
-        
-        # Utilizar la estructura de clasificación automática directamente
-        clasificacion_automatica = clasificacion_data['clasificacion_automatica']
-        resultados_por_foto = clasificacion_data['resultados_por_foto']
-        
-        
-        # Registrar tiempo de inicio
-        tiempo_inicio = time.time()
-        
-        # Obtener configuración de Roboflow
-        roboflow_api_key = current_app.config.get('ROBOFLOW_API_KEY', DEFAULT_API_KEY)
-        workspace_name = current_app.config.get('ROBOFLOW_WORKSPACE', DEFAULT_WORKSPACE_NAME)
-        workflow_id = current_app.config.get('ROBOFLOW_WORKFLOW_ID', DEFAULT_WORKFLOW_ID)
-        
-        # Verificar que tenemos la configuración necesaria
-        if not all([roboflow_api_key, workspace_name, workflow_id]):
-            logger.error("Falta configuración de Roboflow.")
-            logger.error(f"API Key configurada: {'Sí' if roboflow_api_key else 'No'}")
-            logger.error(f"Workspace configurado: {'Sí' if workspace_name else 'No'}")
-            logger.error(f"Workflow ID configurado: {'Sí' if workflow_id else 'No'}")
-            logger.error("Usando simulación como alternativa.")
-            # MODIFICACIÓN: Forzar el uso de API real en vez de simulación
-            use_simulation = False  # Antes: use_simulation = True
-        else:
-            # FORZAR USO DE LLAMADAS REALES
-            use_simulation = False
-            # Inicializar el cliente de Roboflow
-            try:
-                if InferenceHTTPClient:
-                    # Usar el SDK oficial si está disponible
-                    client = InferenceHTTPClient(
-                        api_url="https://detect.roboflow.com",
-                        api_key=roboflow_api_key
-                    )
-                    logger.info("Cliente SDK de Roboflow inicializado correctamente.")
-                else:
-                    # Usar nuestro cliente directo si el SDK no está disponible
-                    client = DirectRoboflowClient(
-                        api_url="https://detect.roboflow.com",
-                        api_key=roboflow_api_key
-                    )
-                    logger.info("Cliente directo HTTP de Roboflow inicializado correctamente.")
-                
-                logger.info(f"Workspace: {workspace_name}, Workflow ID: {workflow_id}")
-            except Exception as e:
-                logger.error(f"Error al inicializar el cliente de Roboflow: {str(e)}")
-                # MODIFICACIÓN: No revertir a simulación en caso de error, intentar usar el cliente directo
-                logger.info("Intentando usar el cliente directo como alternativa...")
-                try:
-                    client = DirectRoboflowClient(
-                        api_url="https://detect.roboflow.com",
-                        api_key=roboflow_api_key
-                    )
-                    logger.info("Cliente directo HTTP de Roboflow inicializado como fallback.")
-                except Exception as e2:
-                    logger.error(f"Error al inicializar cliente directo: {str(e2)}")
-                    # Mantenemos use_simulation=False pero registramos el error
-                    logger.error("Se intentará procesar con la API pero puede fallar.")
-        
-        # Limitar a 3 fotos en producción como indicado
-        if not use_simulation and len(fotos_paths) > 3:
-            logger.info(f"Limitando a 3 fotos para procesamiento con Roboflow (originalmente {len(fotos_paths)})")
-            fotos_paths = fotos_paths[:3]
-        
-        # Procesar cada imagen
-        for idx, foto_path in enumerate(fotos_paths, 1):
-            logger.info(f"Procesando imagen {idx}/{len(fotos_paths)}: {foto_path}")
-            
-            # Actualizar estado de procesamiento
-            global processing_status
-            if codigo_guia in processing_status:
-                processing_status[codigo_guia] = {
-                    'status': 'processing',
-                    'progress': int(5 + (idx-1) * 90 / len(fotos_paths)),  # Dejar espacio para el paso final
-                    'step': 2,  # Paso 2: Procesando con modelo
-                    'message': f'Procesando imagen {idx}/{len(fotos_paths)}...',
-                    'processed_images': idx - 1,
-                    'total_images': len(fotos_paths)
-                }
-            
-            # Verificar que la imagen existe
-            if not os.path.exists(foto_path):
-                logger.error(f"La imagen no existe: {foto_path}")
-                if codigo_guia in processing_status:
-                    processing_status[codigo_guia]['message'] = f'Error: La imagen {idx} no existe'
-                    processing_status[codigo_guia]['status'] = 'error'
-                continue
-            
-            # Enviar la imagen a Roboflow para procesamiento
-            try:
-                if use_simulation:
-                    # SIMULACIÓN: Generar datos de prueba aleatorios para imitar respuesta de Roboflow
-                    logger.info(f"Simulando procesamiento para imagen {idx}: {foto_path}")
-                    
-                    # Simular un tiempo de procesamiento
-                    time.sleep(1)
-                    
-                    # Generar detecciones aleatorias
-                    import random
-                    num_detecciones = random.randint(5, 15)
-                    detecciones = []
-                    
-                    for _ in range(num_detecciones):
-                        clase = random.choice(['verde', 'maduro', 'sobremaduro', 'podrido', 'danio_corona', 'pendunculo_largo'])
-                        detecciones.append({
-                            'class': clase,
-                            'confidence': random.uniform(0.6, 0.95),
-                            'x': random.randint(100, 500),
-                            'y': random.randint(100, 500),
-                            'width': random.randint(50, 150),
-                            'height': random.randint(50, 150)
-                        })
-                    
-                    # Crear un resultado simulado
-                    result = {
-                        'predictions': detecciones,
-                        'time': random.uniform(0.5, 2.0),
-                        'image': {
-                            'width': 800,
-                            'height': 600
-                        }
-                    }
-                    
-                    # Copiar la imagen original como "procesada" para simulación
-                    processed_img_path = os.path.join(guia_fotos_dir, f"foto_{idx}_procesada.jpg")
-                    shutil.copy(foto_path, processed_img_path)
-                    
-                    logger.info(f"Simulación completa para imagen {idx}. Generadas {len(detecciones)} detecciones.")
-                    modelo_utilizado = "SIMULACIÓN (versión mejorada)"
-                else:
-                    # CÓDIGO REAL: Enviar la imagen a Roboflow usando el SDK
-                    logger.info(f"Enviando imagen {idx} a Roboflow API: {foto_path}")
-                    
-                    # Ejecutar el workflow con la imagen
-                    result = client.run_workflow(
-                        workspace_name=workspace_name,
-                        workflow_id=workflow_id,
-                        images={"image": foto_path},
-                        use_cache=True  # cache workflow definition for 15 minutes
-                    )
-                    
-                    logger.info(f"Respuesta de Roboflow recibida: {result}")
-                    
-                    # --- DEBUG --- Log the raw Roboflow result structure
-                    logger.info(f"DEBUG Foto {idx}: Raw Roboflow result type: {type(result)}")
-                    if isinstance(result, list):
-                        logger.info(f"DEBUG Foto {idx}: Raw Roboflow result is a list with {len(result)} items.")
-                        if len(result) > 0:
-                            logger.info(f"DEBUG Foto {idx}: First item type: {type(result[0])}")
-                            if isinstance(result[0], dict):
-                                logger.info(f"DEBUG Foto {idx}: First item keys: {list(result[0].keys())}")
-                    elif isinstance(result, dict):
-                        logger.info(f"DEBUG Foto {idx}: Raw Roboflow result is a dict with keys: {list(result.keys())}")
-                    # --- END DEBUG ---
-                    
-                    # Verificar si hay errores en la respuesta
-                    if "error" in result:
-                        error_msg = result.get("error", "Error desconocido")
-                        logger.error(f"Error en la respuesta de Roboflow: {error_msg}")
-                        
-                        # Actualizar estado de procesamiento para mostrar el error
-                        if codigo_guia in processing_status:
-                            processing_status[codigo_guia]['message'] = f'Error: {error_msg}'
-                            if result.get('auth_error'):
-                                processing_status[codigo_guia]['message'] = 'Error de autenticación con Roboflow. Verifique su API key.'
-                            elif result.get('not_found'):
-                                processing_status[codigo_guia]['message'] = 'Workflow o workspace no encontrado. Verifique configuración.'
-                            elif result.get('server_error'):
-                                processing_status[codigo_guia]['message'] = 'Error del servidor de Roboflow. Intente nuevamente más tarde.'
-                            processing_status[codigo_guia]['status'] = 'error'
-                        
-                        # Almacenar resultado vacío pero con error
-                        detecciones = []
-                        modelo_utilizado = f"Error en Roboflow: {error_msg}"
-                        raw_result_to_save = result # Save the error response
-                    else:
-                        # Assign the full result to be saved by default
-                        raw_result_to_save = result 
-                        logger.info(f"DEBUG Foto {idx}: Assigning full Roboflow result to raw_result_to_save")
-                        
-                        # NORMALIZE THE RESPONSE for consistent processing:
-                        # This ensures that label_visualization_1 is accessible in the same way
-                        # regardless of whether the result is a list or dictionary
-                        if isinstance(result, list) and len(result) > 0:
-                            # Case 1: Response is a list (typical for photos 1 & 2)
-                            logger.info(f"DEBUG Foto {idx}: Normalizing LIST result")
-                            # Get the first item from the list
-                            main_result = result[0] if isinstance(result[0], dict) else {}
-                            # Check if this item has the expected keys
-                            if 'label_visualization_1' in main_result or 'annotated_image' in main_result:
-                                # If it has necessary keys, use just this dictionary
-                                raw_result_to_save = main_result
-                                logger.info(f"DEBUG Foto {idx}: Using first list item as raw_result (has required keys)")
-                            else:
-                                # If not, search all items for one with the necessary keys
-                                logger.info(f"DEBUG Foto {idx}: First item lacks required keys, searching all items")
-                                for item in result:
-                                    if isinstance(item, dict):
-                                        if 'label_visualization_1' in item or 'annotated_image' in item:
-                                            raw_result_to_save = item
-                                            logger.info(f"DEBUG Foto {idx}: Found list item with required keys")
-                                            break
-                        elif isinstance(result, dict):
-                            # Case 2: Response is already a dictionary (possible for photo 3)
-                            logger.info(f"DEBUG Foto {idx}: Result is already a dictionary")
-                            # Keep it as is, but check if it doesn't have expected keys
-                            if 'label_visualization_1' not in result and 'annotated_image' not in result:
-                                logger.warning(f"DEBUG Foto {idx}: Dictionary result lacks both required keys")
-                        
-                        # As a final check, log what's being saved
-                        if isinstance(raw_result_to_save, dict):
-                            logger.info(f"DEBUG Foto {idx}: Final raw_result_to_save has keys: {list(raw_result_to_save.keys())}")
-                            # Specifically check for the visualization keys
-                            has_label = 'label_visualization_1' in raw_result_to_save
-                            has_annotated = 'annotated_image' in raw_result_to_save
-                            logger.info(f"DEBUG Foto {idx}: Has label_visualization_1: {has_label}, annotated_image: {has_annotated}")
-                        elif isinstance(raw_result_to_save, list):
-                            logger.info(f"DEBUG Foto {idx}: Final raw_result_to_save is still a list with {len(raw_result_to_save)} items")
-                        
-                        # Las detecciones podrían estar en diferentes formatos dependiendo del modelo
-                        # Intentar extraer las predicciones si están disponibles
-                        if isinstance(result, dict) and "predictions" in result:
-                            detecciones = result["predictions"]
-                            logger.info(f"Detecciones encontradas (predictions): {len(detecciones)}")
-                        else:
-                            # Si no hay predicciones explícitas, buscamos claves específicas como las del ejemplo
-                            detecciones = []
-                            
-                            # Procesamiento para el formato específico de la respuesta actual
-                            # Donde las categorías están en la raíz del objeto JSON
-                            categorias_mapeo = {
-                                "Racimos verdes": "verde",
-                                "racimo verde": "verde",
-                                "racimo maduro": "maduro", 
-                                "racimo sobremaduro": "sobremaduro",
-                                "racimo daño en corona": "danio_corona",
-                                "racimo pedunculo largo": "pendunculo_largo",
-                                "racimo podrido": "podrido"
-                            }
-                            
-                            try:
-                                logger.info(f"Analizando respuesta de Roboflow para buscar categorías específicas. Formato de respuesta: {type(result)}")
-                                logger.info(f"Claves disponibles en la respuesta: {result.keys() if isinstance(result, dict) else 'No es un diccionario'}")
-                                
-                                # Log más detallado de la estructura JSON para debugging
-                                if isinstance(result, dict):
-                                    for key, value in result.items():
-                                        logger.info(f"Key '{key}' has type {type(value)}")
-                                        if key == 'outputs' and isinstance(value, list) and len(value) > 0:
-                                            logger.info(f"First output has keys: {value[0].keys() if isinstance(value[0], dict) else 'Not a dict'}")
-                                            
-                                            # Extraer detecciones de la lista de outputs
-                                            for output_idx, output in enumerate(value):
-                                                if isinstance(output, dict):
-                                                    logger.info(f"Procesando output[{output_idx}]")
-                                                    
-                                                    # Buscar categorías directamente en el output
-                                                    for categoria_key, categoria_value in categorias_mapeo.items():
-                                                        if categoria_key in output:
-                                                            cantidad = output.get(categoria_key, 0)
-                                                            logger.info(f"Encontrada categoría {categoria_key} en output[{output_idx}]: {cantidad}")
-                                                            
-                                                            if isinstance(cantidad, int) and cantidad > 0:
-                                                                for i in range(cantidad):
-                                                                    detecciones.append({
-                                                                        'class': categoria_value,
-                                                                        'confidence': 0.95,
-                                                                        'x': 100 + (i * 10),
-                                                                        'y': 100 + (i * 10),
-                                                                        'width': 50,
-                                                                        'height': 50
-                                                                    })
-                                                    
-                                                    # Buscar 'Racimos verdes' específicamente
-                                                    if 'Racimos verdes' in output:
-                                                        cantidad = output.get('Racimos verdes', 0)
-                                                        logger.info(f"Encontrada categoría 'Racimos verdes' en output[{output_idx}]: {cantidad}")
-                                                        
-                                                        if isinstance(cantidad, int) and cantidad > 0:
-                                                            for i in range(cantidad):
-                                                                detecciones.append({
-                                                                    'class': 'verde',
-                                                                    'confidence': 0.95,
-                                                                    'x': 100 + (i * 10),
-                                                                    'y': 100 + (i * 10),
-                                                                    'width': 50,
-                                                                    'height': 50
-                                                                })
-                                    
-                                    # Recorrer las categorías que podemos obtener directamente de la respuesta
-                                    for categoria_key, categoria_value in categorias_mapeo.items():
-                                        try:
-                                            if categoria_key in result:
-                                                cantidad = result.get(categoria_key, 0)
-                                                logger.info(f"Encontrada categoría {categoria_key}: {cantidad}")
-                                                
-                                                # Si es un entero, agregamos esa cantidad de detecciones
-                                                if isinstance(cantidad, int) and cantidad > 0:
-                                                    for i in range(cantidad):
-                                                        detecciones.append({
-                                                            'class': categoria_value,
-                                                            'confidence': 0.95,  # Valor alto de confianza
-                                                            'x': 100 + (i * 10),  # Valores placeholder variados
-                                                            'y': 100 + (i * 10),
-                                                            'width': 50,
-                                                            'height': 50
-                                                        })
-                                        except Exception as e:
-                                            logger.error(f"Error procesando categoría {categoria_key}: {str(e)}")
-                                
-                                # Buscar detecciones también en "data.raw_results" si existe
-                                try:
-                                    if "data" in result and isinstance(result["data"], dict) and "raw_results" in result["data"]:
-                                        raw_results = result["data"]["raw_results"]
-                                        logger.info(f"Encontrado campo data.raw_results: {type(raw_results)}")
-                                        
-                                        # Si es una lista, procesamos cada elemento
-                                        if isinstance(raw_results, list):
-                                            for idx, raw_result in enumerate(raw_results):
-                                                # Comprobar las mismas categorías en cada resultado individual
-                                                for categoria_key, categoria_value in categorias_mapeo.items():
-                                                    if isinstance(raw_result, dict) and categoria_key in raw_result:
-                                                        cantidad = raw_result.get(categoria_key, 0)
-                                                        logger.info(f"Encontrada categoría {categoria_key} en raw_result[{idx}]: {cantidad}")
-                                                        
-                                                        if isinstance(cantidad, int) and cantidad > 0:
-                                                            for i in range(cantidad):
-                                                                detecciones.append({
-                                                                    'class': categoria_value,
-                                                                    'confidence': 0.95,
-                                                                    'x': 100 + (i * 10),
-                                                                    'y': 100 + (i * 10),
-                                                                    'width': 50,
-                                                                    'height': 50
-                                                                })
-                                except Exception as e:
-                                    logger.error(f"Error procesando data.raw_results: {str(e)}")
-                                
-                                # Actualizamos el contador de detecciones derivadas
-                                logger.info(f"Detecciones derivadas: {len(detecciones)}")
-                                
-                                # Si no hay detecciones, pero hay potholes_detected, creamos detecciones genéricas
-                                if len(detecciones) == 0 and "potholes_detected" in result and isinstance(result["potholes_detected"], (int, float)) and result["potholes_detected"] > 0:
-                                    total_potholes = result["potholes_detected"]
-                                    logger.info(f"Usando potholes_detected para crear detecciones genéricas: {total_potholes}")
-                                    
-                                    # Crear detecciones genéricas verdes como fallback
-                                    for i in range(int(total_potholes)):
-                                        detecciones.append({
-                                            'class': 'verde',  # Por defecto asumimos verdes
-                                            'confidence': 0.90,
-                                            'x': 100 + (i % 10) * 20,
-                                            'y': 100 + (i // 10) * 20,
-                                            'width': 50,
-                                            'height': 50
-                                        })
-                                    
-                                    logger.info(f"Creadas {len(detecciones)} detecciones genéricas")
-                                    
-                                # Actualizar clasificacion_automatica directamente con los datos del output
-                                # Para trabajar alrededor del error NoneType
-                                if len(detecciones) > 0:
-                                    # Contar cuántos de cada categoría hay en las detecciones
-                                    conteo_categorias = {
-                                        'verdes': 0,
-                                        'maduros': 0,
-                                        'sobremaduros': 0,
-                                        'podridos': 0,
-                                        'danio_corona': 0,
-                                        'pendunculo_largo': 0
-                                    }
-                                    
-                                    for deteccion in detecciones:
-                                        clase = deteccion.get('class', '').lower()
-                                        if clase == 'verde':
-                                            conteo_categorias['verdes'] += 1
-                                        elif clase == 'maduro':
-                                            conteo_categorias['maduros'] += 1
-                                        elif clase == 'sobremaduro':
-                                            conteo_categorias['sobremaduros'] += 1
-                                        elif clase == 'podrido':
-                                            conteo_categorias['podridos'] += 1
-                                        elif clase == 'danio_corona':
-                                            conteo_categorias['danio_corona'] += 1
-                                        elif clase == 'pendunculo_largo':
-                                            conteo_categorias['pendunculo_largo'] += 1
-                                    
-                                    # Actualizar los contadores en clasificacion_automatica
-                                    for categoria, cantidad in conteo_categorias.items():
-                                        if categoria in clasificacion_automatica:
-                                            clasificacion_automatica[categoria]['cantidad'] = cantidad
-                                    
-                                    logger.info(f"Actualizado clasificacion_automatica directamente de detecciones: {conteo_categorias}")
-                            except Exception as e:
-                                logger.error(f"Error procesando respuesta de Roboflow: {str(e)}")
-                                logger.error(traceback.format_exc())
-                        
-                        modelo_utilizado = f"Roboflow Workflow: {workflow_id}"
-                        
-                        # Intentar extraer y guardar la imagen procesada si existe
-                        try:
-                            # Buscar la imagen anotada si está disponible
-                            annotated_image = None
-                            # Comprobar varios campos donde podría estar la imagen anotada
-                            for field_name in ['annotated_image', 'visualization', 'image_with_boxes', 'output_image']:
-                                if field_name in result:
-                                    logger.info(f"Encontrado campo {field_name} para imagen procesada")
-                                    try:
-                                        if isinstance(result[field_name], str):
-                                            # Intentar decodificar como base64
-                                            img_data = decode_image_data(result[field_name])
-                                            if img_data:
-                                                # Guardar la imagen procesada
-                                                img_path = os.path.join(guia_fotos_dir, f"foto_{idx}_procesada.jpg")
-                                                with open(img_path, 'wb') as f:
-                                                    f.write(img_data)
-                                                logger.info(f"Imagen procesada guardada desde campo '{field_name}'")
-                                                break
-                                    except Exception as e:
-                                        logger.error(f"Error al guardar imagen procesada: {str(e)}")
-                        except Exception as e:
-                            logger.error(f"Error general al procesar imagen: {str(e)}")
-                        logger.error(traceback.format_exc())
-                
-                # Guardar resultado completo para esta foto
-                str_idx = str(idx)
-                resultados_por_foto[str_idx] = {
-                    'detecciones': detecciones,
-                    'total_detecciones': len(detecciones),
-                    'raw_result': result  # Guardar el resultado completo
-                }
-                
-                # Contar detecciones por categoría
-                for deteccion in detecciones:
-                    clase = deteccion.get('class', '').lower()
-                    
-                    # Mapear clases a categorías
-                    if 'verde' in clase:
-                        clasificacion_automatica['verdes']['cantidad'] += 1
-                    elif 'maduro' in clase and 'sobre' not in clase:
-                        clasificacion_automatica['maduros']['cantidad'] += 1
-                    elif 'sobremaduro' in clase or 'sobre_maduro' in clase:
-                        clasificacion_automatica['sobremaduros']['cantidad'] += 1
-                    elif 'podrido' in clase:
-                        clasificacion_automatica['podridos']['cantidad'] += 1
-                    elif 'corona' in clase or 'danio_corona' in clase or 'daño_corona' in clase:
-                        clasificacion_automatica['danio_corona']['cantidad'] += 1
-                    elif 'pendunculo' in clase or 'pedunculo' in clase:
-                        clasificacion_automatica['pendunculo_largo']['cantidad'] += 1
-                
-                # Guardar progreso parcial después de cada imagen
-                clasificacion_data['clasificacion_automatica'] = clasificacion_automatica
-                clasificacion_data['resultados_por_foto'] = resultados_por_foto
-                clasificacion_data['estado'] = 'en_proceso'
-                
-                # Guardar archivo JSON con resultados parciales
-                logger.info(f"Guardando resultados parciales en: {json_path}")
-                with open(json_path, 'w', encoding='utf-8') as f:
-                    json.dump(clasificacion_data, f, indent=4, ensure_ascii=False)
-                
-            except Exception as e:
-                logger.error(f"Error procesando imagen {idx}: {str(e)}")
-                logger.error(traceback.format_exc())
-                resultados_por_foto[str(idx)] = {'error': str(e)}
-        
-        # Procesar resultados finales
-        logger.info("Procesamiento de imágenes completado. Preparando resultados finales.")
-        
-        # Calcular porcentajes
+    logger.info(f"[DIAG] Iniciando process_images_with_roboflow para guía {codigo_guia}")
+    tiempo_inicio = time.time()
+
+    # Inicializar estructura de datos para guardar
+    clasificacion_data = {
+        'codigo_guia': codigo_guia,
+        'fotos_originales': fotos_paths,
+        'timestamp_inicio_proceso_utc': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
+        'estado': 'iniciando',
+        'clasificacion_automatica': {
+            'verdes': {'cantidad': 0, 'porcentaje': 0},
+            'maduros': {'cantidad': 0, 'porcentaje': 0},
+            'sobremaduros': {'cantidad': 0, 'porcentaje': 0},
+            'danio_corona': {'cantidad': 0, 'porcentaje': 0},
+            'pendunculo_largo': {'cantidad': 0, 'porcentaje': 0},
+            'podridos': {'cantidad': 0, 'porcentaje': 0}
+        },
+        'resultados_por_foto': {},
+        'total_racimos_detectados': 0,
+        'error_message': None,
+        'modelo_utilizado': None # Para indicar qué modelo se usó
+    }
+
+    # Intentar cargar datos existentes si el archivo JSON ya existe
+    if os.path.exists(json_path):
         try:
-            # Filtrar solo las categorías que son diccionarios (no el total_racimos que añadimos después)
-            categorias_validas = {k: v for k, v in clasificacion_automatica.items() if isinstance(v, dict) and 'cantidad' in v}
-            total_racimos = sum(cat['cantidad'] for cat in categorias_validas.values())
-            logger.info(f"Total de racimos detectados: {total_racimos}")
-            
-            if total_racimos > 0:
-                for categoria, datos in clasificacion_automatica.items():
-                    # Solo procesar categorías que son diccionarios con el campo cantidad
-                    if isinstance(datos, dict) and 'cantidad' in datos:
-                        try:
-                            datos['porcentaje'] = round(
-                                (datos['cantidad'] / total_racimos) * 100, 1
-                            )
-                        except Exception as e:
-                            logger.error(f"Error calculando porcentaje para {categoria}: {str(e)}")
-                            datos['porcentaje'] = 0
-            
-            # Guardar el total_racimos como un campo separado en los datos de clasificación
-            clasificacion_data['total_racimos_detectados'] = total_racimos
-            
-            # También guardamos los datos procesados en clasificacion_data
+            with open(json_path, 'r', encoding='utf-8') as f:
+                existing_data = json.load(f)
+            # Sobrescribir solo si hay datos válidos y estado no es 'completado' o 'error'
+            if isinstance(existing_data, dict) and existing_data.get('estado') not in ['completado', 'error']:
+                clasificacion_data.update(existing_data)
+                logger.info(f"[DIAG] Datos existentes cargados desde {json_path}")
+        except Exception as load_err:
+            logger.error(f"[DIAG] Error cargando JSON existente {json_path}: {load_err}")
+
+    # Crear cliente Roboflow (o inicializar modelo local)
+    try:
+        # Configuración Roboflow
+        api_url = current_app.config.get("ROBOFLOW_API_URL")
+        api_key = current_app.config.get("ROBOFLOW_API_KEY")
+        workspace_name = current_app.config.get("ROBOFLOW_WORKSPACE")
+        workflow_id = current_app.config.get("ROBOFLOW_WORKFLOW_ID")
+
+        if api_url and api_key and workspace_name and workflow_id:
+             client = DirectRoboflowClient(api_url=api_url, api_key=api_key)
+             clasificacion_data['modelo_utilizado'] = f"Roboflow Workflow: {workflow_id}"
+             logger.info("[DIAG] Cliente Roboflow inicializado.")
+        else:
+             client = None
+             clasificacion_data['modelo_utilizado'] = "No configurado"
+             logger.warning("[DIAG] Variables de configuración de Roboflow no encontradas. No se usará la API.")
+
+    except Exception as client_err:
+        logger.error(f"[DIAG] Error inicializando cliente Roboflow: {client_err}")
+        client = None
+        clasificacion_data['modelo_utilizado'] = "Error inicialización"
+
+    # Procesar cada imagen
+    resultados_por_foto = clasificacion_data.get('resultados_por_foto', {})
+    clasificacion_automatica = clasificacion_data.get('clasificacion_automatica', {
+            'verdes': {'cantidad': 0, 'porcentaje': 0}, 'maduros': {'cantidad': 0, 'porcentaje': 0},
+            'sobremaduros': {'cantidad': 0, 'porcentaje': 0}, 'danio_corona': {'cantidad': 0, 'porcentaje': 0},
+            'pendunculo_largo': {'cantidad': 0, 'porcentaje': 0}, 'podridos': {'cantidad': 0, 'porcentaje': 0}
+        })
+
+    num_fotos = len(fotos_paths)
+    for idx, foto_path in enumerate(fotos_paths, 1):
+        str_idx = str(idx)
+        logger.info(f"[DIAG] Procesando imagen {idx}/{num_fotos}: {foto_path}")
+
+        # Actualizar estado global si existe
+        if codigo_guia in processing_status:
+            processing_status[codigo_guia]['status'] = 'processing'
+            processing_status[codigo_guia]['progress'] = int((idx / num_fotos) * 90) # 90% para procesamiento
+            processing_status[codigo_guia]['message'] = f'Procesando imagen {idx} de {num_fotos}'
+
+        # Omitir si ya fue procesada y guardada en resultados_por_foto
+        if str_idx in resultados_por_foto and resultados_por_foto[str_idx].get('detecciones') is not None:
+            logger.info(f"[DIAG] Imagen {idx} ya procesada, omitiendo.")
+            continue
+
+        try:
+            detecciones = []
+            raw_result_to_save = {}
+            modelo_utilizado = clasificacion_data.get('modelo_utilizado', 'Desconocido') # Usar el general
+
+            if not os.path.exists(foto_path):
+                logger.error(f"[DIAG] Archivo de imagen no encontrado: {foto_path}")
+                resultados_por_foto[str_idx] = {'error': 'Archivo no encontrado'}
+                continue # Pasar a la siguiente imagen
+
+            # --- Lógica de inferencia (Roboflow o Local) ---
+            if client: # Solo intentar si el cliente se inicializó
+                logger.info(f"[DIAG] Enviando imagen {idx} a Roboflow API: {foto_path}")
+                result = client.run_workflow(
+                    workspace_name=workspace_name,
+                    workflow_id=workflow_id,
+                    images={"image": foto_path},
+                    use_cache=True
+                )
+                logger.info(f"[DIAG] Respuesta Roboflow Foto {idx} (Tipo: {type(result)}): {result}") # Log completo
+
+                # Normalizar respuesta y extraer detecciones
+                # Corregido: indentación
+                raw_result_to_save = result
+                detecciones = []
+
+                # Corregido: indentación
+                if isinstance(result, list) and len(result) > 0:
+                    main_result = result[0] if isinstance(result[0], dict) else {}
+                    if 'label_visualization_1' in main_result or 'annotated_image' in main_result:
+                        raw_result_to_save = main_result
+                    else:
+                        # Buscar en otros elementos si el primero no tiene la imagen
+                        for item in result:
+                            if isinstance(item, dict):
+                                if 'label_visualization_1' in item or 'annotated_image' in item:
+                                    raw_result_to_save = item
+                                    break
+
+                logger.debug(f"[DIAG] Foto {idx}: raw_result_to_save (Tipo: {type(raw_result_to_save)}): {raw_result_to_save}")
+
+                # Extraer detecciones (intentando varios formatos)
+                if isinstance(raw_result_to_save, dict):
+                    if "predictions" in raw_result_to_save:
+                        # Asegurarse que predictions es una lista de diccionarios
+                        if isinstance(raw_result_to_save["predictions"], list):
+                            detecciones = [d for d in raw_result_to_save["predictions"] if isinstance(d, dict)]
+                            logger.info(f"[DIAG] Foto {idx}: Detecciones extraídas de 'predictions': {len(detecciones)}")
+                        else:
+                            logger.warning(f"[DIAG] Foto {idx}: 'predictions' no es una lista: {type(raw_result_to_save['predictions'])}")
+                    else:
+                        logger.info(f"[DIAG] Foto {idx}: No se encontró 'predictions', buscando en categorías raíz.")
+                        categorias_mapeo = {"Racimos verdes": "verde", "racimo verde": "verde", "racimo maduro": "maduro", "racimo sobremaduro": "sobremaduro", "racimo daño en corona": "danio_corona", "racimo pedunculo largo": "pendunculo_largo", "racimo podrido": "podrido"}
+                        # Corregido: indentación del bucle y su contenido
+                        for categoria_key, categoria_value in categorias_mapeo.items():
+                            if categoria_key in raw_result_to_save and isinstance(raw_result_to_save[categoria_key], int) and raw_result_to_save[categoria_key] > 0:
+                                cantidad = raw_result_to_save[categoria_key]
+                                logger.info(f"[DIAG] Foto {idx}: Encontrada categoría {categoria_key}: {cantidad}")
+                                for i in range(cantidad):
+                                    # Agregar detección simulada si se basa en conteo
+                                    detecciones.append({'class': categoria_value, 'confidence': 0.95, 'x': 100 + i * 10, 'y': 100 + i * 10, 'width': 50, 'height': 50, 'source': 'category_count'})
+                        logger.info(f"[DIAG] Foto {idx}: Detecciones derivadas de categorías raíz: {len(detecciones)}")
+                elif isinstance(result, list): # Si el resultado original era lista y no se normalizó bien
+                    logger.warning(f"[DIAG] Foto {idx}: El resultado sigue siendo una lista, no se pudieron extraer detecciones estructuradas.")
+
+                # Guardar imagen procesada (si existe)
+                try:
+                    annotated_image_data = None
+                    if isinstance(raw_result_to_save, dict):
+                        for field_name in ['annotated_image', 'visualization', 'image_with_boxes', 'output_image', 'label_visualization_1']:
+                            if field_name in raw_result_to_save and isinstance(raw_result_to_save[field_name], str):
+                                logger.info(f"[DIAG] Foto {idx}: Encontrado campo de imagen '{field_name}'")
+                                annotated_image_data = decode_image_data(raw_result_to_save[field_name])
+                                if annotated_image_data:
+                                    img_path = os.path.join(guia_fotos_dir, f"foto_{idx}_procesada.jpg")
+                                    # Corregido: indentación del with y su contenido
+                                    with open(img_path, 'wb') as f:
+                                        f.write(annotated_image_data)
+                                    logger.info(f"[DIAG] Foto {idx}: Imagen procesada guardada en {img_path}")
+                                    break # Salir al encontrar y guardar la primera imagen
+                    if not annotated_image_data:
+                         logger.warning(f"[DIAG] Foto {idx}: No se encontró/decodificó imagen anotada/visualización.")
+                except Exception as img_err:
+                    logger.error(f"[DIAG] Foto {idx}: Error guardando imagen procesada: {img_err}")
+                    logger.error(traceback.format_exc())
+
+            else: # Si no hay cliente Roboflow
+                logger.warning(f"[DIAG] No hay cliente Roboflow inicializado. Saltando procesamiento para imagen {idx}.")
+                detecciones = []
+                raw_result_to_save = {"error": "Cliente Roboflow no inicializado"}
+                modelo_utilizado = "No procesado (sin cliente)"
+
+            # Guardar resultado para esta foto
+            logger.debug(f"[DIAG] Foto {idx}: Antes de guardar resultados_por_foto. Detecciones: {detecciones}")
+            resultados_por_foto[str_idx] = {
+                'detecciones': detecciones,
+                'total_detecciones': len(detecciones),
+                'raw_result': raw_result_to_save # Guardar la respuesta cruda para depuración
+            }
+            logger.debug(f"[DIAG] Foto {idx}: Guardado en resultados_por_foto: {resultados_por_foto[str_idx]}")
+
+            # Contar detecciones por categoría
+            logger.debug(f"[DIAG] Foto {idx}: Contando detecciones por categoría...")
+            for deteccion in detecciones:
+                # Asegurarse que 'deteccion' es un diccionario
+                if not isinstance(deteccion, dict):
+                    logger.warning(f"[DIAG] Foto {idx}: Elemento en 'detecciones' no es un diccionario: {deteccion}")
+                    continue # Saltar este elemento
+
+                clase = deteccion.get('class', '').lower()
+                logger.debug(f"[DIAG] Foto {idx}: Procesando detección - Clase: '{clase}'")
+
+                # Mapeo robusto
+                if 'verde' in clase:
+                    clasificacion_automatica['verdes']['cantidad'] += 1
+                elif 'sobremaduro' in clase or 'sobre_maduro' in clase:
+                    clasificacion_automatica['sobremaduros']['cantidad'] += 1
+                elif 'maduro' in clase: # Asegurarse que esto viene después de sobremaduro
+                     clasificacion_automatica['maduros']['cantidad'] += 1
+                elif 'podrido' in clase:
+                    clasificacion_automatica['podridos']['cantidad'] += 1
+                elif 'corona' in clase or 'danio_corona' in clase or 'daño_corona' in clase:
+                    clasificacion_automatica['danio_corona']['cantidad'] += 1
+                elif 'pendunculo' in clase or 'pedunculo' in clase:
+                    clasificacion_automatica['pendunculo_largo']['cantidad'] += 1
+                else:
+                    logger.warning(f"[DIAG] Foto {idx}: Clase no reconocida '{clase}' en detección: {deteccion}")
+            logger.debug(f"[DIAG] Foto {idx}: Conteo actualizado: {clasificacion_automatica}")
+
+            # Guardar progreso parcial
             clasificacion_data['clasificacion_automatica'] = clasificacion_automatica
             clasificacion_data['resultados_por_foto'] = resultados_por_foto
-            clasificacion_data['estado'] = 'completado' 
-            clasificacion_data['tiempo_procesamiento'] = f"{round(time.time() - tiempo_inicio, 2)} segundos"
-            clasificacion_data['modelo_utilizado'] = modelo_utilizado if 'modelo_utilizado' in locals() else "Modelo no especificado"
-            
-            # Guardar el JSON final
-            logger.info(f"Guardando resultados finales en: {json_path}")
+            clasificacion_data['estado'] = 'en_proceso'
+            clasificacion_data['modelo_utilizado'] = modelo_utilizado # Actualizar por si cambió
+
+            logger.info(f"[DIAG] Guardando resultados parciales en: {json_path}")
             with open(json_path, 'w', encoding='utf-8') as f:
                 json.dump(clasificacion_data, f, indent=4, ensure_ascii=False)
-            
-            # Si hay procesamiento en curso para este código, actualizarlo
-            if codigo_guia in processing_status:
-                processing_status[codigo_guia]['status'] = 'completado'
-                processing_status[codigo_guia]['progress'] = 100
-                processing_status[codigo_guia]['message'] = f'Procesamiento completado. {total_racimos} racimos detectados.'
-                
-            # Log del resultado final
-            logger.info(f"Procesamiento completado para guía {codigo_guia}. Tiempo: {round(time.time() - tiempo_inicio, 2)} segundos")
-            
-            # Si no se detectaron racimos, loguear advertencia
-            if total_racimos == 0:
-                logger.warning(f"Procesamiento completado pero sin detecciones para {codigo_guia}")
-            
+
         except Exception as e:
-            logger.error(f"Error calculando porcentajes: {str(e)}")
-            logger.error(traceback.format_exc())
-            
-            # Guardar el estado aunque haya error
-            clasificacion_data['estado'] = 'error'
-            clasificacion_data['error_message'] = str(e)
-            
-            # Guardar el JSON final aunque haya error
-            with open(json_path, 'w', encoding='utf-8') as f:
-                json.dump(clasificacion_data, f, indent=4, ensure_ascii=False)
-            
-            # Actualizar estado de procesamiento
-            if codigo_guia in processing_status:
-                processing_status[codigo_guia]['status'] = 'error'
-                processing_status[codigo_guia]['message'] = f'Error en procesamiento: {str(e)}'
-        
-        # Preparar datos de fotos procesadas para mostrar en la interfaz
-        fotos_procesadas = []
-        
-        for idx, foto_path in enumerate(fotos_paths, 1):
-            str_idx = str(idx)
-            if str_idx in resultados_por_foto:
-                resultado_foto = resultados_por_foto[str_idx]
-                
-                # Ruta relativa de la imagen original
-                ruta_foto_original = None
-                foto_original_path = os.path.join(guia_fotos_dir, f"foto_{idx}.jpg")
-                if os.path.exists(foto_original_path):
-                    path_parts = foto_original_path.split(os.sep)
+            logger.error(f"[DIAG] Error procesando imagen {idx}: {str(e)}")
+            logger.error(traceback.format_exc()) # Log completo del error
+            resultados_por_foto[str(idx)] = {'error': str(e)}
+            clasificacion_data['estado'] = 'error_parcial' # Indicar que hubo error en al menos una imagen
+            clasificacion_data['error_message'] = f"Error en imagen {idx}: {str(e)}"
+
+
+    # Procesar resultados finales
+    logger.info("[DIAG] Procesamiento de imágenes completado. Preparando resultados finales.")
+
+    try:
+        # Recalcular el total basado en los conteos finales
+        categorias_validas = {k: v for k, v in clasificacion_automatica.items() if isinstance(v, dict) and 'cantidad' in v}
+        total_racimos = sum(cat.get('cantidad', 0) for cat in categorias_validas.values()) # Usar get con default 0
+        logger.info(f"[DIAG] Total de racimos detectados recalculado: {total_racimos}")
+
+        # Calcular porcentajes solo si hay racimos
+        if total_racimos > 0:
+            for categoria, datos in clasificacion_automatica.items():
+                if isinstance(datos, dict) and 'cantidad' in datos:
                     try:
-                        static_index = path_parts.index('static')
-                        ruta_foto_original = os.sep.join(path_parts[static_index+1:])
-                    except ValueError:
-                        ruta_foto_original = foto_original_path
-                
-                # Ruta relativa de la imagen procesada
-                ruta_foto_procesada = None
-                foto_procesada_path = os.path.join(guia_fotos_dir, f"foto_{idx}_procesada.jpg")
-                if os.path.exists(foto_procesada_path):
-                    path_parts = foto_procesada_path.split(os.sep)
-                    try:
-                        static_index = path_parts.index('static')
-                        ruta_foto_procesada = os.sep.join(path_parts[static_index+1:])
-                    except ValueError:
-                        ruta_foto_procesada = foto_procesada_path
-                
-                # Extraer imágenes anotadas de Roboflow (si existen)
-                annotated_image = None
-                label_visualization = None
-                
-                # Intentar acceder al resultado de esta foto específica
-                result_for_foto = resultado_foto.get('raw_result', {})
-                
-                if not use_simulation and 'annotated_image' in result_for_foto:
-                    try:
-                        # Guardar imagen anotada
-                        img_data = decode_image_data(result_for_foto.get('annotated_image'))
-                        if img_data:
-                            annotated_path = os.path.join(guia_fotos_dir, f"foto_{idx}_annotated.jpg")
-                            with open(annotated_path, 'wb') as img_file:
-                                img_file.write(img_data)
-                            
-                            # Determinar ruta relativa
-                            path_parts = annotated_path.split(os.sep)
-                            try:
-                                static_index = path_parts.index('static')
-                                annotated_image = os.sep.join(path_parts[static_index+1:])
-                            except ValueError:
-                                annotated_image = annotated_path
-                    except Exception as e:
-                        logger.error(f"Error guardando imagen anotada: {str(e)}")
-                
-                if not use_simulation and 'label_visualization_1' in result_for_foto:
-                    try:
-                        # Guardar visualización de etiquetas
-                        img_data = decode_image_data(result_for_foto.get('label_visualization_1'))
-                        if img_data:
-                            label_path = os.path.join(guia_fotos_dir, f"foto_{idx}_labels.jpg")
-                            with open(label_path, 'wb') as img_file:
-                                img_file.write(img_data)
-                            
-                            # Determinar ruta relativa
-                            path_parts = label_path.split(os.sep)
-                            try:
-                                static_index = path_parts.index('static')
-                                label_visualization = os.sep.join(path_parts[static_index+1:])
-                            except ValueError:
-                                label_visualization = label_path
-                    except Exception as e:
-                        logger.error(f"Error guardando visualización de etiquetas: {str(e)}")
-                
-                # Obtener conteo de potholes (racimos) detectados
-                total_racimos = result_for_foto.get('potholes_detected', 0)
-                if not total_racimos and 'predictions' in result_for_foto:
-                    total_racimos = len(result_for_foto['predictions'])
-                
-                # Si no hay total_racimos en el resultado específico, usar el total de categorías
-                if not total_racimos:
-                    total_racimos = resultado_foto.get('total_detecciones', 0)
-                
-                # Preparar resultados por categoría
-                resultados_categorias = {}
-                for deteccion in resultado_foto.get('detecciones', []):
-                    clase = deteccion.get('class', '').lower()
-                    if clase not in resultados_categorias:
-                        resultados_categorias[clase] = 0
-                    resultados_categorias[clase] += 1
-                
-                # Agregar a la lista de fotos procesadas
-                fotos_procesadas.append({
-                    'original': ruta_foto_original or foto_path,
-                    'procesada': ruta_foto_procesada,
-                    'annotated': annotated_image,
-                    'labels': label_visualization,
-                    'total_racimos': total_racimos,
-                    'resultados': resultados_categorias
-                })
-        
-        # Calcular tiempo total de procesamiento
-        tiempo_fin = time.time()
-        tiempo_procesamiento = round(tiempo_fin - tiempo_inicio, 2)
-        
-        # No duplicamos esta lógica ya que se hizo en el try/except anterior
-        # Solo añadimos los datos de fotos procesadas que no se incluyeron antes
-        clasificacion_data['fotos_procesadas'] = fotos_procesadas
-        
-        # Si no se llegó a calcular el tiempo_procesamiento en el try/except anterior
-        if 'tiempo_procesamiento' not in clasificacion_data:
-            clasificacion_data['tiempo_procesamiento'] = f"{tiempo_procesamiento} segundos"
-        
-        # Solo guardamos de nuevo si no se guardó en el try/except
-        if clasificacion_data.get('estado') != 'completado' and clasificacion_data.get('estado') != 'error':
-            # Guardar archivo JSON final
-            logger.info(f"Guardando resultados finales (segunda fase) en: {json_path}")
-            with open(json_path, 'w', encoding='utf-8') as f:
-                json.dump(clasificacion_data, f, indent=4, ensure_ascii=False)
-        
-        logger.info(f"Procesamiento completado para guía {codigo_guia}. Tiempo: {tiempo_procesamiento} segundos")
-        return clasificacion_data
-        
-    except Exception as e:
-        logger.error(f"Error en process_images_with_roboflow: {str(e)}")
+                        cantidad = datos.get('cantidad', 0) # Usar get con default 0
+                        datos['porcentaje'] = round((cantidad / total_racimos) * 100, 1)
+                    except ZeroDivisionError:
+                         datos['porcentaje'] = 0
+                    except Exception as perc_err:
+                        logger.error(f"[DIAG] Error calculando porcentaje para {categoria}: {str(perc_err)}")
+                        datos['porcentaje'] = 0
+        else: # Si no hay racimos, poner porcentajes a 0
+            for categoria, datos in clasificacion_automatica.items():
+                 if isinstance(datos, dict) and 'cantidad' in datos:
+                     datos['porcentaje'] = 0
+
+        # Actualizar datos finales en clasificacion_data
+        clasificacion_data['total_racimos_detectados'] = total_racimos
+        clasificacion_data['clasificacion_automatica'] = clasificacion_automatica
+        clasificacion_data['resultados_por_foto'] = resultados_por_foto # Asegurarse que está actualizado
+
+        # Determinar estado final
+        if clasificacion_data.get('estado') == 'error_parcial':
+            logger.warning(f"[DIAG] Procesamiento finalizado con errores parciales para {codigo_guia}")
+            # Mantener estado error_parcial y el mensaje de error
+        else:
+            clasificacion_data['estado'] = 'completado'
+            clasificacion_data['error_message'] = None # Limpiar mensaje de error si se completó bien
+            logger.info(f"[DIAG] Procesamiento completado exitosamente para {codigo_guia}")
+
+
+        clasificacion_data['tiempo_procesamiento'] = f"{round(time.time() - tiempo_inicio, 2)} segundos"
+        # modelo_utilizado ya debería estar actualizado
+
+        # Guardar los resultados finales
+        # Corregido: indentación del logger y with open
+        logger.info(f"[DIAG] Guardando resultados finales (fase final) en: {json_path}")
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(clasificacion_data, f, indent=4, ensure_ascii=False)
+
+        # Actualizar estado global si existe
+        final_status = clasificacion_data['estado']
+        if codigo_guia in processing_status:
+            processing_status[codigo_guia]['status'] = final_status
+            processing_status[codigo_guia]['progress'] = 100
+            if final_status == 'completado':
+                processing_status[codigo_guia]['message'] = f'Procesamiento completado. {total_racimos} racimos detectados.'
+            elif final_status == 'error_parcial':
+                 processing_status[codigo_guia]['message'] = f'Procesamiento completado con errores. {clasificacion_data.get("error_message")}'
+            else: # Otro estado de error
+                 processing_status[codigo_guia]['message'] = f'Error en procesamiento final: {clasificacion_data.get("error_message", "Error desconocido")}'
+
+
+        if total_racimos == 0 and final_status == 'completado':
+            logger.warning(f"[DIAG] Procesamiento completado pero sin detecciones para {codigo_guia}")
+
+    except Exception as final_err:
+        logger.error(f"[DIAG] Error CRÍTICO calculando/guardando resultados finales: {str(final_err)}")
         logger.error(traceback.format_exc())
-        raise
+        clasificacion_data['estado'] = 'error_final' # Nuevo estado para errores en esta fase
+        clasificacion_data['error_message'] = f"Error en fase final: {str(final_err)}"
+        # Intentar guardar estado de error
+        try:
+            with open(json_path, 'w', encoding='utf-8') as f:
+                json.dump(clasificacion_data, f, indent=4, ensure_ascii=False)
+        except Exception as save_err:
+            logger.error(f"[DIAG] No se pudo guardar el estado de error_final en JSON: {save_err}")
+
+        # Actualizar estado global si existe
+        if codigo_guia in processing_status:
+             processing_status[codigo_guia]['status'] = 'error_final'
+             processing_status[codigo_guia]['message'] = f'Error crítico en procesamiento final: {str(final_err)}'
+
+    logger.info(f"[DIAG] process_images_with_roboflow: Finalizado para guía {codigo_guia}. Estado final: {clasificacion_data.get('estado')}")
+    return clasificacion_data
+
 
 
 
@@ -1960,291 +1514,96 @@ def ver_resultados_clasificacion(url_guia):
                     else:
                         # Ya es relativa, usarla directamente
                         fotos_procesadas.append(foto)
-        
-        logger.info(f"Fotos procesadas: {fotos_procesadas}")
-        
-        # Determinar el tamaño de la muestra basado en la cantidad de racimos
-        try:
-            cantidad_racimos_int = int(cantidad_racimos_final) if cantidad_racimos_final and cantidad_racimos_final != 'N/A' else 0
-            tamaño_muestra = 100 if cantidad_racimos_int > 1000 else 28
-        except (ValueError, TypeError):
-            tamaño_muestra = 28  # Valor por defecto si hay algún error
-            
-        # Calcular porcentajes para la clasificación manual
-        clasificacion_manual = clasificacion_data.get('clasificacion_manual', {})
-        if not clasificacion_manual:
-            # Si no hay datos, crear estructura vacía completa
-            clasificacion_manual = {
-                'verdes': 0,
-                'maduros': 0,
-                'sobremaduros': 0,
-                'danio_corona': 0,
-                'pendunculo_largo': 0,
-                'podridos': 0
-            }
-            # Asignar de vuelta para asegurar que se use
-            clasificacion_data['clasificacion_manual'] = clasificacion_manual
-        
-        logger.info(f"Clasificación manual final para porcentajes: {clasificacion_manual}")
-        
-        clasificacion_manual_con_porcentajes = {}
-        
-        for categoria, valor in clasificacion_manual.items():
+        else:
+            logger.warning("No se encontraron fotos en los datos de clasificación")
+            # Buscar fotos en la tabla fotos_clasificacion
             try:
-                valor_num = float(valor) if valor is not None else 0
-                porcentaje = (valor_num / tamaño_muestra) * 100 if tamaño_muestra > 0 else 0
-                clasificacion_manual_con_porcentajes[categoria] = {
-                    'cantidad': valor_num,
-                    'porcentaje': porcentaje
-                }
-            except (ValueError, TypeError, ZeroDivisionError):
-                clasificacion_manual_con_porcentajes[categoria] = {
-                    'cantidad': valor if valor is not None else 0,
-                    'porcentaje': 0
-                }
-                
-        logger.info(f"Clasificación manual con porcentajes: {clasificacion_manual_con_porcentajes}")
+                with sqlite3.connect(current_app.config['TIQUETES_DB_PATH']) as conn:
+                    conn.row_factory = sqlite3.Row
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT ruta_foto FROM fotos_clasificacion WHERE codigo_guia = ? ORDER BY numero_foto", (url_guia,))
+                    db_fotos = [row['ruta_foto'] for row in cursor.fetchall()]
+                    if db_fotos:
+                        logger.info(f"Fotos encontradas en fotos_clasificacion: {len(db_fotos)}")
+                        fotos_originales = db_fotos # Usar estas fotos
+                        # Procesar rutas de nuevo
+                        for foto in fotos_originales:
+                            if isinstance(foto, str):
+                                if os.path.isabs(foto):
+                                    static_index = foto.find('/static/')
+                                    if static_index != -1:
+                                        rel_path = foto[static_index + 8:]
+                                        fotos_procesadas.append(rel_path)
+                                else:
+                                    fotos_procesadas.append(foto)
+            except Exception as db_foto_err:
+                logger.error(f"Error buscando fotos en la DB: {db_foto_err}")
+
+        # Calcular total_racimos_detectados si hay datos automáticos
+        # Asegurarse que clasificacion_automatica_consolidada es un dict
+        if isinstance(clasificacion_data.get('clasificacion_consolidada'), str):
+            try:
+                clasificacion_automatica_consolidada = json.loads(clasificacion_data['clasificacion_consolidada'])
+            except json.JSONDecodeError:
+                clasificacion_automatica_consolidada = {}
+        elif isinstance(clasificacion_data.get('clasificacion_consolidada'), dict):
+            clasificacion_automatica_consolidada = clasificacion_data['clasificacion_consolidada']
+        else:
+            clasificacion_automatica_consolidada = {}
             
-        # Preparar datos para la plantilla de resultados
+        # Obtener total_racimos_detectados de la consolidación
+        if clasificacion_automatica_consolidada and 'total_racimos' in clasificacion_automatica_consolidada:
+            total_racimos_detectados = clasificacion_automatica_consolidada['total_racimos']
+        elif isinstance(clasificacion_data.get('clasificacion_automatica'), dict) and 'total_racimos' in clasificacion_data['clasificacion_automatica']:
+             total_racimos_detectados = clasificacion_data['clasificacion_automatica']['total_racimos']
+        # Fallback si no se encuentra en ningún lado
+        if not isinstance(total_racimos_detectados, int) or total_racimos_detectados < 0:
+            total_racimos_detectados = clasificacion_data.get('total_racimos_detectados', 0)
+            if not isinstance(total_racimos_detectados, int) or total_racimos_detectados < 0:
+                 total_racimos_detectados = 0 # Asegurar que sea un entero no negativo
+        
+        logger.info(f"Total de racimos detectados: {total_racimos_detectados}")
+        
+        # Preparar datos para la plantilla
         template_data = {
             'codigo_guia': url_guia,
-            'codigo_proveedor': codigo_proveedor,  # Agregar código de proveedor extraído
-            'id': clasificacion_data.get('id', ''),  # Añadir el ID para las rutas de imágenes
-            'fecha_registro': datos_guia.get('fecha_registro'),
-            'hora_registro': datos_guia.get('hora_registro'),
-            'fecha_clasificacion': clasificacion_data.get('fecha_clasificacion'),
-            'hora_clasificacion': clasificacion_data.get('hora_clasificacion'),
-            'nombre': nombre_proveedor_final,
+            'codigo_proveedor': codigo_proveedor,
             'nombre_proveedor': nombre_proveedor_final,
             'cantidad_racimos': cantidad_racimos_final,
-            'tamaño_muestra': tamaño_muestra,  # Añadir el tamaño de la muestra
-            'clasificacion_manual': clasificacion_manual,  # Mantener estructura original
-            'clasificacion_manual_con_porcentajes': clasificacion_manual_con_porcentajes,  # Añadir estructura con porcentajes
-            'clasificacion_automatica': clasificacion_data.get('clasificacion_automatica', {}),
-            'total_racimos_detectados': clasificacion_data.get('total_racimos_detectados', 0),
-            'resultados_por_foto': clasificacion_data.get('resultados_por_foto', {}),  # Añadir resultados por foto
-            'clasificaciones': clasificaciones,
-            'fotos': fotos_procesadas,
-            'modelo_utilizado': clasificacion_data.get('modelo_utilizado', 'No especificado'),
-            'tiempo_procesamiento': clasificacion_data.get('tiempo_procesamiento', 'No disponible'),
-            'codigo_guia_transporte_sap': datos_guia.get('codigo_guia_transporte_sap') or clasificacion_data.get('codigo_guia_transporte_sap'),
-            'peso_bruto': datos_guia.get('peso_bruto'),
-            'observaciones': clasificacion_data.get('observaciones', ''),
-            'automatica_completado': 'clasificacion_automatica' in clasificacion_data and any(
-                (isinstance(clasificacion_data['clasificacion_automatica'].get(categoria), dict) and 
-                clasificacion_data['clasificacion_automatica'][categoria].get('cantidad', 0) > 0) or
-                (isinstance(clasificacion_data['clasificacion_automatica'].get(categoria), (int, float)) and 
-                clasificacion_data['clasificacion_automatica'][categoria] > 0)
-                for categoria in ['verdes', 'maduros', 'sobremaduros', 'podridos', 'danio_corona', 'pendunculo_largo']
-            ),
-            'tiene_pesaje_neto': False,  # Por defecto asumimos que no tiene pesaje neto
-            'datos_guia': datos_guia  # Incluir datos_guia completo para la plantilla
+            'peso_bruto': datos_guia.get('peso_bruto', 'N/A'),
+            'clasificacion_manual': clasificacion_data.get('clasificacion_manual', {}),
+            'clasificacion_automatica': clasificacion_data.get('clasificacion_automatica', {}), # Usar datos de clasificacion_data
+            'total_racimos_detectados': total_racimos_detectados, # Usar el calculado
+            'fotos_procesadas': fotos_procesadas,
+            'hay_fotos': len(fotos_procesadas) > 0,
+            'hay_resultados_automaticos': bool(clasificacion_automatica_consolidada) or bool(clasificacion_data.get('clasificacion_automatica')),
+            'tiempo_procesamiento': clasificacion_data.get('tiempo_procesamiento', 'N/A'),
+            'error_procesamiento': clasificacion_data.get('error_message', None),
+            'estado_procesamiento': clasificacion_data.get('estado', 'pendiente'),
+            'mostrar_automatica': mostrar_automatica
         }
         
-        # Registrar lo que estamos enviando a la plantilla
-        logger.info(f"Enviando a template - código_proveedor: {template_data['codigo_proveedor']}")
-        logger.info(f"Enviando a template - nombre_proveedor: {template_data['nombre_proveedor']}")
-        logger.info(f"Enviando a template - cantidad_racimos: {template_data['cantidad_racimos']}")
-        logger.info(f"Enviando a template - clasificacion_manual: {json.dumps(template_data.get('clasificacion_manual', {}))}")
-        logger.info(f"Enviando a template - clasificacion_automatica: {json.dumps(template_data.get('clasificacion_automatica', {}))}")
-        logger.info(f"Enviando a template - fotos: {len(template_data.get('fotos', []))}")
-        logger.info(f"Enviando a template - total_racimos_detectados: {template_data.get('total_racimos_detectados', 0)}")
-        logger.info(f"Enviando a template - codigo_guia_transporte_sap: {template_data.get('codigo_guia_transporte_sap')}")
-        logger.info(f"Mostrando resultados de clasificación para: {url_guia}")
+        # Log final antes de renderizar
+        logger.info(f"Datos finales para renderizar: {json.dumps(template_data)}")
+        fin = time.time()
+        logger.info(f"Tiempo total en ver_resultados_clasificacion: {fin - inicio:.4f} segundos")
         
-        # Intentar cargar la clasificación automática si existe
-        json_folder = os.path.join(current_app.static_folder, 'clasificaciones')
-        clasificacion_file = os.path.join(json_folder, f'clasificacion_{codigo_guia_partes}.json')
-        
-        if os.path.exists(clasificacion_file):
-            logger.info(f"Cargando clasificación automática desde: {clasificacion_file}")
-            try:
-                with open(clasificacion_file, 'r') as f:
-                    json_data = json.load(f)
-                    
-                # Extraer el total de racimos detectados
-                total_racimos_detectados = json_data.get('total_racimos_detectados', 0)
-                logger.info(f"Total de racimos detectados extraído del JSON: {total_racimos_detectados}")
-                
-                # IMPORTANTE: Actualizar clasificación manual si existe en el JSON
-                if 'clasificacion_manual' in json_data and json_data['clasificacion_manual']:
-                    logger.info(f"Actualizando clasificación manual desde JSON: {json_data['clasificacion_manual']}")
-                    # Actualizar datos de template
-                    clasificacion_manual = json_data['clasificacion_manual']
-                    template_data['clasificacion_manual'] = clasificacion_manual
-                    
-                    # Recalcular porcentajes con los nuevos datos manuales
-                    clasificacion_manual_con_porcentajes = {}
-                    for categoria, valor in clasificacion_manual.items():
-                        try:
-                            valor_num = float(valor) if valor is not None else 0
-                            porcentaje = (valor_num / tamaño_muestra) * 100 if tamaño_muestra > 0 else 0
-                            clasificacion_manual_con_porcentajes[categoria] = {
-                                'cantidad': valor_num,
-                                'porcentaje': porcentaje
-                            }
-                        except (ValueError, TypeError, ZeroDivisionError):
-                            clasificacion_manual_con_porcentajes[categoria] = {
-                                'cantidad': valor if valor is not None else 0,
-                                'porcentaje': 0
-                            }
-                    
-                    template_data['clasificacion_manual_con_porcentajes'] = clasificacion_manual_con_porcentajes
-                    logger.info(f"Clasificación manual actualizada con porcentajes: {clasificacion_manual_con_porcentajes}")
-                    
-                # Verificar si se ha realizado una clasificación automática
-                if 'clasificacion_automatica' in json_data:
-                    # Actualizar clasificación automática en template_data
-                    template_data['clasificacion_automatica'] = json_data['clasificacion_automatica']
-                    logger.info(f"Clasificación automática encontrada en el archivo JSON y actualizada en template_data")
-
-                # Asegurarse de pasar total_racimos_detectados al template
-                template_data['total_racimos_detectados'] = total_racimos_detectados
-            except Exception as e:
-                logger.error(f"Error al cargar el archivo de clasificación: {str(e)}")
-                logger.error(traceback.format_exc())
-                # Asegurar que total_racimos_detectados sigue existiendo aunque falle la carga
-                total_racimos_detectados = template_data.get('total_racimos_detectados', 0)
-        
-        # ... existing code ...
-        
-        # Consolidar los resultados de la clasificación automática para mostrarlos en la sección de resumen
-        clasificacion_automatica_consolidada = {}
-        
-        # Si tenemos clasificación automática, procesarla
-        if clasificacion_data.get('clasificacion_automatica'):
-            auto_data = clasificacion_data.get('clasificacion_automatica', {})
-            
-            # Verificar el formato de los datos de clasificación automática
-            logger.info(f"Formato de clasificacion_automatica: {type(auto_data)}")
-            logger.info(f"Contenido de clasificacion_automatica: {auto_data}")
-            
-            # Obtener las categorías y su mapeo singular/plural
-            categorias = ['verdes', 'maduros', 'sobremaduros', 'danio_corona', 'pendunculo_largo', 'podridos']
-            categorias_singular = ['verde', 'maduro', 'sobremaduro', 'danio_corona', 'pendunculo_largo', 'podrido']
-            mapeo_plural_singular = dict(zip(categorias, categorias_singular))
-            mapeo_singular_plural = dict(zip(categorias_singular, categorias))
-            total_racimos_auto = 0
-            
-            # Consolidar los resultados de todas las categorías
-            for i, categoria in enumerate(categorias):
-                categoria_singular = categorias_singular[i]
-                
-                # Intentar obtener datos tanto en formato plural como singular
-                datos_categoria = auto_data.get(categoria, auto_data.get(categoria_singular, {}))
-                
-                logger.info(f"Procesando categoría '{categoria}' (singular: '{categoria_singular}'): {datos_categoria}")
-                
-                if isinstance(datos_categoria, dict) and 'cantidad' in datos_categoria:
-                    cantidad = datos_categoria.get('cantidad', 0)
-                    logger.info(f"Cantidad encontrada en diccionario: {cantidad}")
-                else:
-                    # Si es un valor directo en lugar de un diccionario
-                    cantidad = datos_categoria if isinstance(datos_categoria, (int, float)) else 0
-                    logger.info(f"Cantidad como valor directo: {cantidad}")
-                
-                # Siempre incrementamos el total, independientemente del formato
-                total_racimos_auto += cantidad
-                
-                # Asegurarnos de guardar los datos en un formato consistente (diccionario)
-                # Y guardar tanto en formato plural como singular para compatibilidad
-                if not isinstance(datos_categoria, dict):
-                    datos_formateados = {
-                        'cantidad': cantidad,
-                        'porcentaje': 0  # Lo calcularemos después
-                    }
-                else:
-                    datos_formateados = {
-                        'cantidad': cantidad,
-                        'porcentaje': datos_categoria.get('porcentaje', 0)
-                    }
-                
-                # Guardar en ambos formatos (singular y plural) para compatibilidad
-                clasificacion_automatica_consolidada[categoria] = datos_formateados
-                clasificacion_automatica_consolidada[categoria_singular] = datos_formateados
-            
-            # Calcular porcentajes
-            if total_racimos_auto > 0:
-                for categoria in clasificacion_automatica_consolidada:
-                    cantidad = clasificacion_automatica_consolidada[categoria]['cantidad']
-                    porcentaje = (cantidad / total_racimos_auto) * 100
-                    clasificacion_automatica_consolidada[categoria]['porcentaje'] = porcentaje
-                    logger.info(f"Categoría {categoria}: {cantidad} racimos, {porcentaje:.2f}%")
-            
-            logger.info(f"Clasificación automática consolidada: {clasificacion_automatica_consolidada}")
-            
-            # Asegurar que total_racimos_detectados esté definido
-            if 'total_racimos_detectados' not in locals() or total_racimos_detectados is None:
-                total_racimos_detectados = template_data.get('total_racimos_detectados', 0)
-                logger.info(f"total_racimos_detectados no estaba definido, usando valor de template_data: {total_racimos_detectados}")
-            
-            # Añadir el total de racimos en la clasificación automática
-            clasificacion_automatica_consolidada['total_racimos'] = total_racimos_auto if total_racimos_auto > 0 else total_racimos_detectados
-            
-            # Log del valor final de total_racimos
-            logger.info(f"Valor final de clasificacion_automatica_consolidada['total_racimos']: {clasificacion_automatica_consolidada['total_racimos']}")
-            
-            # Si venimos desde la clasificación automática, mostrar un mensaje
-            if mostrar_automatica:
-                total_detectados = clasificacion_automatica_consolidada['total_racimos']
-                if total_detectados > 0:
-                    flash(f"Procesamiento de imágenes exitoso. Se detectaron {total_detectados} racimos en total.", "success")
-                else:
-                    flash("El procesamiento de imágenes finalizó pero no se detectaron racimos. Revise las imágenes.", "warning")
-        
-        # Actualizar template_data con la clasificación automática consolidada
-        template_data['clasificacion_automatica_consolidada'] = clasificacion_automatica_consolidada
-        template_data['mostrar_automatica'] = mostrar_automatica  # Indicar si se debe destacar la clasificación automática
-        
-        # Log detallado para debugging
-        logger.info(f"DETALLE clasificacion_automatica_consolidada: {json.dumps(clasificacion_automatica_consolidada, default=str)}")
-        logger.info(f"DETALLE clasificacion_automatica_consolidada.total_racimos: {clasificacion_automatica_consolidada.get('total_racimos', 0)}")
-        logger.info(f"DETALLE template_data['total_racimos_detectados']: {template_data.get('total_racimos_detectados', 0)}")
-        
-        for categoria, datos in clasificacion_automatica_consolidada.items():
-            if categoria != 'total_racimos':
-                logger.info(f"DETALLE categoria {categoria}: {json.dumps(datos, default=str)}")
-        
-        # Verificación final de datos de clasificación manual
-        logger.info("=== VERIFICACIÓN FINAL DE DATOS DE CLASIFICACIÓN MANUAL ===")
-        logger.info(f"Clasificación manual en template_data: {json.dumps(template_data.get('clasificacion_manual', {}))}")
-        logger.info(f"Clasificación manual con porcentajes: {json.dumps(template_data.get('clasificacion_manual_con_porcentajes', {}))}")
-        
-        # Validación adicional y corrección final de datos
-        if not template_data.get('clasificacion_manual') or all(value == 0 for value in template_data.get('clasificacion_manual', {}).values()):
-            logger.warning("Clasificación manual está vacía o todos los valores son cero. Intentando recuperar de datos_guia nuevamente.")
-            
-            # Verificar una última vez si hay datos en datos_guia
-            if isinstance(datos_guia, dict) and 'clasificacion_manual' in datos_guia and datos_guia['clasificacion_manual']:
-                logger.info(f"Recuperando clasificación manual de datos_guia: {datos_guia['clasificacion_manual']}")
-                template_data['clasificacion_manual'] = datos_guia['clasificacion_manual']
-                
-                # Recalcular porcentajes con los datos recuperados
-                clasificacion_manual_con_porcentajes = {}
-                for categoria, valor in datos_guia['clasificacion_manual'].items():
-                    try:
-                        valor_num = float(valor) if valor is not None else 0
-                        porcentaje = (valor_num / tamaño_muestra) * 100 if tamaño_muestra > 0 else 0
-                        clasificacion_manual_con_porcentajes[categoria] = {
-                            'cantidad': valor_num,
-                            'porcentaje': porcentaje
-                        }
-                    except (ValueError, TypeError, ZeroDivisionError):
-                        clasificacion_manual_con_porcentajes[categoria] = {
-                            'cantidad': valor if valor is not None else 0,
-                            'porcentaje': 0
-                        }
-                template_data['clasificacion_manual_con_porcentajes'] = clasificacion_manual_con_porcentajes
-        
-        logger.info("=== FIN DE VERIFICACIÓN ===")
-        
-        logger.info("Renderizando plantilla clasificacion_resultados.html")
         return render_template('clasificacion/clasificacion_resultados.html', **template_data)
+        
     except Exception as e:
-        logger.error(f"Error en ver_resultados_clasificacion: {str(e)}")
+        logger.error(f"Error en ver_resultados_clasificacion para {url_guia}: {str(e)}")
         logger.error(traceback.format_exc())
-        return render_template('error.html', message=f"Error mostrando resultados de clasificación: {str(e)}")
-
+        flash(f"Ocurrió un error al cargar los resultados de clasificación: {str(e)}", "danger")
+        # Redirigir a la guía centralizada como fallback seguro
+        # Intentar obtener el código de guía desde la URL decodificada si está disponible
+        codigo_guia_fallback = url_guia # Usar la URL original como fallback inicial
+        try:
+            # Extraer el código de guía si es posible desde la url_guia decodificada
+            if 'codigo_guia_partes' in locals() and codigo_guia_partes: 
+                codigo_guia_fallback = codigo_guia_partes
+        except NameError: # Si codigo_guia_partes no se definió por un error previo
+            pass 
+        return redirect(url_for('misc.ver_guia_centralizada', codigo_guia=codigo_guia_fallback))
 
 @bp.route('/procesar_clasificacion', methods=['POST'])
 def procesar_clasificacion():
@@ -2463,121 +1822,97 @@ processing_status = {}
 
 @bp.route('/iniciar_procesamiento/<path:url_guia>', methods=['POST'])
 def iniciar_procesamiento(url_guia):
-    """Inicia el procesamiento de imágenes con IA para una guía específica."""
-    logger.info(f"Iniciando procesamiento manual con Roboflow para guía: {url_guia}")
-    
-    try:
-        # Cargar los datos de clasificación si existen
-        clasificacion_data = {}
-        clasificacion_file = os.path.join(current_app.static_folder, 'clasificaciones', f"clasificacion_{url_guia}.json")
-        if os.path.exists(clasificacion_file):
-            try:
-                logger.info(f"Datos de clasificación cargados: {clasificacion_file}")
-                with open(clasificacion_file, 'r', encoding='utf-8') as f:
-                    clasificacion_data = json.load(f)
-                    # Extraer información relevante si está disponible
-                    fotos = clasificacion_data.get('fotos', [])
-                    logger.info(f"Contenido relevante del archivo JSON: fotos={fotos}")
-            except Exception as e:
-                logger.error(f"Error al cargar el archivo de clasificación: {str(e)}")
-                
-        # Crear directorios si no existen
-        guia_fotos_base_dir = os.path.join(current_app.static_folder, 'fotos_racimos_temp')
-        os.makedirs(guia_fotos_base_dir, exist_ok=True)
-        
-        # Buscar las imágenes en diferentes ubicaciones
-        guia_fotos_dir = os.path.join(guia_fotos_base_dir, url_guia)
-        
-        # Verificar si existe el directorio de fotos
-        if not os.path.exists(guia_fotos_dir):
-            logger.info(f"El directorio {guia_fotos_dir} no existe")
-            
-            # Intentar buscar en directorio alternativo
-            guia_fotos_dir_alt = os.path.join(current_app.config['UPLOAD_FOLDER'], 'fotos', url_guia)
-            if os.path.exists(guia_fotos_dir_alt):
-                guia_fotos_dir = guia_fotos_dir_alt
-                logger.info(f"Usando directorio alternativo para fotos: {guia_fotos_dir}")
+    """
+    Inicia el procesamiento de imágenes para una guía en un hilo separado.
+    Busca las imágenes en varias ubicaciones posibles.
+    """
+    logger.info(f"Solicitud para iniciar procesamiento recibida para: {url_guia}")
+
+    # Definir directorios
+    fotos_folder = current_app.config.get('FOTOS_RACIMOS_FOLDER', os.path.join(current_app.config['UPLOAD_FOLDER'], 'clasificacion'))
+    temp_folder = current_app.config.get('TEMP_CLASIFICACION_FOLDER', os.path.join(current_app.config['UPLOAD_FOLDER'], 'temp_clasificacion'))
+    json_folder = current_app.config.get('CLASIFICACIONES_FOLDER', os.path.join(current_app.static_folder, 'clasificaciones'))
+    guia_fotos_temp_dir = os.path.join(current_app.static_folder, 'fotos_racimos_temp', url_guia)
+    guia_fotos_upload_dir = os.path.join(fotos_folder, url_guia)
+
+    os.makedirs(json_folder, exist_ok=True)
+    os.makedirs(guia_fotos_upload_dir, exist_ok=True) # Asegurar que existe dir de destino
+
+    # Extraer código de proveedor para búsqueda flexible
+    codigo_proveedor = ''
+    if '_' in url_guia:
+        codigo_proveedor = url_guia.split('_')[0]
+        # Asegurar formato XXXXXA
+        if re.match(r'\d+[aA]?$', codigo_proveedor):
+            if codigo_proveedor.endswith('a'):
+                codigo_proveedor = codigo_proveedor[:-1] + 'A'
+            elif not codigo_proveedor.endswith('A'):
+                codigo_proveedor = codigo_proveedor + 'A'
+
+    fotos_paths = []
+
+    # 1. Buscar en directorio temporal de fotos_racimos_temp/<codigo_guia>
+    if os.path.exists(guia_fotos_temp_dir):
+        logger.info(f"Buscando fotos en directorio fotos_racimos_temp: {guia_fotos_temp_dir}")
+        fotos_paths = [os.path.join(guia_fotos_temp_dir, f) for f in os.listdir(guia_fotos_temp_dir)
+                       if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+    # Corregido: indentación del else y eliminado 'Expected expression'
+    else:
+        logger.info(f"El directorio {guia_fotos_temp_dir} no existe")
+
+
+    # 2. Si no se encontraron, buscar en directorio de uploads/clasificacion/<codigo_guia>
+    if not fotos_paths and os.path.exists(guia_fotos_upload_dir):
+        logger.info(f"Buscando fotos en directorio uploads/clasificacion: {guia_fotos_upload_dir}")
+        fotos_paths = [os.path.join(guia_fotos_upload_dir, f) for f in os.listdir(guia_fotos_upload_dir)
+                       if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+    elif not fotos_paths: # Solo log si no se encontraron en la ubicación anterior tampoco
+        logger.info(f"El directorio {guia_fotos_upload_dir} no existe o no se encontraron fotos allí.")
+
+    # 3. Si aún no se encuentran, buscar en el directorio temporal general (uploads/temp_clasificacion) con patrón
+    if not fotos_paths and codigo_proveedor: # Solo buscar si tenemos código de proveedor
+        logger.info(f"Buscando fotos en directorio temp_clasificacion general: {temp_folder}")
+        try:
+            todos_archivos_temp = os.listdir(temp_folder)
+            logger.info(f"Archivos encontrados en {temp_folder}: {todos_archivos_temp}")
+
+            # Usar patrón flexible con código de proveedor y posible timestamp
+            patron_busqueda = f"temp_clasificacion_{codigo_proveedor}_*.jpg"
+            logger.info(f"Buscando archivos que coincidan con el patrón: {patron_busqueda}")
+
+            fotos_temp = []
+            for f in todos_archivos_temp:
+                if fnmatch.fnmatch(f, patron_busqueda):
+                    fotos_temp.append(os.path.join(temp_folder, f))
+
+            if fotos_temp:
+                logger.info(f"Fotos encontradas en temp_clasificacion con patrón flexible: {fotos_temp}")
+                fotos_paths = sorted(fotos_temp) # Ordenar por nombre (timestamp)
             else:
-                logger.info(f"El directorio {guia_fotos_dir_alt} no existe")
-        
-        # Buscar en el directorio de clasificación temporal
-        temp_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'temp_clasificacion')
-        logger.info(f"Buscando fotos en directorio temp_clasificacion: {temp_dir}")
-        
-        # Listar todos los archivos en el directorio temporal
-        if os.path.exists(temp_dir):
-            all_temp_files = os.listdir(temp_dir)
-            logger.info(f"Archivos encontrados en {temp_dir}: {all_temp_files}")
-            
-            # Filtrar para encontrar archivos relacionados con esta guía
-            pattern = f"*{url_guia}*"
-            matching_files = [f for f in all_temp_files if fnmatch.fnmatch(f, pattern)]
-            
-            if matching_files:
-                logger.info(f"Fotos encontradas que coinciden con {url_guia}: {matching_files}")
-                # Crear directorio para esta guía si no existe
-                os.makedirs(guia_fotos_dir, exist_ok=True)
-                
-                # Mover las imágenes al directorio de la guía
-                for file in matching_files:
-                    src = os.path.join(temp_dir, file)
-                    dst = os.path.join(guia_fotos_dir, file)
-                    shutil.copy2(src, dst)
-                    logger.info(f"Copiada imagen de {src} a {dst}")
-            else:
-                warning_msg = f"No se encontraron fotos que coincidan con el patrón {pattern} en {temp_dir}"
-                logger.warning(warning_msg)
-                flash(warning_msg, "warning")
-        
-        # Buscar fotos en el directorio de la guía
-        fotos_paths = []
-        if os.path.exists(guia_fotos_dir):
-            for ext in ['*.jpg', '*.jpeg', '*.png']:
-                fotos_paths.extend(glob.glob(os.path.join(guia_fotos_dir, ext)))
-        
-        if not fotos_paths:
-            error_msg = f"No se encontraron imágenes para procesar en {url_guia}"
-            logger.error(error_msg)
-            flash(error_msg, "error")
-            flash("Para usar la clasificación automática, primero debe subir imágenes utilizando el botón 'Clasificar' y cargar fotos de racimos.", "warning")
-            return jsonify({
-                'success': False,
-                'message': error_msg,
-                'error_code': 'NO_IMAGES_FOUND'
-            }), 404
-        
-        # Preparar ruta para guardar resultados
-        json_path = os.path.join(current_app.static_folder, 'clasificaciones', f"clasificacion_{url_guia}.json")
-        
-        # Iniciar procesamiento en segundo plano
-        thread = threading.Thread(
-            target=process_thread,
-            args=(current_app._get_current_object(), url_guia, fotos_paths, guia_fotos_dir, json_path)
-        )
-        thread.daemon = True
-        thread.start()
-        
-        logger.info(f"Procesamiento iniciado para {url_guia} con {len(fotos_paths)} imágenes en segundo plano")
-        
-        return jsonify({
-            'success': True,
-            'status': 'started',
-            'message': f'Procesamiento iniciado con {len(fotos_paths)} imágenes',
-            'num_images': len(fotos_paths),
-            'check_status_url': url_for('clasificacion.check_procesamiento_status', url_guia=url_guia),
-            'results_url': url_for('clasificacion.ver_resultados_clasificacion', url_guia=url_guia)
-        })
-        
-    except Exception as e:
-        error_msg = f"Error al iniciar procesamiento: {str(e)}"
-        logger.error(error_msg)
-        logger.error(traceback.format_exc())
-        flash(error_msg, "error")
-        return jsonify({
-            'success': False,
-            'message': error_msg,
-            'error_code': 'PROCESSING_ERROR'
-        }), 500
+                logger.warning(f"No se encontraron fotos que coincidan con el patrón {patron_busqueda} en {temp_folder}")
+        except Exception as e:
+            logger.error(f"Error buscando archivos en {temp_folder}: {str(e)}")
+
+    # Corregido: indentación del if y su contenido
+    if not fotos_paths:
+        logger.error(f"No se encontraron imágenes para procesar en {url_guia} después de buscar en todas las ubicaciones.")
+        return jsonify({'status': 'error', 'message': 'No se encontraron imágenes'}), 404
+
+    # Definir ruta para el archivo JSON de resultados
+    json_path = os.path.join(json_folder, f'clasificacion_{url_guia}.json')
+
+    # Inicializar estado de procesamiento global para esta guía
+    processing_status[url_guia] = {'status': 'starting', 'progress': 0, 'message': 'Iniciando procesamiento...'}
+
+    # Crear un hilo para ejecutar el procesamiento en segundo plano
+    app_context = current_app._get_current_object() # Obtener el contexto de la aplicación
+    thread = Thread(target=process_thread, args=(app_context, url_guia, fotos_paths, guia_fotos_upload_dir, json_path))
+    # Corregido: indentación
+    thread.start()
+
+    logger.info(f"Hilo de procesamiento iniciado para guía: {url_guia}")
+
+    return jsonify({'status': 'processing_started'})
 
 
 
@@ -2826,196 +2161,82 @@ def procesar_imagenes(url_guia):
                     else:
                         # Ya es relativa, usarla directamente
                         fotos_procesadas.append(foto)
-        
-        logger.info(f"Fotos procesadas: {fotos_procesadas}")
-        
-        # Determinar el tamaño de la muestra basado en la cantidad de racimos
-        try:
-            cantidad_racimos_int = int(cantidad_racimos_final) if cantidad_racimos_final and cantidad_racimos_final != 'N/A' else 0
-            tamaño_muestra = 100 if cantidad_racimos_int > 1000 else 28
-        except (ValueError, TypeError):
-            tamaño_muestra = 28  # Valor por defecto si hay algún error
-            
-        # Calcular porcentajes para la clasificación manual
-        clasificacion_manual = clasificacion_data.get('clasificacion_manual', {})
-        if not clasificacion_manual:
-            # Si no hay datos, crear estructura vacía completa
-            clasificacion_manual = {
-                'verdes': 0,
-                'maduros': 0,
-                'sobremaduros': 0,
-                'danio_corona': 0,
-                'pendunculo_largo': 0,
-                'podridos': 0
-            }
-            # Asignar de vuelta para asegurar que se use
-            clasificacion_data['clasificacion_manual'] = clasificacion_manual
-        
-        logger.info(f"Clasificación manual final para porcentajes: {clasificacion_manual}")
-        
-        clasificacion_manual_con_porcentajes = {}
-        
-        for categoria, valor in clasificacion_manual.items():
+        else:
+            logger.warning("No se encontraron fotos en los datos de clasificación")
+            # Buscar fotos en la tabla fotos_clasificacion
             try:
-                valor_num = float(valor) if valor is not None else 0
-                porcentaje = (valor_num / tamaño_muestra) * 100 if tamaño_muestra > 0 else 0
-                clasificacion_manual_con_porcentajes[categoria] = {
-                    'cantidad': valor_num,
-                    'porcentaje': porcentaje
-                }
-            except (ValueError, TypeError, ZeroDivisionError):
-                clasificacion_manual_con_porcentajes[categoria] = {
-                    'cantidad': valor if valor is not None else 0,
-                    'porcentaje': 0
-                }
-                
-        logger.info(f"Clasificación manual con porcentajes: {clasificacion_manual_con_porcentajes}")
+                with sqlite3.connect(current_app.config['TIQUETES_DB_PATH']) as conn:
+                    conn.row_factory = sqlite3.Row
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT ruta_foto FROM fotos_clasificacion WHERE codigo_guia = ? ORDER BY numero_foto", (url_guia,))
+                    db_fotos = [row['ruta_foto'] for row in cursor.fetchall()]
+                    if db_fotos:
+                        logger.info(f"Fotos encontradas en fotos_clasificacion: {len(db_fotos)}")
+                        fotos_originales = db_fotos # Usar estas fotos
+                        # Procesar rutas de nuevo
+                        for foto in fotos_originales:
+                            if isinstance(foto, str):
+                                if os.path.isabs(foto):
+                                    static_index = foto.find('/static/')
+                                    if static_index != -1:
+                                        rel_path = foto[static_index + 8:]
+                                        fotos_procesadas.append(rel_path)
+                                else:
+                                    fotos_procesadas.append(foto)
+            except Exception as db_foto_err:
+                logger.error(f"Error buscando fotos en la DB: {db_foto_err}")
+
+        # Calcular total_racimos_detectados si hay datos automáticos
+        # Asegurarse que clasificacion_automatica_consolidada es un dict
+        if isinstance(clasificacion_data.get('clasificacion_consolidada'), str):
+            try:
+                clasificacion_automatica_consolidada = json.loads(clasificacion_data['clasificacion_consolidada'])
+            except json.JSONDecodeError:
+                clasificacion_automatica_consolidada = {}
+        elif isinstance(clasificacion_data.get('clasificacion_consolidada'), dict):
+            clasificacion_automatica_consolidada = clasificacion_data['clasificacion_consolidada']
+        else:
+            clasificacion_automatica_consolidada = {}
             
-        # Preparar datos para la plantilla de resultados
+        # Obtener total_racimos_detectados de la consolidación
+        if clasificacion_automatica_consolidada and 'total_racimos' in clasificacion_automatica_consolidada:
+            total_racimos_detectados = clasificacion_automatica_consolidada['total_racimos']
+        elif isinstance(clasificacion_data.get('clasificacion_automatica'), dict) and 'total_racimos' in clasificacion_data['clasificacion_automatica']:
+             total_racimos_detectados = clasificacion_data['clasificacion_automatica']['total_racimos']
+        # Fallback si no se encuentra en ningún lado
+        if not isinstance(total_racimos_detectados, int) or total_racimos_detectados < 0:
+            total_racimos_detectados = clasificacion_data.get('total_racimos_detectados', 0)
+            if not isinstance(total_racimos_detectados, int) or total_racimos_detectados < 0:
+                 total_racimos_detectados = 0 # Asegurar que sea un entero no negativo
+        
+        logger.info(f"Total de racimos detectados: {total_racimos_detectados}")
+        
+        # Preparar datos para la plantilla
         template_data = {
             'codigo_guia': url_guia,
-            'codigo_proveedor': codigo_proveedor,  # Agregar código de proveedor extraído
-            'id': clasificacion_data.get('id', ''),  # Añadir el ID para las rutas de imágenes
-            'fecha_registro': datos_guia.get('fecha_registro'),
-            'hora_registro': datos_guia.get('hora_registro'),
-            'fecha_clasificacion': clasificacion_data.get('fecha_clasificacion'),
-            'hora_clasificacion': clasificacion_data.get('hora_clasificacion'),
-            'nombre': nombre_proveedor_final,
+            'codigo_proveedor': codigo_proveedor,
             'nombre_proveedor': nombre_proveedor_final,
             'cantidad_racimos': cantidad_racimos_final,
-            'tamaño_muestra': tamaño_muestra,  # Añadir el tamaño de la muestra
-            'clasificacion_manual': clasificacion_manual,  # Mantener estructura original
-            'clasificacion_manual_con_porcentajes': clasificacion_manual_con_porcentajes,  # Añadir estructura con porcentajes
-            'clasificacion_automatica': clasificacion_data.get('clasificacion_automatica', {}),
-            'total_racimos_detectados': clasificacion_data.get('total_racimos_detectados', 0),
-            'resultados_por_foto': clasificacion_data.get('resultados_por_foto', {}),  # Añadir resultados por foto
-            'clasificaciones': clasificaciones,
-            'fotos': fotos_procesadas,
-            'modelo_utilizado': clasificacion_data.get('modelo_utilizado', 'No especificado'),
-            'tiempo_procesamiento': clasificacion_data.get('tiempo_procesamiento', 'No disponible'),
-            'codigo_guia_transporte_sap': datos_guia.get('codigo_guia_transporte_sap') or clasificacion_data.get('codigo_guia_transporte_sap'),
-            'peso_bruto': datos_guia.get('peso_bruto'),
-            'observaciones': clasificacion_data.get('observaciones', ''),
-            'automatica_completado': 'clasificacion_automatica' in clasificacion_data and any(
-                (isinstance(clasificacion_data['clasificacion_automatica'].get(categoria), dict) and 
-                clasificacion_data['clasificacion_automatica'][categoria].get('cantidad', 0) > 0) or
-                (isinstance(clasificacion_data['clasificacion_automatica'].get(categoria), (int, float)) and 
-                clasificacion_data['clasificacion_automatica'][categoria] > 0)
-                for categoria in ['verdes', 'maduros', 'sobremaduros', 'podridos', 'danio_corona', 'pendunculo_largo']
-            ),
-            'tiene_pesaje_neto': False,  # Por defecto asumimos que no tiene pesaje neto
-            'datos_guia': datos_guia  # Incluir datos_guia completo para la plantilla
+            'peso_bruto': datos_guia.get('peso_bruto', 'N/A'),
+            'clasificacion_manual': clasificacion_data.get('clasificacion_manual', {}),
+            'clasificacion_automatica': clasificacion_data.get('clasificacion_automatica', {}), # Usar datos de clasificacion_data
+            'total_racimos_detectados': total_racimos_detectados, # Usar el calculado
+            'fotos_procesadas': fotos_procesadas,
+            'hay_fotos': len(fotos_procesadas) > 0,
+            'hay_resultados_automaticos': bool(clasificacion_automatica_consolidada) or bool(clasificacion_data.get('clasificacion_automatica')),
+            'tiempo_procesamiento': clasificacion_data.get('tiempo_procesamiento', 'N/A'),
+            'error_procesamiento': clasificacion_data.get('error_message', None),
+            'estado_procesamiento': clasificacion_data.get('estado', 'pendiente'),
+            'mostrar_automatica': mostrar_automatica
         }
         
-        # Registrar lo que estamos enviando a la plantilla
-        logger.info(f"Enviando a template - código_proveedor: {template_data['codigo_proveedor']}")
-        logger.info(f"Enviando a template - nombre_proveedor: {template_data['nombre_proveedor']}")
-        logger.info(f"Enviando a template - cantidad_racimos: {template_data['cantidad_racimos']}")
-        logger.info(f"Enviando a template - clasificacion_manual: {json.dumps(template_data.get('clasificacion_manual', {}))}")
-        logger.info(f"Enviando a template - clasificacion_automatica: {json.dumps(template_data.get('clasificacion_automatica', {}))}")
-        logger.info(f"Enviando a template - fotos: {len(template_data.get('fotos', []))}")
-        logger.info(f"Enviando a template - total_racimos_detectados: {template_data.get('total_racimos_detectados', 0)}")
-        logger.info(f"Enviando a template - codigo_guia_transporte_sap: {template_data.get('codigo_guia_transporte_sap')}")
-        logger.info(f"Mostrando resultados de clasificación para: {url_guia}")
+        # Log final antes de renderizar
+        logger.info(f"Datos finales para renderizar: {json.dumps(template_data)}")
+        fin = time.time()
+        logger.info(f"Tiempo total en ver_resultados_clasificacion: {fin - inicio:.4f} segundos")
         
-        # Consolidar los resultados de la clasificación automática para mostrarlos en la sección de resumen
-        clasificacion_automatica_consolidada = {}
-        
-        # Si tenemos clasificación automática, procesarla
-        if clasificacion_data.get('clasificacion_automatica'):
-            auto_data = clasificacion_data.get('clasificacion_automatica', {})
-            
-            # Verificar el formato de los datos de clasificación automática
-            logger.info(f"Formato de clasificacion_automatica: {type(auto_data)}")
-            logger.info(f"Contenido de clasificacion_automatica: {auto_data}")
-            
-            # Obtener las categorías y su mapeo singular/plural
-            categorias = ['verdes', 'maduros', 'sobremaduros', 'danio_corona', 'pendunculo_largo', 'podridos']
-            categorias_singular = ['verde', 'maduro', 'sobremaduro', 'danio_corona', 'pendunculo_largo', 'podrido']
-            mapeo_plural_singular = dict(zip(categorias, categorias_singular))
-            mapeo_singular_plural = dict(zip(categorias_singular, categorias))
-            total_racimos_auto = 0
-            
-            # Consolidar los resultados de todas las categorías
-            for i, categoria in enumerate(categorias):
-                categoria_singular = categorias_singular[i]
-                
-                # Intentar obtener datos tanto en formato plural como singular
-                datos_categoria = auto_data.get(categoria, auto_data.get(categoria_singular, {}))
-                
-                logger.info(f"Procesando categoría '{categoria}' (singular: '{categoria_singular}'): {datos_categoria}")
-                
-                if isinstance(datos_categoria, dict) and 'cantidad' in datos_categoria:
-                    cantidad = datos_categoria.get('cantidad', 0)
-                    logger.info(f"Cantidad encontrada en diccionario: {cantidad}")
-                else:
-                    # Si es un valor directo en lugar de un diccionario
-                    cantidad = datos_categoria if isinstance(datos_categoria, (int, float)) else 0
-                    logger.info(f"Cantidad como valor directo: {cantidad}")
-                
-                # Siempre incrementamos el total, independientemente del formato
-                total_racimos_auto += cantidad
-                
-                # Asegurarnos de guardar los datos en un formato consistente (diccionario)
-                if not isinstance(datos_categoria, dict):
-                    datos_formateados = {
-                        'cantidad': cantidad,
-                        'porcentaje': 0  # Lo calcularemos después
-                    }
-                else:
-                    datos_formateados = {
-                        'cantidad': cantidad,
-                        'porcentaje': datos_categoria.get('porcentaje', 0)
-                    }
-                
-                # Guardar en ambos formatos (singular y plural) para compatibilidad
-                clasificacion_automatica_consolidada[categoria] = datos_formateados
-                clasificacion_automatica_consolidada[categoria_singular] = datos_formateados
-            
-            # Calcular porcentajes
-            if total_racimos_auto > 0:
-                for categoria in clasificacion_automatica_consolidada:
-                    cantidad = clasificacion_automatica_consolidada[categoria]['cantidad']
-                    porcentaje = (cantidad / total_racimos_auto) * 100
-                    clasificacion_automatica_consolidada[categoria]['porcentaje'] = porcentaje
-                    logger.info(f"Categoría {categoria}: {cantidad} racimos, {porcentaje:.2f}%")
-            
-            logger.info(f"Clasificación automática consolidada: {clasificacion_automatica_consolidada}")
-            
-            # Asegurar que total_racimos_detectados esté definido
-            if 'total_racimos_detectados' not in locals() or total_racimos_detectados is None:
-                total_racimos_detectados = template_data.get('total_racimos_detectados', 0)
-                logger.info(f"total_racimos_detectados no estaba definido, usando valor de template_data: {total_racimos_detectados}")
-            
-            # Añadir el total de racimos en la clasificación automática
-            clasificacion_automatica_consolidada['total_racimos'] = total_racimos_auto if total_racimos_auto > 0 else total_racimos_detectados
-            
-            # Log del valor final de total_racimos
-            logger.info(f"Valor final de clasificacion_automatica_consolidada['total_racimos']: {clasificacion_automatica_consolidada['total_racimos']}")
-            
-            # Si venimos desde la clasificación automática, mostrar un mensaje
-            if mostrar_automatica:
-                total_detectados = clasificacion_automatica_consolidada['total_racimos']
-                if total_detectados > 0:
-                    flash(f"Procesamiento de imágenes exitoso. Se detectaron {total_detectados} racimos en total.", "success")
-                else:
-                    flash("El procesamiento de imágenes finalizó pero no se detectaron racimos. Revise las imágenes.", "warning")
-        
-        # Actualizar template_data con la clasificación automática consolidada
-        template_data['clasificacion_automatica_consolidada'] = clasificacion_automatica_consolidada
-        template_data['mostrar_automatica'] = mostrar_automatica  # Indicar si se debe destacar la clasificación automática
-        
-        # Log detallado para debugging
-        logger.info(f"DETALLE clasificacion_automatica_consolidada: {json.dumps(clasificacion_automatica_consolidada, default=str)}")
-        logger.info(f"DETALLE clasificacion_automatica_consolidada.total_racimos: {clasificacion_automatica_consolidada.get('total_racimos', 0)}")
-        logger.info(f"DETALLE template_data['total_racimos_detectados']: {template_data.get('total_racimos_detectados', 0)}")
-        
-        for categoria, datos in clasificacion_automatica_consolidada.items():
-            if categoria != 'total_racimos':
-                logger.info(f"DETALLE categoria {categoria}: {json.dumps(datos, default=str)}")
-        
-        logger.info("Renderizando plantilla clasificacion_resultados.html")
         return render_template('clasificacion/clasificacion_resultados.html', **template_data)
+        
     except Exception as e:
         logger.error(f"Error en procesar_imagenes: {str(e)}")
         logger.error(traceback.format_exc())
@@ -3692,12 +2913,14 @@ def guardar_clasificacion_final(codigo_guia):
                 clasificacion_data = json.load(f)
                 
                 # Preparar datos para guardar en la base de datos
+                timestamp_utc_str = get_utc_timestamp_str() # Generate UTC timestamp
                 datos_clasificacion = {
                     'codigo_guia': codigo_guia,
                     'codigo_proveedor': datos_guia.get('codigo_proveedor'),
                     'nombre_proveedor': datos_guia.get('nombre_proveedor'),
-                    'fecha_clasificacion': datetime.utcnow().strftime('%d/%m/%Y'), # Use UTC now
-                    'hora_clasificacion': datetime.utcnow().strftime('%H:%M:%S'), # Use UTC now
+                    # 'fecha_clasificacion': datetime.utcnow().strftime('%d/%m/%Y'), # REMOVE LOCAL
+                    # 'hora_clasificacion': datetime.utcnow().strftime('%H:%M:%S'), # REMOVE LOCAL
+                    'timestamp_clasificacion_utc': timestamp_utc_str, # Use UTC timestamp
                     'estado': 'completado'
                 }
                 
@@ -3751,6 +2974,12 @@ def guardar_clasificacion_final(codigo_guia):
                     
                     # Actualizar los datos de la guía
                     datos_guia['clasificacion_manual'] = clasificacion_manual_dict
+                    datos_guia['timestamp_clasificacion_utc'] = timestamp_utc_str # Add UTC timestamp to datos_guia as well
+                    datos_guia['fecha_clasificacion'] = datetime.now(BOGOTA_TZ).strftime('%d/%m/%Y') # Keep local for display if needed
+                    datos_guia['hora_clasificacion'] = datetime.now(BOGOTA_TZ).strftime('%H:%M:%S') # Keep local for display if needed
+                    datos_guia['clasificacion_completada'] = True # Ensure this flag is set
+                    datos_guia['estado_actual'] = 'clasificacion_completada' # Set state
+                    datos_guia['estado_clasificacion'] = 'completado' # Set state
                     utils_instance.update_datos_guia(codigo_guia, datos_guia)
                     logger.info(f"Actualizada clasificación manual en datos_guia: {clasificacion_manual_dict}")
                     
@@ -3761,6 +2990,11 @@ def guardar_clasificacion_final(codigo_guia):
                     
                     # Actualizar también el archivo JSON original de clasificación
                     clasificacion_data['clasificacion_manual'] = clasificacion_manual_dict
+                    # Add timestamp to JSON file as well for consistency
+                    clasificacion_data['timestamp_clasificacion_utc'] = timestamp_utc_str
+                    clasificacion_data['fecha_clasificacion'] = datos_guia['fecha_clasificacion'] # Keep local in JSON too
+                    clasificacion_data['hora_clasificacion'] = datos_guia['hora_clasificacion'] # Keep local in JSON too
+                    clasificacion_data['estado_clasificacion'] = 'completado' # Add status to JSON
                     with open(clasificacion_file, 'w', encoding='utf-8') as f:
                         json.dump(clasificacion_data, f, indent=4)
                     logger.info(f"Archivo de clasificación actualizado en: {clasificacion_file}")
@@ -3786,6 +3020,7 @@ def guardar_clasificacion_final(codigo_guia):
                 
                 # Guardar datos en la base de datos usando store_clasificacion
                 from db_operations import store_clasificacion
+                logger.info(f"Calling store_clasificacion from guardar_clasificacion_final with: {datos_clasificacion}")
                 success = store_clasificacion(datos_clasificacion, clasificacion_data.get('fotos', []))
                 logger.info(f"Datos de clasificación guardados en la base de datos para {codigo_guia}: {'Éxito' if success else 'Falló'}")
         
@@ -4093,7 +3328,7 @@ def test_annotated_image(url_guia):
         output_path = os.path.join(photos_dir, output_name)
         
         # Generar la imagen anotada utilizando la función mejorada
-        from app.blueprints.clasificacion.generate_annotated_image import generate_annotated_image
+        # REMOVED: from app.blueprints.clasificacion.generate_annotated_image import generate_annotated_image
         result_path = generate_annotated_image(image_path, detections, output_path)
         
         if result_path:

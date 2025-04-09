@@ -184,7 +184,7 @@
         <div class="header-section text-center">
             <h2 class="mb-3">Guía de Proceso</h2>
             <h4 class="text-primary mb-2">20250228160718-7315</h4>
-            <h5 class="text-secondary">IND - INVERSIONES SALAS Y ARAUJO</h5>
+            <h5 class="text-secondary"></h5>
             
             <!-- Imagen del tiquete -->
             
@@ -201,11 +201,11 @@
                 <!-- Registro de Portería -->
                 <div class="info-item">
                     <div class="info-label">Código</div>
-                    <div class="info-value">0150076A</div>
+                    <div class="info-value"></div>
                 </div>
                 <div class="info-item">
                     <div class="info-label">Nombre del Agricultor</div>
-                    <div class="info-value">IND - INVERSIONES SALAS Y ARAUJO</div>
+                    <div class="info-value"></div>
                 </div>
                 <div class="info-item">
                     <div class="info-label">Cantidad de Racimos</div>
@@ -229,22 +229,22 @@
                 </div>
                 <div class="info-item">
                     <div class="info-label">Fecha de Registro</div>
-                    <div class="info-value">28/02/2025</div>
+                    <div class="info-value">None</div>
                 </div>
                 <div class="info-item">
                     <div class="info-label">Hora de Registro</div>
-                    <div class="info-value">16:07:18</div>
+                    <div class="info-value">None</div>
                 </div>
 
                 <!-- Información de Pesaje -->
                 
                 <div class="info-item">
                     <div class="info-label">Fecha de Pesaje</div>
-                    <div class="info-value">28/02/2025</div>
+                    <div class="info-value">04/04/2025</div>
                 </div>
                 <div class="info-item">
                     <div class="info-label">Hora de Pesaje</div>
-                    <div class="info-value">16:08:42</div>
+                    <div class="info-value">11:00:09</div>
                 </div>
                 <div class="info-item">
                     <div class="info-label">Tipo de Pesaje</div>
@@ -252,11 +252,24 @@
                 </div>
                 <div class="info-item">
                     <div class="info-label">Peso Bruto</div>
-                    <div class="info-value">10.050 kg</div>
+                    <div class="info-value">23.34 kg</div>
                 </div>
                 
 
                 <!-- Información de Clasificación -->
+                
+                <div class="info-item">
+                    <div class="info-label">Fecha de Clasificación</div>
+                    <div class="info-value">04/04/2025</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Hora de Clasificación</div>
+                    <div class="info-value">11:00:37</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Tipo de Clasificación</div>
+                    <div class="info-value">Manual</div>
+                </div>
                 
 
                 <!-- Información de Peso Tara -->
@@ -286,8 +299,8 @@
                             Registro de Portería
                         </div>
                         <div class="timeline-info">
-                            <span class="me-3">Fecha: 28/02/2025</span>
-                            <span>Hora: 16:07:18</span>
+                            <span class="me-3">Fecha: None</span>
+                            <span>Hora: None</span>
                         </div>
                     </div>
                     
@@ -308,8 +321,8 @@
                         </div>
                         
                         <div class="timeline-info">
-                            <span class="me-3">Peso: 10.050 kg</span>
-                            <span class="me-3">Hora: 16:08:42</span>
+                            <span class="me-3">Peso: 23.34 kg</span>
+                            <span class="me-3">Hora: 11:00:09</span>
                             <span>Tipo: Directo</span>
                         </div>
                         
@@ -318,31 +331,37 @@
                 </div>
 
                 <!-- Clasificación -->
-                <div class="timeline-item current">
+                <div class="timeline-item completed">
                     <div class="timeline-content">
                         <div class="timeline-title">
-                            <i class="fas fa-clock status-icon"></i>
+                            <i class="fas fa-check-circle status-icon"></i>
                             Clasificación de Fruta
                         </div>
                         
+                        <div class="timeline-info">
+                            <span class="me-3">Fecha: 04/04/2025</span>
+                            <span class="me-3">Hora: 11:00:37</span>
+                            <span>Tipo: Manual</span>
+                        </div>
+                        
                     </div>
-                    
-                    <a href="/clasificacion/0150076A" 
-                       class="btn-action btn-register">
-                        Iniciar Clasificación
-                    </a>
                     
                 </div>
 
                 <!-- Peso Tara -->
-                <div class="timeline-item pending">
+                <div class="timeline-item current">
                     <div class="timeline-content">
                         <div class="timeline-title">
-                            <i class="fas fa-hourglass status-icon"></i>
+                            <i class="fas fa-clock status-icon"></i>
                             Peso Tara
                         </div>
                         
                     </div>
+                    
+                    <a href="/pesaje/pesaje-tara/" 
+                       class="btn-action btn-register">
+                        Registrar Tara
+                    </a>
                     
                 </div>
 
