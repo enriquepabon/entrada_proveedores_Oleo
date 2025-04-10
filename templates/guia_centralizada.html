@@ -472,7 +472,7 @@
                             
                             {% if (datos_guia.estado_clasificacion and datos_guia.estado_clasificacion != 'Pendiente') and (not datos_guia.peso_neto or datos_guia.peso_neto == 'Pendiente' or datos_guia.peso_neto == 'N/A') %}
                             <div class="mt-3 text-center">
-                                <a href="{{ url_for('pesaje.pesaje_neto', codigo=codigo_guia) }}" class="btn btn-primary">
+                                <a href="{{ url_for('pesaje_neto.pesaje_neto', codigo_guia=codigo_guia) }}" class="btn btn-primary">
                                     <i class="fas fa-balance-scale"></i> Registrar Pesaje Neto
                                 </a>
                             </div>
@@ -527,7 +527,7 @@
                                 <strong>PEPA:</strong> No requiere clasificación manual/automática.
                             </div>
                             <div class="d-grid gap-2">
-                                <a href="{{ url_for('pesaje.pesaje_neto', codigo=codigo_guia) }}" class="btn btn-success">
+                                <a href="{{ url_for('pesaje_neto.pesaje_neto', codigo_guia=codigo_guia) }}" class="btn btn-success">
                                     <i class="fas fa-weight me-2"></i>Continuar a Pesaje Neto
                                 </a>
                             </div>
@@ -587,7 +587,7 @@
                                         <i class="fas fa-eye me-2"></i>Ver Resultados de Clasificación
                                     </a>
                                     {% if not (datos_guia.fecha_salida and datos_guia.hora_salida) %} {# Ocultar si ya salió #}
-                                    <a href="{{ url_for('pesaje.pesaje_neto', codigo=codigo_guia) }}" class="btn btn-success">
+                                    <a href="{{ url_for('pesaje_neto.pesaje_neto', codigo_guia=codigo_guia) }}" class="btn btn-success">
                                         <i class="fas fa-weight me-2"></i>Continuar a Pesaje Neto
                                     </a>
                                     {% endif %}
@@ -655,7 +655,7 @@
                             {% if clasificacion_completada and not peso_neto_completado %}
                             {% if not (datos_guia.fecha_salida and datos_guia.hora_salida) %} {# Hide if exit is registered #}
                             <div class="mt-3 text-center">
-                                <a href="{{ url_for('pesaje.pesaje_neto', codigo=codigo_guia) }}" class="btn btn-primary">
+                                <a href="{{ url_for('pesaje_neto.pesaje_neto', codigo_guia=codigo_guia) }}" class="btn btn-primary">
                                     <i class="fas fa-balance-scale"></i> Registrar Pesaje Neto
                                 </a>
                             </div>
@@ -728,10 +728,10 @@
                 {% if 'clasificacion' in estado_info.datos_disponibles and not es_pepa %}
                     <a href="{{ url_for('clasificacion.ver_resultados_clasificacion', url_guia=codigo_guia) }}" class="btn btn-primary m-1">Ver Resultados de Clasificación</a>
                     {% if 'pesaje_neto' not in estado_info.datos_disponibles %}
-                        <a href="{{ url_for('pesaje.pesaje_neto', codigo=codigo_guia) }}" class="btn btn-primary m-1">Ir a Pesaje Neto</a>
+                        <a href="{{ url_for('pesaje_neto.pesaje_neto', codigo_guia=codigo_guia) }}" class="btn btn-primary m-1">Ir a Pesaje Neto</a>
                     {% endif %}
                 {% elif es_pepa and 'pesaje_neto' not in estado_info.datos_disponibles %}
-                    <a href="{{ url_for('pesaje.pesaje_neto', codigo=codigo_guia) }}" class="btn btn-primary m-1">Ir a Pesaje Neto (Pepa)</a>
+                    <a href="{{ url_for('pesaje_neto.pesaje_neto', codigo_guia=codigo_guia) }}" class="btn btn-primary m-1">Ir a Pesaje Neto (Pepa)</a>
                 {% endif %}
                 
                 {% if 'pesaje_neto' in estado_info.datos_disponibles %}
