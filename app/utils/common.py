@@ -449,8 +449,21 @@ class CommonUtils:
                     logger.info(f"Actualizando datos en la base de datos para: {codigo}")
                     # Si tiene información de peso neto, guardarlo
                     if 'peso_neto' in datos_guia and 'peso_tara' in datos_guia:
-                        store_pesaje_neto(datos_guia)
-                        logger.info(f"Datos de pesaje neto guardados en la base de datos para: {codigo}")
+                        # Filtrar datos_guia para pasar solo las claves relevantes a store_pesaje_neto
+                        keys_pesaje_neto = [
+                            'codigo_guia', 'peso_bruto', 'peso_tara', 'peso_neto',
+                            'timestamp_pesaje_bruto_utc', 'timestamp_pesaje_neto_utc'
+                        ]
+                        # Asegurarse de que codigo_guia siempre esté presente si se llama a store_pesaje_neto
+                        if 'codigo_guia' not in datos_guia:
+                             datos_guia['codigo_guia'] = codigo # Añadir codigo_guia si falta
+
+                        datos_para_pesaje_neto = {k: datos_guia[k] for k in keys_pesaje_neto if k in datos_guia}
+
+                        # Solo llamar a store_pesaje_neto si tenemos los datos necesarios y el código de guía
+                        if 'peso_neto' in datos_para_pesaje_neto and 'peso_tara' in datos_para_pesaje_neto and 'codigo_guia' in datos_para_pesaje_neto:
+                             store_pesaje_neto(datos_para_pesaje_neto) # Pasar el diccionario filtrado
+                             logger.info(f"Datos de pesaje neto guardados en la base de datos para: {codigo}")
                     return True
             
             # Si no está en la base de datos o no se pudo actualizar, usar JSON

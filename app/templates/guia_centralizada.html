@@ -127,7 +127,7 @@
         margin-bottom: 5px;
         font-size: 0.9rem;
     }
-    .step-date {
+    .step-datetime {
         font-size: 0.75rem;
         font-weight: bold;
         color: #495057;
@@ -244,40 +244,35 @@
                         <i class="fas fa-clipboard-check"></i>
                     </div>
                     <div class="step-label">Registro</div>
-                    <div class="step-date">{{ datos_guia.fecha_registro|default('--/--/----') }}</div>
-                    <div class="step-time">{{ datos_guia.hora_registro|default('--:--') }}</div>
+                    <div class="step-datetime">{{ datos_guia.timestamp_registro_utc | format_datetime if datos_guia.timestamp_registro_utc else '--:--' }}</div>
                 </div>
                 <div class="process-step">
                     <div class="step-circle {% if 'pesaje' in estado_info.pasos_completados %}completed{% elif estado_info.siguiente_paso == 'pesaje' %}active{% endif %}">
                         <i class="fas fa-weight"></i>
                     </div>
                     <div class="step-label">Pesaje</div>
-                    <div class="step-date">{{ datos_guia.fecha_pesaje|default('--/--/----') }}</div>
-                    <div class="step-time">{{ datos_guia.hora_pesaje|default('--:--') }}</div>
+                    <div class="step-datetime">{{ datos_guia.timestamp_pesaje_utc | format_datetime if datos_guia.timestamp_pesaje_utc else '--:--' }}</div>
                 </div>
                 <div class="process-step">
-                    <div class="step-circle {% if 'clasificacion' in estado_info.pasos_completados or datos_guia.clasificacion_completada or 'clasificacion' in datos_guia.pasos_completados %}completed{% elif estado_info.siguiente_paso == 'clasificacion' %}active{% endif %}">
+                    <div class="step-circle {% if 'clasificacion' in estado_info.pasos_completados %}completed{% elif estado_info.siguiente_paso == 'clasificacion' %}active{% endif %}">
                         <i class="fas fa-tasks"></i>
                     </div>
                     <div class="step-label">Clasificación</div>
-                    <div class="step-date">{{ datos_guia.fecha_clasificacion|default('--/--/----') }}</div>
-                    <div class="step-time">{{ datos_guia.hora_clasificacion|default('--:--') }}</div>
+                    <div class="step-datetime">{{ datos_guia.timestamp_clasificacion_utc | format_datetime if datos_guia.timestamp_clasificacion_utc else '--:--' }}</div>
                 </div>
                 <div class="process-step">
-                    <div class="step-circle {% if 'pesaje_neto' in estado_info.pasos_completados or datos_guia.pesaje_neto_completado or (datos_guia.peso_neto and datos_guia.peso_neto != 'Pendiente' and datos_guia.peso_neto != 'N/A') %}completed{% elif estado_info.siguiente_paso == 'pesaje_neto' %}active{% endif %}">
+                    <div class="step-circle {% if 'pesaje_neto' in estado_info.pasos_completados %}completed{% elif estado_info.siguiente_paso == 'pesaje_neto' %}active{% endif %}">
                         <i class="fas fa-balance-scale"></i>
                     </div>
                     <div class="step-label">Pesaje Neto</div>
-                    <div class="step-date">{{ datos_guia.fecha_pesaje_neto|default('--/--/----') }}</div>
-                    <div class="step-time">{{ datos_guia.hora_pesaje_neto|default('--:--') }}</div>
+                    <div class="step-datetime">{{ datos_guia.timestamp_pesaje_neto_utc | format_datetime if datos_guia.timestamp_pesaje_neto_utc else '--:--' }}</div>
                 </div>
                 <div class="process-step">
-                    <div class="step-circle {% if 'salida' in estado_info.pasos_completados or (datos_guia.fecha_salida and datos_guia.hora_salida) %}completed{% elif estado_info.siguiente_paso == 'salida' %}active{% endif %}">
+                    <div class="step-circle {% if 'salida' in estado_info.pasos_completados %}completed{% elif estado_info.siguiente_paso == 'salida' %}active{% endif %}">
                         <i class="fas fa-truck"></i>
                     </div>
                     <div class="step-label">Salida</div>
-                    <div class="step-date">{{ datos_guia.fecha_salida|default('--/--/----') }}</div>
-                    <div class="step-time">{{ datos_guia.hora_salida|default('--:--') }}</div>
+                    <div class="step-datetime">{{ datos_guia.timestamp_salida_utc | format_datetime if datos_guia.timestamp_salida_utc else '--:--' }}</div>
                 </div>
             </div>
             
@@ -347,7 +342,7 @@
             <div class="row mb-4">
                 <div class="col-12">
                     <div class="card mb-3">
-                        <div class="card-header {% if datos_guia.fecha_registro %}bg-success{% else %}bg-primary{% endif %} text-white">
+                        <div class="card-header {% if datos_guia.timestamp_registro_utc %}bg-success{% else %}bg-primary{% endif %} text-white">
                             <h4>Registro Entrada</h4>
                         </div>
                         <div class="card-body">
@@ -375,8 +370,8 @@
                                     <ul class="list-group">
                                         <li class="list-group-item">
                                             <div class="fecha-hora">
-                                                <span class="fecha"><strong>Fecha Registro:</strong> {{ datos_guia.fecha_registro|default('N/A') }}</span>
-                                                <span class="hora"><strong>Hora:</strong> {{ datos_guia.hora_registro|default('N/A') }}</span>
+                                                <span class="fecha"><strong>Fecha Registro:</strong> {{ datos_guia.timestamp_registro_utc | format_datetime if datos_guia.timestamp_registro_utc else 'N/A' }}</span>
+                                                <span class="hora"><strong>Hora:</strong> {{ datos_guia.timestamp_registro_utc | format_datetime if datos_guia.timestamp_registro_utc else 'N/A' }}</span>
                                             </div>
                                         </li>
                                         <li class="list-group-item"><strong>Código Guía:</strong> {{ codigo_guia }}</li>
@@ -401,11 +396,11 @@
                         <div class="card-body">
                             <ul class="list-group">
                                 <li class="list-group-item"><strong>Peso Bruto:</strong> {{ datos_guia.peso_bruto|default('Pendiente') }}</li>
-                                {% if datos_guia.fecha_pesaje %}
+                                {% if datos_guia.timestamp_pesaje_utc %}
                                 <li class="list-group-item">
                                     <div class="fecha-hora">
-                                        <span class="fecha"><strong>Fecha:</strong> {{ datos_guia.fecha_pesaje }}</span>
-                                        <span class="hora"><strong>Hora:</strong> {{ datos_guia.hora_pesaje|default('N/A') }}</span>
+                                        <span class="fecha"><strong>Fecha:</strong> {{ datos_guia.timestamp_pesaje_utc | format_datetime if datos_guia.timestamp_pesaje_utc else 'N/A' }}</span>
+                                        <span class="hora"><strong>Hora:</strong> {{ datos_guia.timestamp_pesaje_utc | format_datetime if datos_guia.timestamp_pesaje_utc else 'N/A' }}</span>
                                     </div>
                                 </li>
                                 {% endif %}
@@ -433,11 +428,11 @@
                         <div class="card-body">
                             <ul class="list-group">
                                 <li class="list-group-item"><strong>Peso Neto:</strong> {{ datos_guia.peso_neto|default('Pendiente') }}</li>
-                                {% if datos_guia.fecha_pesaje_neto %}
+                                {% if datos_guia.timestamp_pesaje_neto_utc %}
                                 <li class="list-group-item">
                                     <div class="fecha-hora">
-                                        <span class="fecha"><strong>Fecha:</strong> {{ datos_guia.fecha_pesaje_neto }}</span>
-                                        <span class="hora"><strong>Hora:</strong> {{ datos_guia.hora_pesaje_neto|default('N/A') }}</span>
+                                        <span class="fecha"><strong>Fecha:</strong> {{ datos_guia.timestamp_pesaje_neto_utc | format_datetime if datos_guia.timestamp_pesaje_neto_utc else 'N/A' }}</span>
+                                        <span class="hora"><strong>Hora:</strong> {{ datos_guia.timestamp_pesaje_neto_utc | format_datetime if datos_guia.timestamp_pesaje_neto_utc else 'N/A' }}</span>
                                     </div>
                                 </li>
                                 {% endif %}
@@ -507,13 +502,13 @@
                                     <li class="list-group-item bg-light">
                                         <div class="d-flex justify-content-between">
                                             <div><strong>Fecha de clasificación:</strong></div>
-                                            <div>{{ datos_guia.fecha_clasificacion }}</div>
+                                            <div>{{ datos_guia.timestamp_clasificacion_utc | format_datetime if datos_guia.timestamp_clasificacion_utc else 'N/A' }}</div>
                                         </div>
                                     </li>
                                     <li class="list-group-item">
                                         <div class="d-flex justify-content-between">
                                             <div><strong>Hora de clasificación:</strong></div>
-                                            <div>{{ datos_guia.hora_clasificacion }}</div>
+                                            <div>{{ datos_guia.timestamp_clasificacion_utc | format_datetime if datos_guia.timestamp_clasificacion_utc else 'N/A' }}</div>
                                         </div>
                                     </li>
                                     <li class="list-group-item bg-light">
@@ -566,11 +561,11 @@
                         <div class="card-body">
                             <ul class="list-group">
                                 <li class="list-group-item"><strong>Peso Neto:</strong> {{ datos_guia.peso_neto|default('Pendiente') }}</li>
-                                {% if datos_guia.fecha_pesaje_neto %}
+                                {% if datos_guia.timestamp_pesaje_neto_utc %}
                                 <li class="list-group-item">
                                     <div class="fecha-hora">
-                                        <span class="fecha"><strong>Fecha:</strong> {{ datos_guia.fecha_pesaje_neto }}</span>
-                                        <span class="hora"><strong>Hora:</strong> {{ datos_guia.hora_pesaje_neto|default('N/A') }}</span>
+                                        <span class="fecha"><strong>Fecha:</strong> {{ datos_guia.timestamp_pesaje_neto_utc | format_datetime if datos_guia.timestamp_pesaje_neto_utc else 'N/A' }}</span>
+                                        <span class="hora"><strong>Hora:</strong> {{ datos_guia.timestamp_pesaje_neto_utc | format_datetime if datos_guia.timestamp_pesaje_neto_utc else 'N/A' }}</span>
                                     </div>
                                 </li>
                                 {% endif %}
@@ -615,11 +610,11 @@
                         <div class="card-body">
                             <ul class="list-group">
                                 <li class="list-group-item"><strong>Estado de Salida:</strong> {{ datos_guia.estado_salida|default('Pendiente') }}</li>
-                                {% if datos_guia.fecha_salida %}
+                                {% if datos_guia.timestamp_salida_utc %}
                                 <li class="list-group-item">
                                     <div class="fecha-hora">
-                                        <span class="fecha"><strong>Fecha:</strong> {{ datos_guia.fecha_salida }}</span>
-                                        <span class="hora"><strong>Hora:</strong> {{ datos_guia.hora_salida|default('N/A') }}</span>
+                                        <span class="fecha"><strong>Fecha:</strong> {{ datos_guia.timestamp_salida_utc | format_datetime if datos_guia.timestamp_salida_utc else 'N/A' }}</span>
+                                        <span class="hora"><strong>Hora:</strong> {{ datos_guia.timestamp_salida_utc | format_datetime if datos_guia.timestamp_salida_utc else 'N/A' }}</span>
                                     </div>
                                 </li>
                                 {% endif %}

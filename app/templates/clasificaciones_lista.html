@@ -145,8 +145,7 @@
                             <th>Código Guía</th>
                             <th>Proveedor</th>
                             <th>Código</th>
-                            <th>Fecha</th>
-                            <th>Hora</th>
+                            <th>Fecha y Hora</th>
                             <th>Racimos</th>
                             <th>Estado</th>
                             <th class="text-center">Acciones</th>
@@ -158,8 +157,7 @@
                             <td>{{ clasificacion.codigo_guia }}</td>
                             <td>{{ clasificacion.nombre_proveedor }}</td>
                             <td>{{ clasificacion.codigo_proveedor }}</td>
-                            <td>{{ clasificacion.fecha_clasificacion }}</td>
-                            <td>{{ clasificacion.hora_clasificacion }}</td>
+                            <td>{{ clasificacion.timestamp_clasificacion_utc | format_datetime if clasificacion.timestamp_clasificacion_utc else 'N/A' }}</td>
                             <td>{{ clasificacion.cantidad_racimos }}</td>
                             <td>
                                 {% if clasificacion.estado == 'completado' %}

@@ -1,6 +1,6 @@
 ---
-description:
-globs:
+description: 
+globs: 
 alwaysApply: true
 ---
 
@@ -8,3 +8,8 @@ alwaysApply: true
 
 - You can @ files here
 - You can use markdown but dont have to
+
+[cursor_rules](mdc:cursor_rules)
+
+
+para el archivo: [clasificacion_routes.py](mdc:archive/migration_backups/blueprint_migration_20250311_094812/clasificacion_routes.py) [clasificacion_routes.py](mdc:archive/migration_backups/blueprint_migration_20250311_094812/clasificacion_routes.py) no hacer cambios o ediciones, enviar TODO el codigo de la función que se deberia cambiar, para reemplazarla, pero no hacer el cambio.

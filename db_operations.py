@@ -303,120 +303,137 @@ def update_pesaje_bruto(codigo_guia, datos_pesaje):
 #-----------------------
 # Operaciones para Clasificaciones
 #-----------------------
+# db_operations.py
+
+
 
 def store_clasificacion(clasificacion_data, fotos=None):
     """
     Almacena un registro de clasificación y sus fotos asociadas en la base de datos.
-    Uses TIQUETES_DB_PATH.
-    
-    Args:
-        clasificacion_data (dict): Diccionario con los datos de la clasificación
-        fotos (list, optional): Lista de rutas a las fotos de la clasificación
-        
-    Returns:
-        bool: True si se almacenó correctamente, False en caso contrario
+    Uses TIQUETES_DB_PATH. CON LOGGING DETALLADO.
     """
     conn = None
+    codigo_guia_logging = clasificacion_data.get('codigo_guia', 'UNKNOWN') # Para logs
     try:
-        logger.info(f"--- store_clasificacion called with data: {clasificacion_data} ---")
-        
+        logger.info(f"--- store_clasificacion v2 INICIO para {codigo_guia_logging} ---")
+        logger.debug(f"Datos recibidos: {clasificacion_data}")
+        logger.debug(f"Fotos recibidas: {fotos}")
+
         db_path = current_app.config['TIQUETES_DB_PATH']
         conn = sqlite3.connect(db_path)
+        # Asegurar que las claves foráneas estén habilitadas si usas relaciones
+        # conn.execute("PRAGMA foreign_keys = ON")
         cursor = conn.cursor()
 
-        # --- CORRECCIÓN: Simplificar la preparación de datos --- 
-        # Usar directamente el diccionario recibido, filtrando solo None al final.
         datos_para_sql = clasificacion_data.copy()
         codigo_guia = datos_para_sql.get('codigo_guia')
 
         if not codigo_guia:
-            logger.error("Cannot store classification without 'codigo_guia'. Aborting.")
+            logger.error("STORE_CLASIF: No se puede guardar sin 'codigo_guia'. Abortando.")
             return False
 
         # Quitar valores None ANTES de construir el SQL
         datos_finales = {k: v for k, v in datos_para_sql.items() if v is not None}
-        
-        logger.info(f"--- store_clasificacion - Datos finales para SQL: {datos_finales} ---")
-        # --- FIN CORRECCIÓN ---
-            
+        logger.debug(f"STORE_CLASIF: Datos finales para SQL (sin None): {datos_finales}")
+
         # Check if record exists
         cursor.execute("SELECT id FROM clasificaciones WHERE codigo_guia = ?", (codigo_guia,))
         existing = cursor.fetchone()
+        logger.debug(f"STORE_CLASIF: Registro existente para {codigo_guia}? {'Sí' if existing else 'No'}")
 
         if existing:
             # UPDATE logic
-            # Excluir codigo_guia de los campos a actualizar
             update_fields = {k: v for k, v in datos_finales.items() if k != 'codigo_guia'}
             if not update_fields:
-                logger.warning(f"No fields to update for existing classification {codigo_guia}. Skipping update.")
+                logger.warning(f"STORE_CLASIF: No hay campos para actualizar en clasificación existente {codigo_guia}.")
             else:
                 set_clause = ', '.join([f"{k} = ?" for k in update_fields.keys()])
-                valores = list(update_fields.values()) + [codigo_guia] # Values for SET + WHERE
+                valores = list(update_fields.values()) + [codigo_guia]
                 update_query = f"UPDATE clasificaciones SET {set_clause} WHERE codigo_guia = ?"
-                logger.info(f"Executing UPDATE for classification: {update_query} with values {valores}")
+                logger.info(f"STORE_CLASIF: Ejecutando UPDATE: {update_query}")
+                logger.debug(f"STORE_CLASIF: Valores para UPDATE: {valores}")
                 cursor.execute(update_query, valores)
+                logger.info(f"STORE_CLASIF: UPDATE ejecutado para {codigo_guia}.")
         else:
             # INSERT logic
             if not datos_finales:
-                 logger.error("No data available to insert for classification. Aborting.")
+                 logger.error("STORE_CLASIF: No hay datos disponibles para insertar. Abortando.")
                  return False
-                 
+
             campos = ', '.join(datos_finales.keys())
             placeholders = ', '.join(['?' for _ in datos_finales])
             valores = list(datos_finales.values())
             insert_query = f"INSERT INTO clasificaciones ({campos}) VALUES ({placeholders})"
-            logger.info(f"Executing INSERT for classification: {insert_query} with values {valores}")
+            logger.info(f"STORE_CLASIF: Ejecutando INSERT: {insert_query}")
+            logger.debug(f"STORE_CLASIF: Valores para INSERT: {valores}")
             cursor.execute(insert_query, valores)
+            logger.info(f"STORE_CLASIF: INSERT ejecutado para {codigo_guia}.")
 
+        # Commit después de INSERT/UPDATE de clasificación
         conn.commit()
+        logger.info(f"STORE_CLASIF: Commit realizado para tabla clasificaciones ({codigo_guia}).")
 
-        # Guardar fotos si existen
+
+        # --- Guardar fotos si existen ---
         if fotos:
-            # Borrar fotos existentes para esta guía antes de insertar las nuevas
-            # para evitar duplicados si se re-guarda
-            logger.info(f"[DIAG][store_clasificacion] Intentando guardar {len(fotos)} fotos para guía: {codigo_guia}")
-            logger.info(f"[DIAG][store_clasificacion] Rutas a guardar: {fotos}")
-            logger.info(f"[DIAG][store_clasificacion] Borrando fotos existentes para {codigo_guia} antes de insertar nuevas.")
+            logger.info(f"STORE_CLASIF: Procesando {len(fotos)} fotos para {codigo_guia}.")
+            # Borrar fotos existentes
+            logger.info(f"STORE_CLASIF: Borrando fotos existentes para {codigo_guia}...")
             try:
                 cursor.execute("DELETE FROM fotos_clasificacion WHERE codigo_guia = ?", (codigo_guia,))
-                logger.info(f"[DIAG][store_clasificacion] Fotos antiguas borradas para {codigo_guia}.")
+                logger.info(f"STORE_CLASIF: Fotos antiguas borradas ok para {codigo_guia}.")
             except sqlite3.Error as del_err:
-                 logger.error(f"[DIAG][store_clasificacion] Error borrando fotos antiguas para {codigo_guia}: {del_err}")
-                 # Considerar si continuar o devolver error aquí
-            
+                 # Loguear pero continuar, podría ser que la tabla no exista o esté vacía
+                 logger.warning(f"STORE_CLASIF: Error (o tabla vacía?) borrando fotos antiguas para {codigo_guia}: {del_err}")
+
+            # Insertar fotos nuevas
+            fotos_insertadas_count = 0
             for i, foto_path in enumerate(fotos):
-                # Asegurarse que la ruta no sea None o vacía
                 if foto_path:
-                    logger.info(f"[DIAG][store_clasificacion] Insertando foto {i+1} para {codigo_guia}: {foto_path}")
+                    logger.debug(f"STORE_CLASIF: Insertando foto {i+1}: {foto_path}")
                     try:
                         cursor.execute("""
                             INSERT INTO fotos_clasificacion (codigo_guia, ruta_foto, numero_foto)
                             VALUES (?, ?, ?)
                         """, (codigo_guia, foto_path, i + 1))
-                        logger.info(f"[DIAG][store_clasificacion] Foto {i+1} insertada correctamente para {codigo_guia}.")
+                        fotos_insertadas_count += 1
                     except sqlite3.Error as insert_err:
-                         logger.error(f"[DIAG][store_clasificacion] Error insertando foto {i+1} ({foto_path}) para {codigo_guia}: {insert_err}")
+                         # Loguear el error específico de la foto
+                         logger.error(f"STORE_CLASIF: Error insertando foto {i+1} ({foto_path}) para {codigo_guia}: {insert_err}")
+                         # Considerar si se debe devolver False aquí si una foto falla
+                         # return False # Descomentar si el fallo al guardar UNA foto debe detener todo
                 else:
-                    logger.warning(f"[DIAG][store_clasificacion] Se omitió la inserción de la foto {i+1} para {codigo_guia} porque la ruta estaba vacía.")
+                    logger.warning(f"STORE_CLASIF: Se omitió la foto {i+1} para {codigo_guia} (ruta vacía).")
+
+            # Commit después de insertar todas las fotos
             conn.commit()
-            logger.info(f"[DIAG][store_clasificacion] Commit realizado después de insertar fotos para {codigo_guia}.")
+            logger.info(f"STORE_CLASIF: Commit realizado para tabla fotos_clasificacion ({codigo_guia}). {fotos_insertadas_count} fotos insertadas.")
         else:
-             logger.info(f"[DIAG][store_clasificacion] No se proporcionaron fotos para guardar para guía: {codigo_guia}")
-        
-        logger.info(f"Successfully stored/updated classification for {codigo_guia}")
+             logger.info(f"STORE_CLASIF: No se proporcionaron fotos para guardar ({codigo_guia}).")
+
+        logger.info(f"--- store_clasificacion v2 FIN ÉXITO para {codigo_guia_logging} ---")
         return True
-    except KeyError:
-        logger.error("Error: 'TIQUETES_DB_PATH' no está configurada en la aplicación Flask.")
+
+    except KeyError as ke:
+        logger.error(f"STORE_CLASIF: Error de configuración (KeyError) para {codigo_guia_logging}: {ke}", exc_info=True)
         return False
     except sqlite3.Error as db_err:
-        logger.error(f"Database error in store_clasificacion for guide {clasificacion_data.get('codigo_guia')}: {db_err}")
+        # *** LOG DETALLADO DEL ERROR SQL ***
+        logger.error(f"STORE_CLASIF: Error de Base de Datos (sqlite3.Error) para {codigo_guia_logging}: {db_err}", exc_info=True)
+        # Loguear los datos que se intentaban guardar puede ser útil
+        logger.error(f"STORE_CLASIF: Datos que se intentaban guardar: {datos_finales if 'datos_finales' in locals() else 'No disponibles'}")
         return False
     except Exception as e:
-        logger.error(f"General error in store_clasificacion for guide {clasificacion_data.get('codigo_guia')}: {str(e)}")
+        logger.error(f"STORE_CLASIF: Error General (Exception) para {codigo_guia_logging}: {e}", exc_info=True)
         return False
     finally:
         if conn:
             conn.close()
+            logger.debug(f"STORE_CLASIF: Conexión a BD cerrada para {codigo_guia_logging}.")
+        else:
+            logger.debug(f"STORE_CLASIF: Conexión a BD no estaba abierta al finalizar ({codigo_guia_logging}).")
+
+# ... (resto de funciones en db_operations.py) ...
 
 def get_clasificaciones(filtros=None):
     """

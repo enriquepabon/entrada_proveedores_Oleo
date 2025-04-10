@@ -200,6 +200,20 @@
         <div id="seccionDirecta" class="weighing-section mb-4">
             <h4 class="mb-3">Pesaje Neto con Sistema SAP</h4>
             <div id="solicitarPesajeSection">
+                <!-- Añadir input para la imagen -->
+                <div class="mb-3">
+                    <label for="imagenSAP" class="form-label">Imagen de soporte (opcional):</label>
+                    <div class="input-group">
+                        <input type="file" class="form-control" id="imagenSAP" accept="image/*">
+                        <button class="btn btn-outline-secondary" type="button" id="btn_capturar_pantalla_sap">
+                            <i class="fas fa-desktop me-1"></i> Capturar Pantalla
+                        </button>
+                    </div>
+                    <div id="previewImagenSAP" class="mt-2" style="max-width: 200px;">
+                        <!-- La imagen se mostrará aquí -->
+                    </div>
+                </div>
+                <!-- Fin input imagen -->
                 <p>Haga clic en el botón para obtener los datos de pesaje desde el sistema SAP:</p>
                 <button type="button" class="btn btn-primary" id="btnConsultarSAP">
                     <i class="fas fa-sync me-2"></i>Consultar Datos de Pesaje SAP
@@ -329,20 +343,23 @@
             try {
                 mostrarCarga(true);
                 
-                // Preparar datos para enviar al webhook
-                const datos = {
-                    codigo_proveedor: codigoProveedor,
-                    peso_bruto: pesoBruto,
-                    guia_transporte_sap: codigoGuiaTransporteSAP
-                };
+                // Preparar datos para enviar al webhook usando FormData
+                const formData = new FormData();
+                formData.append('codigo_proveedor', codigoProveedor);
+                formData.append('peso_bruto', pesoBruto);
+                formData.append('guia_transporte_sap', codigoGuiaTransporteSAP);
 
-                // Enviar datos al webhook
+                // Añadir la imagen si existe un input para ella y se seleccionó un archivo
+                const imagenInput = document.getElementById('imagenSAP');
+                if (imagenInput && imagenInput.files[0]) {
+                    formData.append('imagen', imagenInput.files[0]);
+                }
+
+                // Enviar datos al webhook (ya no se usa JSON, se envía FormData)
                 const response = await fetch('https://hook.us2.make.com/b7r4cic76sundyy2nc8f305llik3tprx', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(datos)
+                    // No es necesario 'Content-Type' cuando se usa FormData
+                    body: formData
                 });
 
                 // Procesar texto de respuesta
@@ -440,9 +457,92 @@
             }
         });
 
+        // Añadir este código para la previsualización de la imagen
+        const inputImagenSAP = document.getElementById('imagenSAP');
+        const previewImagenSAP = document.getElementById('previewImagenSAP');
+
+        if(inputImagenSAP && previewImagenSAP) {
+            inputImagenSAP.addEventListener('change', function(event) {
+                const file = event.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        previewImagenSAP.innerHTML = `<img src="${e.target.result}" class="img-fluid rounded">`;
+                    }
+                    reader.readAsDataURL(file);
+                }
+            });
+        }
+
+        // --- Screen Capture Logic for SAP Image ---
+        const btnCapturarPantallaSAP = document.getElementById('btn_capturar_pantalla_sap');
+
+        async function startScreenCaptureNeto(displayCallback) {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+                alert("La captura de pantalla no está soportada por este navegador.");
+                return;
+            }
+
+            let captureStream = null;
+            const videoElement = document.createElement('video');
+            const canvasElement = document.createElement('canvas');
+            const context = canvasElement.getContext('2d');
+
+            try {
+                captureStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+
+                videoElement.srcObject = captureStream;
+                videoElement.play();
+
+                videoElement.onloadedmetadata = () => {
+                    canvasElement.width = videoElement.videoWidth;
+                    canvasElement.height = videoElement.videoHeight;
+                    context.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
+                    captureStream.getTracks().forEach(track => track.stop());
+
+                    canvasElement.toBlob(blob => {
+                        if (blob) {
+                            displayCallback(blob);
+                        } else {
+                            alert("Error al crear la imagen desde la captura de pantalla.");
+                        }
+                    }, 'image/png');
+                };
+            } catch (err) {
+                console.error("Error en captura de pantalla SAP: ", err);
+                alert(`Error al capturar pantalla: ${err.message}`);
+                if (captureStream) {
+                    captureStream.getTracks().forEach(track => track.stop());
+                }
+            }
+        }
+
+        // Callback para mostrar la imagen en el preview de SAP
+        function displayCapturedImageSAP(blob) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                previewImagenSAP.innerHTML = `<img src="${e.target.result}" class="img-fluid rounded">`;
+                 // También necesitamos asignar este blob al input de archivo para que se envíe
+                 // Crear un objeto File desde el Blob
+                 const capturedFile = new File([blob], `captura_pantalla_sap_${Date.now()}.png`, { type: 'image/png' });
+                 // Crear un DataTransfer para simular la selección de archivo
+                 const dataTransfer = new DataTransfer();
+                 dataTransfer.items.add(capturedFile);
+                 inputImagenSAP.files = dataTransfer.files;
+                 // Disparar evento change para cualquier otra lógica que dependa de él
+                 inputImagenSAP.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            reader.readAsDataURL(blob);
+        }
+
+        if (btnCapturarPantallaSAP) {
+            btnCapturarPantallaSAP.addEventListener('click', () => startScreenCaptureNeto(displayCapturedImageSAP));
+        }
+        // ----------------------------------------
+
         // Función para parsear la respuesta del webhook que viene en texto plano
         function parseWebhookResponse(text) {
-            const lines = text.trim().split('\n');
+            const lines = text.trim().split('\n'); // Revertir a split('\n')
             const result = {
                 fecha: new Date().toLocaleDateString('es-ES'),
                 hora: new Date().toLocaleTimeString('es-ES')

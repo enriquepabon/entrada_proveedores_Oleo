@@ -253,7 +253,7 @@
                                 <button class="btn btn-success mb-2 w-100 d-none" id="btn-capturar-{{ i }}">
                                     <i class="fas fa-camera"></i> Capturar Foto
                                 </button>
-                                <input type="file" class="form-control" id="foto-{{ i }}" accept="image/*">
+                                <input type="file" class="form-control" id="foto-{{ i }}" name="foto-{{ i }}" accept="image/*">
                                 <small class="text-muted">O seleccione una imagen desde su dispositivo</small>
                             </div>
                             <img id="preview-{{ i }}" class="photo-preview d-none">
@@ -501,7 +501,6 @@
                 // PERO, para mayor claridad, podríamos quitar el preventDefault() inicial
                 // y ponerlo solo aquí. Vamos a probar así:
                 // Quitamos el e.preventDefault() inicial y lo ponemos aquí.
-                // e.preventDefault(); // <-- Si se cancela, sí prevenimos.
                 // *** REVISIÓN: Mejor dejar el preventDefault() al inicio y NO hacer nada más aquí si cancela.
                 // El flujo se detendrá porque no se continúa.
             }

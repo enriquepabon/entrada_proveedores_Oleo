@@ -281,31 +281,31 @@
                         </div>
                     </div>
                     <div class="col-md-4">
-                        <h6 class="mb-3">Imagen Anotada (Roboflow)</h6>
+                        <h6 class="mb-3">Imagen Anotada (Local - BBoxes)</h6>
                         <div class="img-container">
                             {% if foto.imagen_annotated %}
-                                {% set annotated_img_path = foto.imagen_annotated.replace('/static/', '', 1) %}
-                                <img src="{{ url_for('static', filename=annotated_img_path) }}" alt="Imagen Anotada {{ foto.numero }}" class="img-fluid">
+                                {# Ya es una URL completa, no necesita url_for ni replace #}
+                                <img src="{{ foto.imagen_annotated }}" alt="Imagen Anotada Local {{ foto.numero }}" class="img-fluid">
                             {% else %}
                                 <div class="alert alert-warning">
                                     <i class="fas fa-exclamation-triangle me-2"></i>
-                                    No hay imagen anotada (de Roboflow) disponible.
+                                    No hay imagen anotada (local) disponible.
                                 </div>
                             {% endif %}
                         </div>
                     </div>
                     <div class="col-md-4">
-                        <h6 class="mb-3">Imagen Clasificada (Etiquetas)</h6>
+                        <h6 class="mb-3">Imagen Clasificada (Roboflow - Etiquetas)</h6>
                         <div class="img-container">
-                            {% if foto.imagen_clasificada %}
-                                {% set classified_img_path = foto.imagen_clasificada.replace('/static/', '', 1) %}
-                                <img src="{{ url_for('static', filename=classified_img_path) }}" alt="Imagen Clasificada {{ foto.numero }}" class="img-fluid">
-                            {% else %}
-                                <div class="alert alert-warning">
-                                    <i class="fas fa-exclamation-triangle me-2"></i>
-                                    No hay imagen clasificada (etiquetas) disponible.
-                                </div>
-                            {% endif %}
+                             {% if foto.imagen_clasificada %}
+                                {# Ya es una URL completa, no necesita url_for ni replace #}
+                                <img src="{{ foto.imagen_clasificada }}" alt="Imagen Clasificada Roboflow {{ foto.numero }}" class="img-fluid">
+                             {% else %}
+                                 <div class="alert alert-warning">
+                                     <i class="fas fa-exclamation-triangle me-2"></i>
+                                     No hay imagen clasificada (de Roboflow) disponible.
+                                 </div>
+                             {% endif %}
                         </div>
                     </div>
                 </div>

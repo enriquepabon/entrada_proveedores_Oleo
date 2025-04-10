@@ -347,9 +347,9 @@
     <a href="{{ url_for('clasificacion.print_view_clasificacion', codigo_guia=codigo_guia) }}" class="btn btn-primary" target="_blank">
         <i class="fas fa-print me-2"></i>Imprimir
     </a>
-    <a href="{{ url_for('clasificacion.ver_detalles_clasificacion', url_guia=codigo_guia) }}" 
-       class="btn {{ 'btn-info' if clasificacion_automatica_consolidada and clasificacion_automatica_consolidada|length > 0 and total_racimos_detectados > 0 else 'btn-secondary disabled' }}"
-       {{ 'aria-disabled=true' if not (clasificacion_automatica_consolidada and clasificacion_automatica_consolidada|length > 0 and total_racimos_detectados > 0) }}>
+    <a href="{{ url_for('clasificacion.ver_detalles_clasificacion', url_guia=codigo_guia) }}"
+       class="btn {{ 'btn-info' if hay_detalles_por_foto else 'btn-secondary disabled' }}"
+       {% if not hay_detalles_por_foto %}aria-disabled="true"{% endif %}>
         <i class="fas fa-eye me-2"></i>Ver Detalles por Foto
     </a>
     
@@ -428,10 +428,10 @@
                         <h5 class="mb-0">Resultados de Clasificación: {{ codigo_guia }}</h5>
                         <div class="d-flex">
                             <!-- Botón de Ver Detalles por Foto -->
-                            <div id="ver-detalles-container" class="me-2 {% if not clasificacion_automatica_consolidada and not total_racimos_detectados %}d-none{% endif %}">
-                                <a id="btn-ver-detalles" href="{{ url_for('clasificacion.ver_detalles_clasificacion', url_guia=codigo_guia) }}" 
-                                   class="btn {% if clasificacion_automatica_consolidada or total_racimos_detectados > 0 %}btn-info{% else %}btn-secondary disabled{% endif %}"
-                                   {% if not clasificacion_automatica_consolidada and total_racimos_detectados == 0 %}aria-disabled="true"{% endif %}>
+                            <div id="ver-detalles-container" class="me-2 {% if not hay_detalles_por_foto %}d-none{% endif %}">
+                                <a id="btn-ver-detalles" href="{{ url_for('clasificacion.ver_detalles_clasificacion', url_guia=codigo_guia) }}"
+                                   class="btn {% if hay_detalles_por_foto %}btn-info{% else %}btn-secondary disabled{% endif %}"
+                                   {% if not hay_detalles_por_foto %}aria-disabled="true"{% endif %}>
                                     <i class="fas fa-eye me-2"></i>Ver Detalles por Foto
                                 </a>
                             </div>

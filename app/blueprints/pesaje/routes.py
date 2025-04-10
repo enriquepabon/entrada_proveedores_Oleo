@@ -85,7 +85,8 @@ def pesaje(codigo):
         utils = Utils(current_app)
         logger.info(f"Iniciando proceso de pesaje para código: {codigo}")
         
-        # Verificar formato del código recibido
+        # --- START: Lógica para determinar codigo_guia_completo (se mantiene igual) ---
+        codigo_guia_completo = codigo # Asumir inicialmente que es el código completo
         if not '_' in codigo:
             # Parece ser solo un código de proveedor, no un código_guia completo
             logger.info(f"El código proporcionado parece ser solo el código del proveedor: {codigo}")
@@ -95,83 +96,62 @@ def pesaje(codigo):
             try:
                 from db_utils import get_latest_entry_by_provider_code
                 registro = get_latest_entry_by_provider_code(codigo_proveedor)
-                if registro:
-                    codigo = registro.get('codigo_guia')
-                    logger.info(f"Encontrado código_guia más reciente para el proveedor: {codigo}")
+                if registro and registro.get('codigo_guia'): # Asegurarse que se encontró y tiene codigo_guia
+                    codigo_guia_completo = registro.get('codigo_guia')
+                    logger.info(f"Encontrado código_guia más reciente para el proveedor: {codigo_guia_completo}")
+                else:
+                    logger.warning(f"No se encontró registro reciente para proveedor {codigo_proveedor}, usando código original: {codigo}")
+            except ImportError:
+                 logger.error("Error al importar db_utils.get_latest_entry_by_provider_code. Asegúrese que db_utils.py está accesible.")
+                 # Continuar con el código original como fallback
             except Exception as e:
                 logger.error(f"Error al buscar código_guia para proveedor {codigo_proveedor}: {str(e)}")
+                # Continuar con el código original como fallback
         
-        # Usar el código original si no tiene formato de guía completa
-        codigo_guia_completo = codigo
-        logger.info(f"Usando código_guia: {codigo_guia_completo}")
+        logger.info(f"Usando código_guia para obtener datos: {codigo_guia_completo}")
+        # --- END: Lógica para determinar codigo_guia_completo ---
         
-        # Intentar obtener datos directamente desde la base de datos (método más fiable)
+        # --- CAMBIO PRINCIPAL: Usar SIEMPRE utils.get_datos_guia ---
         datos_guia = None
         try:
-            from db_utils import get_entry_record_by_guide_code
-            logger.info(f"Buscando registro en base de datos para: {codigo_guia_completo}")
-            registro = get_entry_record_by_guide_code(codigo_guia_completo)
-            
-            if registro:
-                logger.info(f"Registro encontrado en base de datos: {registro}")
-                # Crear un diccionario con exactamente los campos que espera la plantilla
-                datos_guia = {
-                    'codigo_guia': codigo_guia_completo,
-                    'codigo': registro.get('codigo_proveedor', ''),
-                    'nombre': registro.get('nombre_proveedor', ''),
-                    'nombre_proveedor': registro.get('nombre_proveedor', ''),
-                    'cantidad_racimos': registro.get('cantidad_racimos', ''),
-                    'racimos': registro.get('cantidad_racimos', ''),
-                    'placa': registro.get('placa', 'No disponible'),
-                    'transportador': registro.get('transportador', 'No disponible'),
-                    'transportista': registro.get('transportador', 'No disponible'),
-                    'fecha_registro': registro.get('fecha_registro', ''),
-                    'hora_registro': registro.get('hora_registro', ''),
-                    'fecha_tiquete': registro.get('fecha_tiquete', ''),
-                    'acarreo': registro.get('acarreo', 'No'),
-                    'cargo': registro.get('cargo', 'No'),
-                    'estado_actual': 'registro_completado'
-                }
-                
-                # Registrar estos valores en la sesión para garantizar consistencia
+            datos_guia = utils.get_datos_guia(codigo_guia_completo)
+            if datos_guia:
+                logger.info(f"Datos obtenidos exitosamente con utils.get_datos_guia para {codigo_guia_completo}")
+                # Guardar información relevante en sesión si se obtuvieron datos
                 session['codigo_guia'] = codigo_guia_completo
-                session['codigo_proveedor'] = registro.get('codigo_proveedor', '')
-                session['nombre_proveedor'] = registro.get('nombre_proveedor', '')
+                session['codigo_proveedor'] = datos_guia.get('codigo_proveedor', datos_guia.get('codigo', ''))
+                session['nombre_proveedor'] = datos_guia.get('nombre_proveedor', datos_guia.get('nombre', ''))
                 session.modified = True
             else:
-                logger.warning(f"No se encontró registro en base de datos para: {codigo_guia_completo}")
+                 logger.warning(f"utils.get_datos_guia no devolvió datos para {codigo_guia_completo}")
+                 # No asignar nada a datos_guia, el bloque 'if datos_guia:' más abajo manejará el caso de no encontrado
+
         except Exception as e:
-            logger.error(f"Error al consultar base de datos: {str(e)}")
+            logger.error(f"Error crítico al obtener datos con utils.get_datos_guia para {codigo_guia_completo}: {str(e)}")
             logger.error(traceback.format_exc())
-        
-        # Si no se encontró en la base de datos, intentar con utils.get_datos_guia
-        if not datos_guia:
-            try:
-                datos_guia = utils.get_datos_guia(codigo_guia_completo)
-                if datos_guia:
-                    logger.info(f"Datos obtenidos con utils.get_datos_guia para {codigo_guia_completo}")
-            except Exception as e:
-                logger.error(f"Error al obtener datos con utils.get_datos_guia: {str(e)}")
+            # Asegurar que datos_guia sea None para que se muestre el error 404
+            datos_guia = None
+        # --- FIN CAMBIO PRINCIPAL ---
         
         # Si se encontraron datos, mostrar la página de pesaje
         if datos_guia:
-            # Importar función para estandarizar datos
+            # Importar función para estandarizar datos (se mantiene igual)
             from app.utils.common import standardize_template_data
             
-            # Log de datos antes de estandarizar
+            # Log de datos antes de estandarizar (se mantiene igual)
             logger.info(f"Datos antes de estandarizar: nombre={datos_guia.get('nombre', datos_guia.get('nombre_proveedor', 'N/A'))}, "
                       f"racimos={datos_guia.get('cantidad_racimos', datos_guia.get('racimos', 'N/A'))}")
             
-            # Estandarizar datos para el template
+            # Estandarizar datos para el template (se mantiene igual)
             datos_guia = standardize_template_data(datos_guia, 'pesaje')
             
-            # Log detallado de datos estandarizados
+            # Log detallado de datos estandarizados (se mantiene igual)
             logger.info(f"Datos para template: codigo={datos_guia.get('codigo')}, "
                       f"nombre={datos_guia.get('nombre_proveedor')}, "
                       f"racimos={datos_guia.get('cantidad_racimos')}, "
                       f"transportista={datos_guia.get('transportista')}")
             
-            # --- Explicitly fetch Racimos from entry_records DB --- 
+            # --- Explicitly fetch Racimos from entry_records DB (se mantiene igual) --- 
             racimos_from_db = datos_guia.get('racimos', datos_guia.get('cantidad_racimos', 'No registrado')) 
             try:
                 conn_racimos = sqlite3.connect(DB_PATH)
@@ -183,6 +163,9 @@ def pesaje(codigo):
                 # Update if found and valid
                 if racimos_result and racimos_result[0] and racimos_result[0] not in ('No disponible', 'N/A', ''):
                     racimos_from_db = racimos_result[0]
+                    # --- CORRECCIÓN: Actualizar el valor en datos_guia ---
+                    datos_guia['cantidad_racimos'] = racimos_from_db
+                    datos_guia['racimos'] = racimos_from_db # Asegurar consistencia
                     logger.info(f"Updated racimos from DB for {codigo_guia_completo}: {racimos_from_db}")
                 else:
                     logger.warning(f"Using racimos from datos_guia for {codigo_guia_completo}: {racimos_from_db}")
@@ -190,15 +173,33 @@ def pesaje(codigo):
                 logger.error(f"DB error fetching racimos for {codigo_guia_completo}: {db_err}")
                 if 'conn_racimos' in locals() and conn_racimos:
                     conn_racimos.close() 
+            except NameError:
+                 logger.error("DB_PATH no está definida al buscar racimos.")
             # --- End fetching Racimos ---
             
+            # --- Asegurar que datos_guia tenga fecha_registro y hora_registro ---
+            # get_datos_guia ya debería haberlas creado, pero verificamos por si acaso
+            if 'fecha_registro' not in datos_guia:
+                logger.warning(f"fecha_registro no encontrada en datos_guia para {codigo_guia_completo}, usando 'N/A'")
+                datos_guia['fecha_registro'] = 'N/A'
+            if 'hora_registro' not in datos_guia:
+                logger.warning(f"hora_registro no encontrada en datos_guia para {codigo_guia_completo}, usando 'N/A'")
+                datos_guia['hora_registro'] = 'N/A'
+            # Hacer lo mismo para fecha/hora de pesaje si es relevante aquí
+            if 'fecha_pesaje' not in datos_guia:
+                datos_guia['fecha_pesaje'] = 'Pendiente'
+            if 'hora_pesaje' not in datos_guia:
+                 datos_guia['hora_pesaje'] = ''
+            # --- Fin asegurar fechas ---
+
             return render_template('pesaje/pesaje.html', datos=datos_guia)
         else:
-            # Si no se encontraron datos, mostrar error 404
+            # Si no se encontraron datos, mostrar error 404 (se mantiene igual)
             logger.warning(f"No se encontraron datos para el código: {codigo_guia_completo}")
             return render_template('error.html', message=f"No se encontraron datos para el código {codigo_guia_completo}"), 404
     except Exception as e:
-        logger.error(f"Error en la función pesaje: {str(e)}")
+        # Manejo de errores generales (se mantiene igual)
+        logger.error(f"Error en la función pesaje para código '{codigo}': {str(e)}")
         logger.error(traceback.format_exc())
         return render_template('error.html', message=f"Error procesando la solicitud: {str(e)}"), 500
 
@@ -437,8 +438,8 @@ def registrar_peso_directo():
         # Preparar datos para almacenar
         datos_pesaje = {
             'codigo_guia': codigo_guia,
-            'codigo_proveedor': codigo_proveedor or datos_existentes.get('codigo_proveedor', ''),
-            'nombre_proveedor': nombre_proveedor or datos_existentes.get('nombre_proveedor', ''),
+            'codigo_proveedor': codigo_proveedor or '',
+            'nombre_proveedor': nombre_proveedor or '',
             'peso_bruto': peso_bruto,
             'tipo_pesaje': 'directo',
             'timestamp_pesaje_utc': timestamp_utc,
@@ -1420,5 +1421,144 @@ def validar_codigo_autorizacion():
             'success': False,
             'message': f'Error validando código: {str(e)}'
         }), 500
+
+
+# --- NUEVO ENDPOINT PARA PROCESO PEPA ---
+@bp.route('/registrar_y_marcar_pepa', methods=['POST'])
+def registrar_y_marcar_pepa():
+    """
+    Registra el peso bruto para el proceso Pepa y marca la clasificación como completada.
+    """
+    logger.info("Iniciando registro de peso y marcado de clasificación para Pepa")
+    try:
+        # Verificar datos recibidos
+        codigo_guia = request.form.get('codigo_guia')
+        peso_bruto = request.form.get('peso_bruto')
+        proceso_pepa = request.form.get('proceso_pepa') == 'true'
+
+        if not codigo_guia or not peso_bruto or not proceso_pepa:
+            logger.error(f"Datos incompletos en registrar_y_marcar_pepa: guia={codigo_guia}, peso={peso_bruto}, pepa={proceso_pepa}")
+            return jsonify({'success': False, 'message': 'Datos incompletos o proceso no marcado como Pepa'}), 400
+
+        # Procesar imagen adjunta
+        imagen_pesaje_rel_path = None
+        if 'imagen_pesaje' in request.files:
+            foto_bascula = request.files['imagen_pesaje']
+            if foto_bascula and foto_bascula.filename:
+                try:
+                    upload_folder = current_app.config['UPLOAD_FOLDER']
+                    # Usar un nombre de archivo consistente con otros pesajes
+                    filename = secure_filename(f"peso_{codigo_guia}_{int(time.time())}.jpg")
+                    filepath_abs = os.path.join(upload_folder, filename)
+                    foto_bascula.save(filepath_abs)
+                    # Guardar la ruta relativa para la base de datos o template
+                    # Asumiendo que UPLOAD_FOLDER es accesible como /static/uploads/
+                    static_folder_name = os.path.basename(current_app.static_folder) # 'static'
+                    upload_folder_name = os.path.basename(upload_folder) # 'uploads'
+                    imagen_pesaje_rel_path = f"{static_folder_name}/{upload_folder_name}/{filename}"
+                    logger.info(f"Imagen de báscula Pepa guardada en: {filepath_abs}, ruta relativa: {imagen_pesaje_rel_path}")
+                except Exception as img_e:
+                     logger.error(f"Error al guardar imagen de pesaje Pepa: {str(img_e)}")
+                     # Continuar sin imagen si falla el guardado?
+                     imagen_pesaje_rel_path = None 
+            else:
+                logger.warning("Archivo de imagen de pesaje Pepa vacío o sin nombre")
+        else:
+             logger.warning("No se recibió archivo 'imagen_pesaje' para Pepa")
+
+        # Generar timestamp UTC
+        timestamp_utc = get_utc_timestamp_str()
+        
+        # Obtener datos existentes de la guía para info de proveedor, etc.
+        utils = current_app.config.get('utils', Utils(current_app))
+        datos_existentes = utils.get_datos_guia(codigo_guia) or {}
+        codigo_proveedor = datos_existentes.get('codigo_proveedor') or datos_existentes.get('codigo')
+        nombre_proveedor = datos_existentes.get('nombre_proveedor') or datos_existentes.get('nombre')
+        codigo_sap = session.get('codigo_guia_transporte_sap', datos_existentes.get('codigo_guia_transporte_sap', None))
+        session.pop('codigo_guia_transporte_sap', None) # Limpiar sesión
+
+        # 1. Guardar el peso bruto en pesajes_bruto
+        datos_pesaje = {
+            'codigo_guia': codigo_guia,
+            'codigo_proveedor': codigo_proveedor or '',
+            'nombre_proveedor': nombre_proveedor or '',
+            'peso_bruto': peso_bruto,
+            'tipo_pesaje': 'pepa', # Marcar como tipo 'pepa'
+            'timestamp_pesaje_utc': timestamp_utc,
+            'imagen_pesaje': imagen_pesaje_rel_path or '',
+            'codigo_guia_transporte_sap': codigo_sap
+        }
+        
+        from db_operations import store_pesaje_bruto
+        result_peso = store_pesaje_bruto(datos_pesaje)
+        if not result_peso:
+            logger.error(f"Error al guardar peso bruto Pepa para {codigo_guia}")
+            return jsonify({'success': False, 'message': 'Error al guardar el peso bruto'}), 500
+        logger.info(f"Peso bruto Pepa registrado para {codigo_guia}")
+
+        # 2. Marcar clasificación como completada (insertando en tabla clasificaciones)
+        now_bogota_dt = datetime.now(BOGOTA_TZ)
+        fecha_clasificacion_str = now_bogota_dt.strftime('%d/%m/%Y')
+        hora_clasificacion_str = now_bogota_dt.strftime('%H:%M:%S')
+        
+        conn_clasif = None
+        try:
+            db_path = current_app.config.get('TIQUETES_DB_PATH', DB_PATH) # Usar DB_PATH como fallback
+            conn_clasif = sqlite3.connect(db_path)
+            cursor_clasif = conn_clasif.cursor()
+            
+            # Verificar si ya existe una clasificación para evitar duplicados
+            cursor_clasif.execute("SELECT COUNT(*) FROM clasificaciones WHERE codigo_guia = ?", (codigo_guia,))
+            existe = cursor_clasif.fetchone()[0]
+            
+            if existe == 0:
+                cursor_clasif.execute("""
+                    INSERT INTO clasificaciones (codigo_guia, fecha_clasificacion, hora_clasificacion, 
+                                               clasificacion_manual, clasificacion_automatica, estado)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (codigo_guia, fecha_clasificacion_str, hora_clasificacion_str, 
+                      json.dumps({}), json.dumps({}), 'activo'))
+                conn_clasif.commit()
+                logger.info(f"Clasificación marcada como completada (registro insertado) para Pepa {codigo_guia}")
+            else:
+                logger.warning(f"Ya existe una clasificación para {codigo_guia}, no se insertó nuevo registro.")
+                # Opcional: podrías actualizar el estado si es necesario
+                # cursor_clasif.execute("UPDATE clasificaciones SET estado = ? WHERE codigo_guia = ?", ('activo', codigo_guia))
+                # conn_clasif.commit()
+
+        except sqlite3.Error as db_err:
+            logger.error(f"Error DB al marcar clasificación Pepa para {codigo_guia}: {db_err}")
+            # Decidir si fallar toda la operación o solo loggear el error
+            if conn_clasif: conn_clasif.rollback()
+            return jsonify({'success': False, 'message': f'Error al marcar clasificación: {db_err}'}), 500
+        except Exception as e_clasif:
+             logger.error(f"Error inesperado al marcar clasificación Pepa para {codigo_guia}: {e_clasif}")
+             if conn_clasif: conn_clasif.rollback()
+             return jsonify({'success': False, 'message': f'Error inesperado al marcar clasificación: {e_clasif}'}), 500
+        finally:
+            if conn_clasif: conn_clasif.close()
+
+        # 3. Generar URL de redirección a resultados
+        try:
+            redirect_url = url_for('pesaje.ver_resultados_pesaje', codigo_guia=codigo_guia, _external=True)
+            logger.info(f"Redirigiendo a la URL de resultados: {redirect_url}")
+        except Exception as e_url:
+            logger.error(f"Error generando URL de resultados: {str(e_url)}")
+            redirect_url = f"/pesaje/ver_resultados_pesaje/{codigo_guia}" # Fallback relativo
+            
+        return jsonify({
+            'success': True,
+            'message': 'Peso Pepa registrado y clasificación marcada correctamente.',
+            'redirect_url': redirect_url
+        })
+            
+    except Exception as e:
+        logger.error(f"Error general en registrar_y_marcar_pepa: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'message': f'Error general al procesar el pesaje Pepa: {str(e)}'
+        }), 500
+# --- FIN NUEVO ENDPOINT ---
 
 
