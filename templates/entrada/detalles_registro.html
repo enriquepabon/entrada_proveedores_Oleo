@@ -303,10 +303,7 @@
                             <div class="card-body">
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
-                                        <strong>Fecha de Registro:</strong> <span id="fecha_registro">{{ fecha_registro }}</span>
-                                    </div>
-                                    <div class="col-md-6 mb-3">
-                                        <strong>Hora de Registro:</strong> <span id="hora_registro">{{ hora_registro }}</span>
+                                        <strong>Fecha y Hora Registro:</strong> <span id="timestamp_registro">{{ timestamp_registro_utc | format_datetime if timestamp_registro_utc else 'N/A' }}</span>
                                     </div>
                                     <div class="col-md-6 mb-3">
                                         <strong>Código Guía:</strong> <span id="codigo_guia">{{ codigo_guia }}</span>

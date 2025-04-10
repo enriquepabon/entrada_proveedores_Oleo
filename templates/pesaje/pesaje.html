@@ -11,12 +11,10 @@
                 <p><strong>Código Proveedor:</strong> {{ datos.codigo }}</p>
                 <p><strong>Nombre Proveedor:</strong> {{ datos.nombre_proveedor }}</p>
                 <p><strong>Código Guía:</strong> {{ datos.codigo_guia }}</p>
-                <p><strong>Fecha de Entrada:</strong> {{ datos.fecha_registro }}</p>
-                <p><strong>Hora de Registro:</strong> {{ datos.hora_registro }}</p>
+                <p><strong>Fecha y Hora Entrada:</strong> {{ datos.timestamp_registro_utc | format_datetime if datos.timestamp_registro_utc else 'N/A' }}</p>
             </div>
             <div class="col-md-6">
-                <p><strong>Fecha Pesaje:</strong> {{ datos.fecha_pesaje or 'Pendiente' }}</p>
-                <p><strong>Hora Pesaje:</strong> {{ datos.hora_pesaje or 'Pendiente' }}</p>
+                <p><strong>Fecha y Hora Pesaje:</strong> {{ datos.timestamp_pesaje_utc | format_datetime if datos.timestamp_pesaje_utc else 'Pendiente' }}</p>
                 <p><strong>Racimos:</strong> {{ datos.cantidad_racimos }}</p>
                 <p><strong>Se Cargó:</strong> {{ datos.cargo }}</p>
                 <p><strong>Se Acarreó:</strong> {{ datos.acarreo }}</p>
@@ -36,8 +34,8 @@
                 <input type="radio" class="btn-check" name="tipo_pesaje" id="pesaje_manual" value="manual">
                 <label class="btn btn-outline-primary" for="pesaje_manual">Pesaje Manual</label>
                 
-                <input type="radio" class="btn-check" name="tipo_pesaje" id="pesaje_directo" value="directo">
-                <label class="btn btn-outline-primary" for="pesaje_directo">Pesaje Directo</label>
+                <input type="radio" class="btn-check" name="tipo_pesaje" id="pesaje_pepa" value="pepa">
+                <label class="btn btn-outline-primary" for="pesaje_pepa">Pesaje Pepa</label>
             </div>
         </div>
         
@@ -54,6 +52,9 @@
                         <input type="file" id="input_foto" class="position-absolute top-0 start-0 opacity-0 w-100 h-100" 
                                accept="image/*" style="cursor: pointer;">
                     </div>
+                    <button class="btn btn-info" id="btn_capturar_pantalla">
+                        <i class="fas fa-desktop"></i> Capturar Pantalla
+                    </button>
                     <button class="btn btn-secondary" id="btn_recapturar" style="display: none;">
                         <i class="fas fa-redo"></i> Reintentar
                     </button>
@@ -103,120 +104,166 @@
             </div>
         </div>
         
-        <!-- Sección de Pesaje Directo (nuevo) -->
-        <div id="seccion_pesaje_directo" class="mt-4" style="display: none;">
+        <!-- Sección de Pesaje Pepa (antes Directo) -->
+        <div id="seccion_pesaje_pepa" class="mt-4" style="display: none;">
             <div class="alert alert-info mb-3">
                 <i class="fas fa-info-circle me-2"></i>
-                Este pesaje se conectará directamente con la báscula digital.
+                Este pesaje es específico para el producto PEPA. Use "Validación Foto" para procesar la imagen de la báscula.
             </div>
             
-            <div class="mb-3">
-                <button class="btn btn-primary btn-lg" id="btn_obtener_peso_directo" disabled>
-                    <i class="fas fa-balance-scale me-2"></i> Obtener Peso Directo
+            <!-- Nuevos botones para Pepa -->
+            <div class="mb-3 d-flex gap-2">
+                <!-- El botón Validación Foto ahora está abajo, junto a la lógica de captura -->
+                
+                <!-- Botón para procesar/guardar el peso de Pepa -->
+                <button class="btn btn-warning" id="btn_procesar_pepa" style="display: none;">
+                    <i class="fas fa-save me-2"></i> Procesar Peso Pepa
                 </button>
-                <div class="form-text mt-2">
-                    <i class="fas fa-exclamation-circle me-1"></i> 
-                    Esta funcionalidad estará disponible próximamente.
+            </div>
+            
+            <!-- **** INICIO: Estructura copiada de Pesaje Soporte Foto **** -->
+            <div class="mb-3">
+                <label class="form-label">Capturar o Subir Peso (Pepa)</label>
+                <div class="d-flex gap-2 mb-2">
+                    <button class="btn btn-primary" id="btn_capturar_pepa">
+                        <i class="fas fa-camera"></i> Capturar con Cámara
+                    </button>
+                    <div class="btn btn-primary position-relative">
+                        <i class="fas fa-upload"></i> Subir Foto
+                        <input type="file" id="input_foto_pepa" class="position-absolute top-0 start-0 opacity-0 w-100 h-100" 
+                               accept="image/*" style="cursor: pointer;">
+                    </div>
+                    <!-- Nuevo botón para captura de pantalla (Pepa) -->
+                    <button class="btn btn-info" id="btn_capturar_pantalla_pepa">
+                        <i class="fas fa-desktop"></i> Capturar Pantalla
+                    </button>
+                    <button class="btn btn-secondary" id="btn_recapturar_pepa" style="display: none;">
+                        <i class="fas fa-redo"></i> Reintentar (Pepa)
+                    </button>
                 </div>
             </div>
             
-            <div id="peso_directo_container" class="mb-3 alert alert-success" style="display: none;">
-                <h5 class="mb-0">Peso Recibido: <span id="peso_directo_valor"></span> kg</h5>
+            <div id="preview_container_pepa" class="mb-3" style="display: none;">
+                <img id="preview_image_pepa" class="img-fluid rounded" style="max-width: 400px;">
+                <div class="mt-2">
+                    <button class="btn btn-primary" id="btn_validacion_foto_pepa">
+                        <i class="fas fa-check"></i> Validar Foto (Pepa)
+                    </button>
+                </div>
+            </div>
+            
+            <div id="peso_detectado_container_pepa" class="mb-3 alert alert-success" style="display: none;">
+                <h5 class="mb-0">Peso Detectado (Pepa): <span id="peso_detectado_pepa"></span> kg</h5>
+            </div>
+             <!-- **** FIN: Estructura copiada de Pesaje Soporte Foto **** -->
+
+            
+            <!-- Elementos existentes de la sección anterior (deshabilitados/informativos por ahora) -->
+            
+            <div id="peso_pepa_container" class="mb-3 alert alert-success" style="display: none;">
+                <h5 class="mb-0">Peso Recibido Pepa: <span id="peso_pepa_valor"></span> kg</h5>
             </div>
         </div>
         
         <!-- Sección de Fotos de Soporte -->
         <div class="mt-4 mb-4">
-            <h4 class="mb-3">Fotos de Soporte (Opcional)</h4>
-            <div class="alert alert-info">
-                <i class="fas fa-info-circle me-2"></i>
-                Adjunte fotos del camión en la báscula como evidencia del pesaje (máximo 4 fotos).
-            </div>
-            
-            <div class="row">
-                <!-- Foto 1 -->
-                <div class="col-md-3 mb-3">
-                    <div class="card">
-                        <div class="card-body">
-                            <h5 class="card-title">Foto 1</h5>
-                            <div class="mb-2">
-                                <div class="btn btn-primary position-relative w-100">
-                                    <i class="fas fa-upload me-2"></i> Subir Foto
-                                    <input type="file" id="foto_soporte_1" class="position-absolute top-0 start-0 opacity-0 w-100 h-100" 
-                                       accept="image/*" style="cursor: pointer;">
+            <h4 class="mb-3 d-flex justify-content-between align-items-center">
+                <span>Fotos de Soporte (Opcional)</span>
+                <button class="btn btn-sm btn-outline-secondary" type="button" id="toggle_fotos_soporte">
+                    <i class="fas fa-eye me-1"></i> Mostrar
+                </button>
+            </h4>
+            <!-- Envolver contenido en div oculto -->
+            <div id="contenedor_fotos_soporte" style="display: none;">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Adjunte fotos del camión en la báscula como evidencia del pesaje (máximo 4 fotos).
+                </div>
+                <div class="row">
+                    <!-- Foto 1 -->
+                    <div class="col-md-3 mb-3">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title">Foto 1</h5>
+                                <div class="mb-2">
+                                    <div class="btn btn-primary position-relative w-100">
+                                        <i class="fas fa-upload me-2"></i> Subir Foto
+                                        <input type="file" id="foto_soporte_1" class="position-absolute top-0 start-0 opacity-0 w-100 h-100" 
+                                           accept="image/*" style="cursor: pointer;">
+                                    </div>
                                 </div>
-                            </div>
-                            <div id="preview_foto_1" class="text-center" style="display: none;">
-                                <img class="img-fluid rounded mb-2 preview-image" alt="Vista previa foto 1">
-                                <button type="button" class="btn btn-danger btn-sm w-100 btn-remove-foto" data-foto="1">
-                                    <i class="fas fa-trash-alt me-1"></i> Eliminar
-                                </button>
+                                <div id="preview_foto_1" class="text-center" style="display: none;">
+                                    <img class="img-fluid rounded mb-2 preview-image" alt="Vista previa foto 1">
+                                    <button type="button" class="btn btn-danger btn-sm w-100 btn-remove-foto" data-foto="1">
+                                        <i class="fas fa-trash-alt me-1"></i> Eliminar
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-                
-                <!-- Foto 2 -->
-                <div class="col-md-3 mb-3">
-                    <div class="card">
-                        <div class="card-body">
-                            <h5 class="card-title">Foto 2</h5>
-                            <div class="mb-2">
-                                <div class="btn btn-primary position-relative w-100">
-                                    <i class="fas fa-upload me-2"></i> Subir Foto
-                                    <input type="file" id="foto_soporte_2" class="position-absolute top-0 start-0 opacity-0 w-100 h-100" 
-                                       accept="image/*" style="cursor: pointer;">
+                    
+                    <!-- Foto 2 -->
+                    <div class="col-md-3 mb-3">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title">Foto 2</h5>
+                                <div class="mb-2">
+                                    <div class="btn btn-primary position-relative w-100">
+                                        <i class="fas fa-upload me-2"></i> Subir Foto
+                                        <input type="file" id="foto_soporte_2" class="position-absolute top-0 start-0 opacity-0 w-100 h-100" 
+                                           accept="image/*" style="cursor: pointer;">
+                                    </div>
                                 </div>
-                            </div>
-                            <div id="preview_foto_2" class="text-center" style="display: none;">
-                                <img class="img-fluid rounded mb-2 preview-image" alt="Vista previa foto 2">
-                                <button type="button" class="btn btn-danger btn-sm w-100 btn-remove-foto" data-foto="2">
-                                    <i class="fas fa-trash-alt me-1"></i> Eliminar
-                                </button>
+                                <div id="preview_foto_2" class="text-center" style="display: none;">
+                                    <img class="img-fluid rounded mb-2 preview-image" alt="Vista previa foto 2">
+                                    <button type="button" class="btn btn-danger btn-sm w-100 btn-remove-foto" data-foto="2">
+                                        <i class="fas fa-trash-alt me-1"></i> Eliminar
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-                
-                <!-- Foto 3 -->
-                <div class="col-md-3 mb-3">
-                    <div class="card">
-                        <div class="card-body">
-                            <h5 class="card-title">Foto 3</h5>
-                            <div class="mb-2">
-                                <div class="btn btn-primary position-relative w-100">
-                                    <i class="fas fa-upload me-2"></i> Subir Foto
-                                    <input type="file" id="foto_soporte_3" class="position-absolute top-0 start-0 opacity-0 w-100 h-100" 
-                                       accept="image/*" style="cursor: pointer;">
+                    
+                    <!-- Foto 3 -->
+                    <div class="col-md-3 mb-3">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title">Foto 3</h5>
+                                <div class="mb-2">
+                                    <div class="btn btn-primary position-relative w-100">
+                                        <i class="fas fa-upload me-2"></i> Subir Foto
+                                        <input type="file" id="foto_soporte_3" class="position-absolute top-0 start-0 opacity-0 w-100 h-100" 
+                                           accept="image/*" style="cursor: pointer;">
+                                    </div>
                                 </div>
-                            </div>
-                            <div id="preview_foto_3" class="text-center" style="display: none;">
-                                <img class="img-fluid rounded mb-2 preview-image" alt="Vista previa foto 3">
-                                <button type="button" class="btn btn-danger btn-sm w-100 btn-remove-foto" data-foto="3">
-                                    <i class="fas fa-trash-alt me-1"></i> Eliminar
-                                </button>
+                                <div id="preview_foto_3" class="text-center" style="display: none;">
+                                    <img class="img-fluid rounded mb-2 preview-image" alt="Vista previa foto 3">
+                                    <button type="button" class="btn btn-danger btn-sm w-100 btn-remove-foto" data-foto="3">
+                                        <i class="fas fa-trash-alt me-1"></i> Eliminar
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-                
-                <!-- Foto 4 -->
-                <div class="col-md-3 mb-3">
-                    <div class="card">
-                        <div class="card-body">
-                            <h5 class="card-title">Foto 4</h5>
-                            <div class="mb-2">
-                                <div class="btn btn-primary position-relative w-100">
-                                    <i class="fas fa-upload me-2"></i> Subir Foto
-                                    <input type="file" id="foto_soporte_4" class="position-absolute top-0 start-0 opacity-0 w-100 h-100" 
-                                       accept="image/*" style="cursor: pointer;">
+                    
+                    <!-- Foto 4 -->
+                    <div class="col-md-3 mb-3">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title">Foto 4</h5>
+                                <div class="mb-2">
+                                    <div class="btn btn-primary position-relative w-100">
+                                        <i class="fas fa-upload me-2"></i> Subir Foto
+                                        <input type="file" id="foto_soporte_4" class="position-absolute top-0 start-0 opacity-0 w-100 h-100" 
+                                           accept="image/*" style="cursor: pointer;">
+                                    </div>
                                 </div>
-                            </div>
-                            <div id="preview_foto_4" class="text-center" style="display: none;">
-                                <img class="img-fluid rounded mb-2 preview-image" alt="Vista previa foto 4">
-                                <button type="button" class="btn btn-danger btn-sm w-100 btn-remove-foto" data-foto="4">
-                                    <i class="fas fa-trash-alt me-1"></i> Eliminar
-                                </button>
+                                <div id="preview_foto_4" class="text-center" style="display: none;">
+                                    <img class="img-fluid rounded mb-2 preview-image" alt="Vista previa foto 4">
+                                    <button type="button" class="btn btn-danger btn-sm w-100 btn-remove-foto" data-foto="4">
+                                        <i class="fas fa-trash-alt me-1"></i> Eliminar
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -226,53 +273,60 @@
         
         <!-- Sección de Verificación de Placa -->
         <div class="mt-4 mb-4">
-            <h4 class="mb-3">Verificación de Placa</h4>
-            <div class="alert alert-info">
-                <i class="fas fa-info-circle me-2"></i>
-                Tome una foto de la placa del vehículo para verificar que coincida con la placa registrada inicialmente.
-            </div>
-            
-            <div class="row">
-                <div class="col-md-6">
-                    <div class="card">
-                        <div class="card-body">
-                            <h5 class="card-title">Foto de la Placa</h5>
-                            <p class="card-text">Placa registrada: <strong>{{ datos.placa }}</strong></p>
-                            <div class="mb-3">
-                                <div class="btn btn-primary position-relative">
-                                    <i class="fas fa-camera me-2"></i> Capturar Placa
-                                    <input type="file" id="placa_foto" class="position-absolute top-0 start-0 opacity-0 w-100 h-100" 
-                                           accept="image/*" style="cursor: pointer;">
+            <h4 class="mb-3 d-flex justify-content-between align-items-center">
+                <span>Verificación de Placa</span>
+                 <button class="btn btn-sm btn-outline-secondary" type="button" id="toggle_verificacion_placa">
+                    <i class="fas fa-eye me-1"></i> Mostrar
+                </button>
+            </h4>
+            <!-- Envolver contenido en div oculto -->
+            <div id="contenedor_verificacion_placa" style="display: none;">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Tome una foto de la placa del vehículo para verificar que coincida con la placa registrada inicialmente.
+                </div>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title">Foto de la Placa</h5>
+                                <p class="card-text">Placa registrada: <strong>{{ datos.placa }}</strong></p>
+                                <div class="mb-3">
+                                    <div class="btn btn-primary position-relative">
+                                        <i class="fas fa-camera me-2"></i> Capturar Placa
+                                        <input type="file" id="placa_foto" class="position-absolute top-0 start-0 opacity-0 w-100 h-100" 
+                                               accept="image/*" style="cursor: pointer;">
+                                    </div>
+                                    <button class="btn btn-success ms-2" id="btn_verificar_placa" disabled>
+                                        <i class="fas fa-check me-2"></i> Verificar Placa
+                                    </button>
                                 </div>
-                                <button class="btn btn-success ms-2" id="btn_verificar_placa" disabled>
-                                    <i class="fas fa-check me-2"></i> Verificar Placa
-                                </button>
-                            </div>
-                            <div id="preview_placa" class="text-center" style="display: none;">
-                                <img class="img-fluid rounded mb-2" alt="Vista previa placa">
-                                <button type="button" class="btn btn-danger btn-sm" id="btn_eliminar_placa">
-                                    <i class="fas fa-trash-alt me-1"></i> Eliminar
-                                </button>
+                                <div id="preview_placa" class="text-center" style="display: none;">
+                                    <img class="img-fluid rounded mb-2" alt="Vista previa placa">
+                                    <button type="button" class="btn btn-danger btn-sm" id="btn_eliminar_placa">
+                                        <i class="fas fa-trash-alt me-1"></i> Eliminar
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-                <div class="col-md-6">
-                    <div id="resultado_placa" style="display: none;">
-                        <div class="card">
-                            <div class="card-body">
-                                <h5 class="card-title">Resultado de la Verificación</h5>
-                                <div id="placa_detectada" class="mb-2">
-                                    <span class="fw-bold">Placa detectada:</span> <span id="texto_placa_detectada"></span>
-                                </div>
-                                <div id="placa_coincide" class="alert alert-success" style="display: none;">
-                                    <i class="fas fa-check-circle me-2"></i> La placa coincide con la registrada inicialmente.
-                                </div>
-                                <div id="placa_no_coincide" class="alert alert-danger" style="display: none;">
-                                    <i class="fas fa-exclamation-triangle me-2"></i> La placa NO coincide con la registrada inicialmente.
-                                </div>
-                                <div id="placa_error" class="alert alert-warning" style="display: none;">
-                                    <i class="fas fa-exclamation-circle me-2"></i> <span id="texto_error_placa"></span>
+                    <div class="col-md-6">
+                        <div id="resultado_placa" style="display: none;">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5 class="card-title">Resultado de la Verificación</h5>
+                                    <div id="placa_detectada" class="mb-2">
+                                        <span class="fw-bold">Placa detectada:</span> <span id="texto_placa_detectada"></span>
+                                    </div>
+                                    <div id="placa_coincide" class="alert alert-success" style="display: none;">
+                                        <i class="fas fa-check-circle me-2"></i> La placa coincide con la registrada inicialmente.
+                                    </div>
+                                    <div id="placa_no_coincide" class="alert alert-danger" style="display: none;">
+                                        <i class="fas fa-exclamation-triangle me-2"></i> La placa NO coincide con la registrada inicialmente.
+                                    </div>
+                                    <div id="placa_error" class="alert alert-warning" style="display: none;">
+                                        <i class="fas fa-exclamation-circle me-2"></i> <span id="texto_error_placa"></span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -350,12 +404,14 @@ document.addEventListener('DOMContentLoaded', function() {
     const tipoPesajeRadios = document.querySelectorAll('input[name="tipo_pesaje"]');
     const seccionFoto = document.getElementById('seccion_pesaje_foto');
     const seccionManual = document.getElementById('seccion_pesaje_manual');
-    const seccionDirecto = document.getElementById('seccion_pesaje_directo');
+    const seccionPepa = document.getElementById('seccion_pesaje_pepa');
     const btnProcesar = document.getElementById('btn_procesar');
     let pesoCapturado = null;
     let imagenActual = null;
     let fotoBascula = null;
     let sapCodeFromValidation = null;
+    let imagenActualPepa = null; // Variable para la imagen de la sección Pepa
+    let pesoDetectadoPepaValor = null; // Variable para guardar el peso detectado para Pepa
     
     // Función para capturar imagen con la cámara
     async function capturarImagen() {
@@ -367,15 +423,15 @@ document.addEventListener('DOMContentLoaded', function() {
             if (this.value === 'foto') {
                 seccionFoto.style.display = 'block';
                 seccionManual.style.display = 'none';
-                seccionDirecto.style.display = 'none';
+                seccionPepa.style.display = 'none';
             } else if (this.value === 'manual') {
                 seccionFoto.style.display = 'none';
                 seccionManual.style.display = 'block';
-                seccionDirecto.style.display = 'none';
+                seccionPepa.style.display = 'none';
             } else {
                 seccionFoto.style.display = 'none';
                 seccionManual.style.display = 'none';
-                seccionDirecto.style.display = 'block';
+                seccionPepa.style.display = 'block';
             }
             btnProcesar.style.display = 'none';
             pesoCapturado = null;
@@ -649,8 +705,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 formData.append('justificacion', document.getElementById('justificacion').value);
                 endpointUrl = '/pesaje/registrar_peso_virtual'; // Endpoint for virtual registration
 
-            } else { // tipoPesaje === 'directo' (Báscula)
-                alert('La funcionalidad de Pesaje Directo desde báscula aún no está implementada.');
+            } else { // tipoPesaje === 'pepa'
+                // Aquí irá la lógica futura para Pepa, por ahora no hace nada o muestra alerta
+                alert('La funcionalidad de Pesaje Pepa aún no está completamente implementada para el guardado final en este paso.');
                 mostrarCarga(false);
                 return;
             }
@@ -801,6 +858,246 @@ document.addEventListener('DOMContentLoaded', function() {
             mostrarCarga(false);
         }
     });
-});
+
+    // --- Elementos para la sección Pepa ---
+    const btnCapturarPepa = document.getElementById('btn_capturar_pepa');
+    const inputFotoPepa = document.getElementById('input_foto_pepa');
+    const btnRecapturarPepa = document.getElementById('btn_recapturar_pepa');
+    const previewContainerPepa = document.getElementById('preview_container_pepa');
+    const previewImagePepa = document.getElementById('preview_image_pepa');
+    const pesoDetectadoContainerPepa = document.getElementById('peso_detectado_container_pepa');
+    const pesoDetectadoSpanPepa = document.getElementById('peso_detectado_pepa');
+    const btnValidarFotoPepa = document.getElementById('btn_validacion_foto_pepa');
+    const btnProcesarPepa = document.getElementById('btn_procesar_pepa'); // Referencia al nuevo botón
+    // -------------------------------------
+
+    // --- Función para mostrar la imagen (sección Pepa) ---
+    function mostrarImagenPepa(blob) {
+        previewImagePepa.src = URL.createObjectURL(blob);
+        previewContainerPepa.style.display = 'block';
+        btnCapturarPepa.style.display = 'none';
+        inputFotoPepa.parentElement.style.display = 'none';
+        btnRecapturarPepa.style.display = 'block';
+        pesoDetectadoContainerPepa.style.display = 'none'; // Ocultar resultado previo
+        btnProcesarPepa.style.display = 'none'; // Ocultar botón de procesar pepa
+        imagenActualPepa = blob;
+    }
+    // ----------------------------------------------------
+
+    // --- Eventos para la sección Pepa ---
+    btnCapturarPepa.addEventListener('click', async () => {
+        // Aquí iría la lógica de captura de cámara si se implementa específicamente para Pepa
+        // Por ahora, podemos asumir que usa el input de archivo o una lógica similar
+        alert('Funcionalidad de cámara aún no implementada para Pepa. Use "Subir Foto".');
+    });
+
+    inputFotoPepa.addEventListener('change', function(e) {
+        if (this.files && this.files[0]) {
+            mostrarImagenPepa(this.files[0]);
+        }
+    });
+
+    btnRecapturarPepa.addEventListener('click', function() {
+        previewContainerPepa.style.display = 'none';
+        btnCapturarPepa.style.display = 'block';
+        inputFotoPepa.parentElement.style.display = 'block';
+        btnRecapturarPepa.style.display = 'none';
+        pesoDetectadoContainerPepa.style.display = 'none';
+        btnProcesarPepa.style.display = 'none'; // Ocultar al recapturar
+        imagenActualPepa = null;
+        pesoDetectadoPepaValor = null; // Limpiar peso guardado
+    });
+    // -------------------------------------
+
+    // --- Evento para validar foto (sección Pepa) ---
+    btnValidarFotoPepa.addEventListener('click', async function() {
+        if (!imagenActualPepa) {
+            alert('Por favor, capture o suba una imagen para Pepa primero');
+            return;
+        }
+        
+        // Mostrar el overlay de carga
+        mostrarCarga(true);
+        
+        try {
+            const formData = new FormData();
+            // Usamos la imagen específica de la sección Pepa
+            formData.append('imagen', imagenActualPepa); 
+            formData.append('codigo_guia', '{{ datos.codigo_guia }}');
+            
+            // Usamos el mismo endpoint de backend que la validación original
+            const response = await fetch('/pesaje/procesar_pesaje_directo', { 
+                method: 'POST',
+                body: formData
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                pesoDetectadoSpanPepa.textContent = data.peso;
+                pesoDetectadoContainerPepa.style.display = 'block';
+                // Guardar el peso y habilitar el botón de procesar específico de Pepa
+                pesoDetectadoPepaValor = data.peso;
+                btnProcesarPepa.style.display = 'block'; // Mostrar botón para procesar
+                // ¡Importante! NO Habilitar el botón para ir a pesaje neto aquí
+                // btnIrPesajeNetoPepa.disabled = true; // Ya no existe
+                // No guardamos pesoCapturado global ni habilitamos btnProcesar
+                // sapCodeFromValidation = data.codigo_guia_transporte_sap; // Podríamos guardar esto si fuera necesario para Pepa
+            } else {
+                pesoDetectadoContainerPepa.style.display = 'none';
+                // btnIrPesajeNetoPepa.disabled = true; // Ya no existe
+                btnProcesarPepa.style.display = 'none'; // Ocultar si falla
+                alert(data.message || 'Error al procesar la imagen para Pepa');
+            }
+        } catch (error) {
+            console.error(error);
+            alert('Error al procesar la imagen para Pepa: ' + error.message);
+            // btnIrPesajeNetoPepa.disabled = true; // Ya no existe
+            btnProcesarPepa.style.display = 'none'; // Ocultar en caso de error
+        } finally {
+            // Ocultar el overlay de carga
+            mostrarCarga(false);
+        }
+    });
+    // ------------------------------------------------
+
+    // --- Evento para procesar/guardar peso (sección Pepa) ---
+    btnProcesarPepa.addEventListener('click', async function() {
+        if (!pesoDetectadoPepaValor || !imagenActualPepa) {
+            alert('Error: Falta el peso detectado o la imagen para procesar.');
+            return;
+        }
+
+        // Mostrar overlay de carga
+        const loadingContent = document.querySelector('.loading-content');
+        const loadingTitle = loadingContent.querySelector('h2');
+        const loadingText = loadingContent.querySelector('p');
+        loadingTitle.textContent = 'Guardando peso Pepa...';
+        loadingText.textContent = 'Por favor espere.';
+        mostrarCarga(true);
+
+        try {
+            const formData = new FormData();
+            formData.append('codigo_guia', '{{ datos.codigo_guia }}');
+            formData.append('peso_bruto', pesoDetectadoPepaValor);
+            formData.append('imagen_pesaje', imagenActualPepa);
+            // Indicador para el backend
+            formData.append('proceso_pepa', 'true'); 
+
+            // Llamada al NUEVO endpoint del backend
+            const response = await fetch('/pesaje/registrar_y_marcar_pepa', { 
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (data.success && data.redirect_url) {
+                // Redirigir a la página de resultados
+                window.location.href = data.redirect_url;
+            } else {
+                alert(data.message || 'Error al guardar el peso Pepa.');
+            }
+        
+        } catch (error) {
+            console.error('Error al procesar peso Pepa:', error);
+            alert('Error al procesar el peso Pepa: ' + error.message);
+        } finally {
+            // Ocultar el overlay de carga y restaurar texto
+            mostrarCarga(false);
+            loadingTitle.textContent = 'Procesando validación...'; // Restaurar texto original por si acaso
+            loadingText.textContent = 'Por favor espere mientras validamos la foto.';
+        }
+    });
+    // -------------------------------------------------------
+
+    // --- Toggle Visibility Buttons (Añadir lógica) ---
+    const toggleFotosSoporteBtn = document.getElementById('toggle_fotos_soporte');
+    const contenedorFotosSoporte = document.getElementById('contenedor_fotos_soporte');
+    const toggleVerificacionPlacaBtn = document.getElementById('toggle_verificacion_placa');
+    const contenedorVerificacionPlaca = document.getElementById('contenedor_verificacion_placa');
+
+    if (toggleFotosSoporteBtn && contenedorFotosSoporte) {
+        toggleFotosSoporteBtn.addEventListener('click', () => {
+            const isHidden = contenedorFotosSoporte.style.display === 'none';
+            contenedorFotosSoporte.style.display = isHidden ? 'block' : 'none';
+            toggleFotosSoporteBtn.innerHTML = isHidden ? '<i class="fas fa-eye-slash me-1"></i> Ocultar' : '<i class="fas fa-eye me-1"></i> Mostrar';
+        });
+    }
+
+    if (toggleVerificacionPlacaBtn && contenedorVerificacionPlaca) {
+        toggleVerificacionPlacaBtn.addEventListener('click', () => {
+            const isHidden = contenedorVerificacionPlaca.style.display === 'none';
+            contenedorVerificacionPlaca.style.display = isHidden ? 'block' : 'none';
+            toggleVerificacionPlacaBtn.innerHTML = isHidden ? '<i class="fas fa-eye-slash me-1"></i> Ocultar' : '<i class="fas fa-eye me-1"></i> Mostrar';
+        });
+    }
+    // ---------------------------------
+
+    // --- Screen Capture Logic ---
+    const btnCapturarPantalla = document.getElementById('btn_capturar_pantalla');
+    const btnCapturarPantallaPepa = document.getElementById('btn_capturar_pantalla_pepa'); // Botón para Pepa
+
+    // Modificamos startScreenCapture para aceptar la función de callback de visualización
+    async function startScreenCapture(displayCallback) {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+            alert("La captura de pantalla no está soportada por este navegador.");
+            return;
+        }
+
+        let captureStream = null;
+        const videoElement = document.createElement('video');
+        const canvasElement = document.createElement('canvas');
+        const context = canvasElement.getContext('2d');
+
+        try {
+            captureStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+
+            videoElement.srcObject = captureStream;
+            videoElement.play();
+
+            // Esperar a que el video tenga suficientes datos para obtener dimensiones
+            videoElement.onloadedmetadata = () => {
+                canvasElement.width = videoElement.videoWidth;
+                canvasElement.height = videoElement.videoHeight;
+
+                // Dibujar el fotograma actual en el canvas
+                context.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
+
+                // Detener la captura de pantalla
+                captureStream.getTracks().forEach(track => track.stop());
+
+                // Convertir canvas a Blob
+                canvasElement.toBlob(blob => {
+                    if (blob) {
+                        // Llamar al callback proporcionado para mostrar la imagen
+                        displayCallback(blob); 
+                    } else {
+                        alert("Error al crear la imagen desde la captura de pantalla.");
+                    }
+                }, 'image/png');
+            };
+
+        } catch (err) {
+            console.error("Error en captura de pantalla: ", err);
+            alert(`Error al capturar pantalla: ${err.message}`);
+            if (captureStream) {
+                 captureStream.getTracks().forEach(track => track.stop());
+            }
+        }
+    }
+
+    // Listener para el botón original (Pesaje Soporte Foto)
+    if (btnCapturarPantalla) {
+        btnCapturarPantalla.addEventListener('click', () => startScreenCapture(mostrarImagen));
+    }
+
+    // Listener para el nuevo botón (Pesaje Pepa)
+    if (btnCapturarPantallaPepa) {
+        btnCapturarPantallaPepa.addEventListener('click', () => startScreenCapture(mostrarImagenPepa));
+    }
+    // -------------------------
+
+}); // Fin de DOMContentLoaded
 </script>
 {% endblock %}

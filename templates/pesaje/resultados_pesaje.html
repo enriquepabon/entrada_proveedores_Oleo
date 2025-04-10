@@ -199,13 +199,9 @@
                             </div>
                         </div>
                         <div class="row">
-                            <div class="col-md-6">
-                                <div class="info-label">Fecha</div>
-                                <div class="info-value">{{ fecha_pesaje if fecha_pesaje and fecha_pesaje != 'N/A' and fecha_pesaje != 'No disponible' else 'No registrada' }}</div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="info-label">Hora</div>
-                                <div class="info-value">{{ hora_pesaje if hora_pesaje and hora_pesaje != 'N/A' and hora_pesaje != 'No disponible' else 'No registrada' }}</div>
+                            <div class="col-12">
+                                <div class="info-label">Fecha y Hora del Pesaje (Bogotá)</div>
+                                <div class="info-value">{{ datos_guia.timestamp_pesaje_utc | format_datetime if datos_guia.timestamp_pesaje_utc else 'No registrada' }}</div>
                             </div>
                         </div>
                         

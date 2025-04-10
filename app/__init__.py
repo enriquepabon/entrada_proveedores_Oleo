@@ -5,6 +5,8 @@ from config import app as app_config
 import db_schema
 import secrets
 from werkzeug.middleware.proxy_fix import ProxyFix
+# Importar la función del filtro
+from .utils.common import format_datetime_filter
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -169,6 +171,10 @@ def create_app(test_config=None):
             logger.info("Estructura de tabla clasificaciones verificada/actualizada correctamente.")
         except Exception as e:
             logger.error(f"Error verificando tabla clasificaciones: {str(e)}")
+    
+    # --- Registrar el filtro Jinja2 ---
+    app.add_template_filter(format_datetime_filter, 'format_datetime')
+    # ----------------------------------
     
     return app
 

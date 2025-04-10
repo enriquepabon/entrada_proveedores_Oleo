@@ -21,6 +21,30 @@ logger = logging.getLogger(__name__)
 UTC = pytz.utc
 BOGOTA_TZ = pytz.timezone('America/Bogota')
 
+def format_datetime_filter(utc_timestamp_str, format='%d/%m/%Y %H:%M:%S'):
+    """
+    Jinja2 filter to convert a UTC timestamp string (YYYY-MM-DD HH:MM:SS)
+    to Bogota local time and format it.
+    """
+    if not utc_timestamp_str or not isinstance(utc_timestamp_str, str):
+        return 'N/A' # O '' o None, según el resultado deseado para entrada inválida
+
+    try:
+        # Parsear el string del timestamp UTC
+        utc_dt = datetime.strptime(utc_timestamp_str, '%Y-%m-%d %H:%M:%S')
+        # Hacerlo consciente de la zona horaria (asumiendo que el string es UTC)
+        utc_dt = UTC.localize(utc_dt)
+        # Convertir a la zona horaria de Bogotá
+        bogota_dt = utc_dt.astimezone(BOGOTA_TZ)
+        # Formatearlo
+        return bogota_dt.strftime(format)
+    except (ValueError, TypeError) as e:
+        logger.error(f"Error formateando timestamp '{utc_timestamp_str}' con formato '{format}': {e}")
+        return f"ErrFmt: {utc_timestamp_str}" # Devolver original o indicador de error
+    except Exception as e:
+        logger.error(f"Error inesperado formateando timestamp '{utc_timestamp_str}': {e}")
+        return "Error"
+
 def format_datetime_bogota(date_str, time_str):
     """
     Combines date and time strings, assumes UTC, converts to Bogota TZ, and formats.
@@ -300,48 +324,6 @@ class CommonUtils:
                 'podrido': auto_data.get('podridos', {}).get('porcentaje') if auto_data else None
             }
             
-            # --- Convert Timestamps to Local Time (Bogota) ---
-            timestamp_fields = {
-                'registro': 'timestamp_registro_utc',
-                'pesaje': 'timestamp_pesaje_utc',
-                'clasificacion': 'timestamp_clasificacion_utc',
-                'pesaje_neto': 'timestamp_pesaje_neto_utc',
-                'salida': 'timestamp_salida_utc'
-            }
-            
-            for step, utc_field in timestamp_fields.items():
-                utc_timestamp_str = datos_guia.get(utc_field)
-                fecha_local = 'N/A'
-                hora_local = ''
-                
-                if utc_timestamp_str:
-                    try:
-                        # Parse the UTC timestamp string (assuming YYYY-MM-DD HH:MM:SS)
-                        utc_dt = UTC.localize(datetime.strptime(utc_timestamp_str, '%Y-%m-%d %H:%M:%S'))
-                        # Convert to Bogota timezone
-                        bogota_dt = utc_dt.astimezone(BOGOTA_TZ)
-                        # Format
-                        fecha_local = bogota_dt.strftime('%d/%m/%Y')
-                        hora_local = bogota_dt.strftime('%H:%M:%S')
-                    except (ValueError, TypeError) as e:
-                        logger.error(f"Error converting/formatting {utc_field} ('{utc_timestamp_str}') for {codigo_guia}: {e}")
-                        # Attempt fallback if format is DD/MM/YYYY HH:MM:SS
-                        try:
-                            naive_dt = datetime.strptime(utc_timestamp_str, '%d/%m/%Y %H:%M:%S')
-                            utc_dt = UTC.localize(naive_dt) # Assume it was UTC
-                            bogota_dt = utc_dt.astimezone(BOGOTA_TZ)
-                            fecha_local = bogota_dt.strftime('%d/%m/%Y')
-                            hora_local = bogota_dt.strftime('%H:%M:%S')
-                        except Exception:
-                            # Keep defaults if fallback also fails
-                            logger.warning(f"Fallback parsing failed for {utc_field} ('{utc_timestamp_str}')")
-                            fecha_local = 'Formato inválido'
-                            hora_local = ''
-                
-                # Assign formatted date/time to the dictionary
-                datos_guia[f'fecha_{step}'] = fecha_local
-                datos_guia[f'hora_{step}'] = hora_local
-
             # --- Determine Current Status and Next Step --- 
             estado_actual = 'pendiente'
             siguiente_paso = 'entrada' # Default start
@@ -815,7 +797,7 @@ def get_estado_guia(codigo_guia):
         
         # PRIORIDAD: Verificar si hay datos de salida (esto es lo más importante)
         # Si hay datos de salida, el proceso está completado
-        if (datos_guia.get('fecha_salida') and datos_guia.get('hora_salida')) or datos_guia.get('estado_final') == 'completado' or datos_guia.get('estado_actual') == 'proceso_completado':
+        if (datos_guia.get('timestamp_salida_utc') and datos_guia.get('timestamp_pesaje_neto_utc')) or datos_guia.get('estado_final') == 'completado' or datos_guia.get('estado_actual') == 'proceso_completado':
             estado_info['estado'] = 'proceso_completado'
             estado_info['descripcion'] = 'Proceso completado'
             estado_info['porcentaje_avance'] = 100
