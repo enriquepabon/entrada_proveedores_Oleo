@@ -1,7 +1,7 @@
 import sqlite3
 import os
 import logging
-from datetime import datetime
+from datetime import datetime, time
 import traceback
 from flask import current_app
 import pytz
@@ -129,14 +129,42 @@ def get_entry_records(filters=None):
             
             # Use timestamp_registro_utc for date filtering
             if filters.get('fecha_desde'):
-                # Assuming fecha_desde is YYYY-MM-DD, append time for comparison
-                conditions.append("timestamp_registro_utc >= ?")
-                params.append(f"{filters['fecha_desde']} 00:00:00") 
+                try:
+                    fecha_desde_str = filters['fecha_desde'] # YYYY-MM-DD
+                    # Crear datetime naive al inicio del día en Bogotá
+                    naive_dt_desde = datetime.strptime(fecha_desde_str, '%Y-%m-%d')
+                    naive_dt_desde = datetime.combine(naive_dt_desde.date(), time.min)
+                    # Localizar a Bogotá
+                    bogota_dt_desde = BOGOTA_TZ.localize(naive_dt_desde)
+                    # Convertir a UTC
+                    utc_dt_desde = bogota_dt_desde.astimezone(UTC)
+                    # Formatear para SQL
+                    utc_timestamp_desde = utc_dt_desde.strftime('%Y-%m-%d %H:%M:%S')
+                    
+                    conditions.append("timestamp_registro_utc >= ?")
+                    params.append(utc_timestamp_desde)
+                    logger.info(f"Filtro fecha_desde (Bogotá: {fecha_desde_str} 00:00:00) convertido a UTC: {utc_timestamp_desde}")
+                except (ValueError, TypeError) as e:
+                     logger.warning(f"Error procesando fecha_desde '{filters['fecha_desde']}': {e}. Saltando filtro de fecha.")
                 
             if filters.get('fecha_hasta'):
-                # Assuming fecha_hasta is YYYY-MM-DD, append time for comparison
-                conditions.append("timestamp_registro_utc <= ?")
-                params.append(f"{filters['fecha_hasta']} 23:59:59")
+                try:
+                    fecha_hasta_str = filters['fecha_hasta'] # YYYY-MM-DD
+                    # Crear datetime naive al final del día en Bogotá
+                    naive_dt_hasta = datetime.strptime(fecha_hasta_str, '%Y-%m-%d')
+                    naive_dt_hasta = datetime.combine(naive_dt_hasta.date(), time.max.replace(microsecond=0)) # time.max para 23:59:59
+                    # Localizar a Bogotá
+                    bogota_dt_hasta = BOGOTA_TZ.localize(naive_dt_hasta)
+                    # Convertir a UTC
+                    utc_dt_hasta = bogota_dt_hasta.astimezone(UTC)
+                    # Formatear para SQL
+                    utc_timestamp_hasta = utc_dt_hasta.strftime('%Y-%m-%d %H:%M:%S')
+                    
+                    conditions.append("timestamp_registro_utc <= ?")
+                    params.append(utc_timestamp_hasta)
+                    logger.info(f"Filtro fecha_hasta (Bogotá: {fecha_hasta_str} 23:59:59) convertido a UTC: {utc_timestamp_hasta}")
+                except (ValueError, TypeError) as e:
+                     logger.warning(f"Error procesando fecha_hasta '{filters['fecha_hasta']}': {e}. Saltando filtro de fecha.")
                 
             if filters.get('codigo_proveedor'):
                 conditions.append("codigo_proveedor LIKE ?")

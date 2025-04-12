@@ -801,24 +801,25 @@ def registrar_clasificacion_api():
         logger.error(traceback.format_exc())
         return jsonify({'success': False, 'message': f'Error: {str(e)}'}), 500
 
+# Definición de la función completa modificada
 def process_images_with_roboflow(codigo_guia, fotos_paths, guia_fotos_dir, json_path, roboflow_config):
     """
     Procesa imágenes usando Roboflow, enfocándose en guardar los detalles por imagen
-    para que el template realice la agregación. Recibe la configuración como argumento.
+    y calculando un resumen agregado. Recibe la configuración como argumento.
 
     Args:
         codigo_guia (str): Código de la guía.
         fotos_paths (list): Rutas absolutas a las imágenes.
         guia_fotos_dir (str): Directorio de salida para imágenes anotadas.
-        json_path (str): Ruta al archivo JSON donde se guardarán los resultados detallados.
+        json_path (str): Ruta al archivo JSON donde se guardarán los resultados detallados y el resumen.
         roboflow_config (dict): Diccionario con la configuración de Roboflow
                                 ('api_key', 'workspace', 'project', 'workflow_id', 'api_url').
 
     Returns:
         tuple: (success (bool), message (str), results (dict))
-               results contiene 'imagenes_procesadas' con los detalles por foto.
+               results contiene 'imagenes_procesadas' con detalles por foto y 'clasificacion_automatica' con el resumen.
     """
-    logger.info(f"[DIAG Param] Iniciando process_images_with_roboflow para guía {codigo_guia} (Modo Detalle)")
+    logger.info(f"[DIAG Param] Iniciando process_images_with_roboflow para guía {codigo_guia} (Modo Detalle + Agregación)")
     start_time_total = time.time()
     use_roboflow_api = False
     roboflow_client = None
@@ -834,9 +835,9 @@ def process_images_with_roboflow(codigo_guia, fotos_paths, guia_fotos_dir, json_
         if not all(roboflow_config.get(key) for key in required_keys):
             missing_keys = [key for key in required_keys if not roboflow_config.get(key)]
             logger.warning(f"[DIAG Param] Faltan valores en la config de Roboflow: {missing_keys}. No se usará la API.")
-            # Devolver error claro si la configuración es incompleta
             return False, f"Configuración de Roboflow incompleta: faltan {missing_keys}", {}
         else:
+            # Asumiendo que DirectRoboflowClient está definido o importado correctamente
             roboflow_client = DirectRoboflowClient(api_url=api_url, api_key=api_key)
             logger.info(f"[DIAG Param] Cliente Roboflow inicializado para {project}/{workflow_id}")
             use_roboflow_api = True
@@ -848,7 +849,7 @@ def process_images_with_roboflow(codigo_guia, fotos_paths, guia_fotos_dir, json_
         logger.error(f"[DIAG Param] Error inicializando cliente Roboflow: {client_init_err}")
         return False, f"Error inicializando cliente Roboflow: {client_init_err}", {}
 
-    # --- Estructura de Resultados (sin 'summary') ---
+    # --- Estructura de Resultados (incluirá 'clasificacion_automatica' al final) ---
     results_data = {
         'codigo_guia': codigo_guia,
         'timestamp_procesamiento_utc': get_utc_timestamp_str(),
@@ -861,13 +862,13 @@ def process_images_with_roboflow(codigo_guia, fotos_paths, guia_fotos_dir, json_
         'imagenes_procesadas': [], # Lista para detalles por imagen
         'errores': [], # Lista para errores generales o por imagen
         'tiempo_total_procesamiento_seg': 0.0
+        # 'clasificacion_automatica' se añadirá después del bucle
     }
 
     try:
         os.makedirs(guia_fotos_dir, exist_ok=True)
     except OSError as e:
         logger.error(f"No se pudo crear el directorio de salida {guia_fotos_dir}: {e}")
-        # Añadir error a la estructura principal si falla la creación del directorio
         results_data['errores'].append({
              'indice': None, 'nombre_original': 'Setup Directorio',
              'mensaje_error': f"Error creando directorio {guia_fotos_dir}: {e}",
@@ -875,414 +876,344 @@ def process_images_with_roboflow(codigo_guia, fotos_paths, guia_fotos_dir, json_
         })
         return False, f"Error creando directorio de salida: {e}", results_data
 
+    # Definir class_mapping una vez fuera del bucle para la agregación
+    # ESTE MAPEADO ES CRÍTICO - debe coincidir con las clases de TU MODELO y la respuesta API
+    class_mapping = {
+       'verde': 'verde',
+       'racimos verdes': 'verde', # Clave exacta de tu log
+       'sobremaduro': 'sobremaduro',
+       'racimo sobremaduro': 'sobremaduro', # Clave exacta de tu log
+       'danio_en_corona': 'danio_corona', # Nombre común Roboflow
+       'racimo daño en corona': 'danio_corona', # Clave exacta de tu log (con ñ) -> Ojo con encoding si usas 'ñ'
+       'racimo dano en corona': 'danio_corona', # Variante sin 'ñ'
+       'pendunculo_largo': 'pendunculo_largo', # Nombre común Roboflow
+       'racimo pedunculo largo': 'pendunculo_largo', # Clave exacta de tu log
+       'fruta_podrida': 'podrido', # Nombre común Roboflow
+       'racimo podrido': 'podrido', # Clave exacta de tu log
+       'maduro': 'maduro', # Añadir 'maduro' si es una clase posible
+       # Añade más alias o nombres exactos si es necesario
+    }
+    logger.info(f"[DIAG RESPONSE PROC] Diccionario class_mapping definido globalmente para la función: {class_mapping}")
+
     # --- BUCLE DE PROCESAMIENTO DE IMÁGENES ---
     for idx, img_path in enumerate(fotos_paths):
         start_time_img = time.time()
         img_filename = os.path.basename(img_path)
         logger.info(f"[DIAG Param] Procesando imagen {idx+1}/{len(fotos_paths)}: {img_filename}")
 
-        # Inicializar diccionario para esta imagen específica
         image_result = {
-            'indice': idx + 1,
-            'numero': idx + 1, # Añadir 'numero' para compatibilidad con template
-            'nombre_original': img_filename,
-            'ruta_original': img_path, # Guardar ruta original absoluta
-            # Calcular y guardar ruta relativa para la imagen original
-            'imagen_original': None, # Inicializar
-            'timestamp_inicio': get_utc_timestamp_str(),
-            'estado': 'pendiente',
-            'mensaje_error': None,
-            'traceback': None, # Para errores específicos de esta imagen
+            'indice': idx + 1, 'numero': idx + 1,
+            'nombre_original': img_filename, 'ruta_original': img_path,
+            'imagen_original': None, # Se calcula abajo
+            'timestamp_inicio': get_utc_timestamp_str(), 'estado': 'pendiente',
+            'mensaje_error': None, 'traceback': None,
             'tiempo_procesamiento_seg': 0,
-            'detecciones': [], # Lista de detecciones individuales {clase, confianza, bbox}
-            'conteo_por_clase': {}, # Diccionario {clase: cantidad}
-            'conteo_categorias': {}, # Alias para compatibilidad con template detalles
-            'total_racimos_imagen': 0, # Total racimos detectados en ESTA imagen
-            'total_racimos': 0, # Alias para compatibilidad con template detalles
-            'ruta_anotada': None, # Ruta relativa de la imagen anotada
-            'imagen_annotated': None # Alias URL para compatibilidad con template detalles
-            # Añadir 'imagen_clasificada' y 'imagen_procesada' si se generan en otro lado
+            'detecciones': [], 'conteo_por_clase': {}, 'conteo_categorias': {},
+            'total_racimos_imagen': 0, 'total_racimos': 0, 'num_racimos_detectados': 0, # Inicializar todos
+            'ruta_anotada': None, 'imagen_annotated': None,
+            'ruta_clasificada_rf': None # Para la imagen de Roboflow
         }
 
         try:
-            # --- Calcular ruta relativa para imagen original --- (antes de procesar)
+            # Calcular ruta relativa imagen original
             try:
                 static_folder_path = current_app.static_folder
                 rel_original_path = os.path.relpath(img_path, static_folder_path)
                 image_result['imagen_original'] = rel_original_path.replace(os.sep, '/')
-                logger.debug(f"Ruta relativa calculada para imagen original: {image_result['imagen_original']}")
             except Exception as rel_orig_err:
                 logger.error(f"Error calculando ruta relativa para imagen original {img_filename}: {rel_orig_err}")
-                image_result['imagen_original'] = img_path # Fallback a ruta absoluta
-            # --------------------------------------------------
+                image_result['imagen_original'] = img_path # Fallback
 
             # Validación y apertura de imagen
-            if not os.path.exists(img_path):
-                 raise FileNotFoundError(f"Archivo de imagen no encontrado en: {img_path}")
-            if not es_archivo_imagen(img_filename):
-                raise ValueError("El archivo no parece ser una imagen válida.")
+            if not os.path.exists(img_path): raise FileNotFoundError(f"Archivo no encontrado: {img_path}")
+            if not es_archivo_imagen(img_filename): raise ValueError("Archivo no es imagen válida.")
             try:
-                with Image.open(img_path) as img_pil:
-                    img_pil.verify()
+                with Image.open(img_path) as img_pil: img_pil.verify()
                 with Image.open(img_path) as img_pil:
                     img_pil.load()
-                    if img_pil.mode != 'RGB':
-                        img_pil = img_pil.convert('RGB')
+                    if img_pil.mode != 'RGB': img_pil = img_pil.convert('RGB')
                     img_width, img_height = img_pil.size
-            except (IOError, SyntaxError, FileNotFoundError, Image.DecompressionBombError) as img_err:
-                raise ValueError(f"Error abriendo o validando la imagen: {img_err}")
+            except Exception as img_err: raise ValueError(f"Error abriendo imagen: {img_err}")
 
-            # --- Lógica de procesamiento Roboflow (si aplica) ---
-            if not use_roboflow_api or not roboflow_client:
-                 raise ConnectionError("Cliente Roboflow no inicializado o configuración incompleta.")
-
-            logger.info(f"[DIAG Param] Enviando imagen {idx+1} a Roboflow API ({workflow_id})...")
-
-            # Preparar datos para Roboflow (base64)
+            # Llamada a Roboflow
+            if not use_roboflow_api or not roboflow_client: raise ConnectionError("Cliente Roboflow no inicializado.")
+            logger.info(f"[DIAG Param] Enviando imagen {idx+1} a Roboflow API...")
             image_data_dict = {}
             try:
                 with open(img_path, "rb") as image_file:
                     img_str = base64.b64encode(image_file.read()).decode('utf-8')
                     image_data_dict = {"type": "base64", "value": img_str}
-            except Exception as read_err:
-                raise IOError(f"Error leyendo o codificando la imagen: {read_err}")
+            except Exception as read_err: raise IOError(f"Error leyendo/codificando imagen: {read_err}")
 
-            # Llamar a la API
             start_api_time = time.time()
-            api_response = roboflow_client.run_workflow(
-                workspace_name=workspace,
-                workflow_id=workflow_id,
-                image_path_or_url=img_path,
-                image_data_dict=image_data_dict
-            )
+            api_response = roboflow_client.run_workflow(workspace, workflow_id, img_path, image_data_dict)
             end_api_time = time.time()
             logger.info(f"[DIAG Param] Respuesta Roboflow img {idx+1}. Tiempo API: {end_api_time - start_api_time:.2f}s")
 
-            # Verificar errores en la respuesta API
             if isinstance(api_response, dict) and api_response.get("error"):
-                error_msg = api_response.get("error", "Error desconocido de Roboflow")
-                logger.error(f"[DIAG Param] Roboflow devolvió error para img {idx+1}: {error_msg}")
-                raise ConnectionError(f"Error de Roboflow: {error_msg}")
+                error_msg = api_response.get("error", "Error desconocido Roboflow")
+                logger.error(f"[DIAG Param] Roboflow error img {idx+1}: {error_msg}")
+                raise ConnectionError(f"Error Roboflow: {error_msg}")
 
-            # --- INICIO: PROCESAMIENTO CORREGIDO DE RESPUESTA ROBOFLOW ---
+            # --- PROCESAMIENTO RESPUESTA ROBOFLOW ---
             logger.info(f"[DIAG RESPONSE PROC] Procesando respuesta API para img {idx+1}...")
-            # Log completo de la respuesta para depuración
-            try:
-                logger.info(f"[DIAG RESPONSE PROC] Respuesta API Completa: {json.dumps(api_response, indent=2)}")
-            except:
-                 logger.info(f"[DIAG RESPONSE PROC] Respuesta API Completa (raw): {api_response}")
+            try: logger.info(f"[DIAG RESPONSE PROC] Respuesta API Completa: {json.dumps(api_response, indent=2)}")
+            except: logger.info(f"[DIAG RESPONSE PROC] Respuesta API Completa (raw): {api_response}")
 
-            # --- DEFINICIÓN DE class_mapping ---
-            # ESTE MAPEADO ES CRÍTICO - debe coincidir con las clases de TU MODELO y la respuesta API
-            class_mapping = {
-               'verde': 'verde',
-               'racimos verdes': 'verde', # Clave exacta de tu log
-               'sobremaduro': 'sobremaduro',
-               'racimo sobremaduro': 'sobremaduro', # Clave exacta de tu log
-               'danio_en_corona': 'danio_corona', # Nombre común Roboflow
-               'racimo daño en corona': 'danio_corona', # Clave exacta de tu log (con ñ) -> Ojo con encoding si usas 'ñ'
-               'racimo dano en corona': 'danio_corona', # Variante sin 'ñ'
-               'pendunculo_largo': 'pendunculo_largo', # Nombre común Roboflow
-               'racimo pedunculo largo': 'pendunculo_largo', # Clave exacta de tu log
-               'fruta_podrida': 'podrido', # Nombre común Roboflow
-               'racimo podrido': 'podrido', # Clave exacta de tu log
-               'maduro': 'maduro', # Añadir 'maduro' si es una clase posible
-               # Añade más alias o nombres exactos si es necesario
-            }
-            logger.info(f"[DIAG RESPONSE PROC] Diccionario class_mapping definido: {class_mapping}")
-            # ----------------------------------
-
-            # Inicializar conteos y detecciones
-            detections_processed = [] # Para BBOX si los hubiera
-            # Usar las claves internas/normalizadas del mapping como base
-            claves_internas_unicas = set(class_mapping.values()) # Ahora class_mapping está definida
+            # (class_mapping ya está definido fuera del bucle)
+            claves_internas_unicas = set(class_mapping.values())
             conteo_clases_directo = {clave: 0 for clave in claves_internas_unicas}
             num_racimos_detectados_en_imagen = 0
+            detections_processed = [] # Para BBOX
 
-            # 1. Extraer CONTEOS DIRECTOS (prioridad)
-            # La respuesta parece tener los conteos en outputs[0]
+            # Extraer CONTEOS DIRECTOS
             primary_output = {}
             if isinstance(api_response, dict) and 'outputs' in api_response and isinstance(api_response['outputs'], list) and api_response['outputs']:
                 primary_output = api_response['outputs'][0]
                 if not isinstance(primary_output, dict):
-                     logger.warning(f"[DIAG RESPONSE PROC] outputs[0] no es un diccionario: {primary_output}. Buscando conteos en la raíz.")
-                     primary_output = api_response # Fallback a la raíz si outputs[0] no es dict
+                     logger.warning(f"[DIAG RESPONSE PROC] outputs[0] no es dict. Buscando en raíz.")
+                     primary_output = api_response
             elif isinstance(api_response, dict):
-                 logger.info("[DIAG RESPONSE PROC] No se encontró 'outputs' o está vacío. Buscando conteos en la raíz de la respuesta.")
-                 primary_output = api_response # Buscar en la raíz si no hay 'outputs'
+                 logger.info("[DIAG RESPONSE PROC] No se encontró 'outputs'. Buscando en raíz.")
+                 primary_output = api_response
             else:
-                 logger.warning(f"[DIAG RESPONSE PROC] Formato de respuesta API inesperado ({type(api_response)}). No se pueden extraer conteos.")
+                 logger.warning(f"[DIAG RESPONSE PROC] Formato respuesta API inesperado ({type(api_response)}).")
 
             if isinstance(primary_output, dict):
-                 logger.info(f"[DIAG RESPONSE PROC] Buscando conteos directos en: {list(primary_output.keys())}")
+                 logger.info(f"[DIAG RESPONSE PROC] Buscando conteos directos en keys: {list(primary_output.keys())}")
                  for key_rf, value_rf in primary_output.items():
-                     # Intentar mapear la clave de Roboflow a nuestra clave interna
                      key_rf_normalized = key_rf.lower().strip()
                      clase_interna = class_mapping.get(key_rf_normalized)
-
                      if clase_interna and isinstance(value_rf, (int, float)):
                          try:
                              cantidad = int(value_rf)
                              if cantidad > 0:
                                  conteo_clases_directo[clase_interna] += cantidad
                                  num_racimos_detectados_en_imagen += cantidad
-                                 logger.info(f"[DIAG RESPONSE PROC] Conteo directo encontrado: RFKey='{key_rf}' -> Internal='{clase_interna}', Cantidad={cantidad}. Total ahora: {num_racimos_detectados_en_imagen}")
+                                 logger.info(f"[DIAG RESPONSE PROC] Conteo directo: RF='{key_rf}'->Int='{clase_interna}', Cant={cantidad}. Total img: {num_racimos_detectados_en_imagen}")
                          except (ValueError, TypeError):
-                              logger.warning(f"[DIAG RESPONSE PROC] No se pudo convertir el valor '{value_rf}' para la clave '{key_rf}' a entero.")
+                              logger.warning(f"No se pudo convertir valor '{value_rf}' para '{key_rf}'.")
                      elif clase_interna:
-                           logger.warning(f"[DIAG RESPONSE PROC] Valor para clave mapeada '{key_rf}' -> '{clase_interna}' no es numérico: {value_rf} ({type(value_rf)})")
+                           logger.warning(f"Valor para clave mapeada '{key_rf}'->'{clase_interna}' no numérico: {value_rf}")
 
-            logger.info(f"[DIAG RESPONSE PROC] Conteos directos procesados. Total detectado: {num_racimos_detectados_en_imagen}. Conteos por clase: {conteo_clases_directo}")
+            logger.info(f"[DIAG RESPONSE PROC] Conteos directos img {idx+1}. Total: {num_racimos_detectados_en_imagen}. Detalle: {conteo_clases_directo}")
 
-            # 2. Extraer PREDICCIONES BBOX (si existen y como complemento)
+            # Extraer PREDICCIONES BBOX (si existen)
             raw_predictions = []
-            # Reutilizar primary_output para buscar 'predictions'
             if isinstance(primary_output, dict) and 'predictions' in primary_output:
                 raw_predictions = primary_output.get('predictions', [])
-                if isinstance(raw_predictions, list):
-                    logger.info(f"[DIAG RESPONSE PROC] Encontradas {len(raw_predictions)} predicciones BBOX en 'primary_output'.")
-                else:
-                    logger.warning(f"[DIAG RESPONSE PROC] 'predictions' en 'primary_output' no es una lista ({type(raw_predictions)}). Ignorando BBOX.")
-                    raw_predictions = []
-            else:
-                 logger.info("[DIAG RESPONSE PROC] No se encontró la clave 'predictions' en 'primary_output' para BBOX.")
+                if isinstance(raw_predictions, list): logger.info(f"Encontradas {len(raw_predictions)} predicciones BBOX.")
+                else: logger.warning(f"'predictions' no es lista. Ignorando BBOX."); raw_predictions = []
+            else: logger.info("No se encontró 'predictions' para BBOX.")
 
-            # Procesar BBOX si se encontraron
-            if raw_predictions:
-                img_width, img_height = 0, 0 # Obtener dimensiones si es necesario para BBOX absoluto
-                try:
-                    with Image.open(img_path) as img_pil:
-                         img_width, img_height = img_pil.size
-                except Exception as img_read_err:
-                     logger.error(f"Error re-abriendo imagen {img_filename} para dimensiones BBOX: {img_read_err}")
+            if raw_predictions and img_width > 0 and img_height > 0:
+                for pred in raw_predictions:
+                    if not isinstance(pred, dict): continue
+                    class_name_rf = pred.get('class')
+                    confidence = pred.get('confidence')
+                    class_name_rf_normalized = class_name_rf.lower().strip() if class_name_rf else None
+                    class_name_internal = class_mapping.get(class_name_rf_normalized)
+                    if not class_name_internal or confidence is None: continue
+                    x_c, y_c, w, h = pred.get('x'), pred.get('y'), pred.get('width'), pred.get('height')
+                    if None in [x_c, y_c, w, h]: continue
+                    try:
+                        x1, y1 = int((x_c-w/2)*img_width), int((y_c-h/2)*img_height)
+                        x2, y2 = int((x_c+w/2)*img_width), int((y_c+h/2)*img_height)
+                        detections_processed.append({'clase': class_name_internal, 'class': class_name_internal,
+                                                     'confianza': round(float(confidence), 3), 'confidence': round(float(confidence), 3),
+                                                     'bbox': [x1, y1, x2, y2], 'x': x_c, 'y': y_c, 'width': w, 'height': h})
+                    except TypeError: continue
+                logger.info(f"Procesadas {len(detections_processed)} detecciones BBOX.")
+            elif raw_predictions:
+                logger.warning("No se pudieron obtener dimensiones img, BBOX no procesados.")
 
-                if img_width > 0 and img_height > 0:
-                    for pred in raw_predictions:
-                        if not isinstance(pred, dict): continue
-                        class_name_rf = pred.get('class')
-                        confidence = pred.get('confidence')
-                        class_name_rf_normalized = class_name_rf.lower().strip() if class_name_rf else None
-                        class_name_internal = class_mapping.get(class_name_rf_normalized)
+            # Asignación Final a image_result
+            image_result['detections'] = detections_processed
+            image_result['conteo_por_clase'] = conteo_clases_directo
+            image_result['num_racimos_detectados'] = num_racimos_detectados_en_imagen # Clave principal
+            image_result['total_racimos_imagen'] = num_racimos_detectados_en_imagen # Alias
+            image_result['total_racimos'] = num_racimos_detectados_en_imagen # Alias
 
-                        if not class_name_internal or confidence is None: continue
+            logger.info(f"Asignación final img {idx+1} - num_racimos_detectados: {image_result['num_racimos_detectados']}")
 
-                        x_center, y_center = pred.get('x'), pred.get('y')
-                        width_rel, height_rel = pred.get('width'), pred.get('height')
-                        if None in [x_center, y_center, width_rel, height_rel]: continue
-
-                        try:
-                            x1 = int((x_center - width_rel / 2) * img_width)
-                            y1 = int((y_center - height_rel / 2) * img_height)
-                            x2 = int((x_center + width_rel / 2) * img_width)
-                            y2 = int((y_center + height_rel / 2) * img_height)
-                        except TypeError: continue
-
-                        detection_data = {
-                            'clase': class_name_internal, 'class': class_name_internal,
-                            'confianza': round(float(confidence), 3), 'confidence': round(float(confidence), 3),
-                            'bbox': [x1, y1, x2, y2],
-                            'x': x_center, 'y': y_center, 'width': width_rel, 'height': height_rel
-                        }
-                        detections_processed.append(detection_data)
-                    logger.info(f"[DIAG RESPONSE PROC] Procesadas {len(detections_processed)} detecciones BBOX.")
-                else:
-                    logger.warning("[DIAG RESPONSE PROC] No se pudieron obtener dimensiones de imagen, BBOX no procesados.")
-
-
-            # --- Asignación Final a image_result ---
-            image_result['detections'] = detections_processed # Lista de BBOX (puede estar vacía)
-            image_result['conteo_por_clase'] = conteo_clases_directo # Usar los conteos directos!
-            # *** CLAVE: Asignar el total correcto a la clave esperada ***
-            image_result['num_racimos_detectados'] = num_racimos_detectados_en_imagen
-            # Mantener los otros totales por compatibilidad si es necesario
-            image_result['total_racimos_imagen'] = num_racimos_detectados_en_imagen
-            image_result['total_racimos'] = num_racimos_detectados_en_imagen
-
-            logger.info(f"[DIAG RESPONSE PROC] Asignación final - num_racimos_detectados: {image_result['num_racimos_detectados']}")
-
-            # Calcular porcentajes POR IMAGEN y crear estructura para template detalles
-            # Usar el total correcto 'num_racimos_detectados_en_imagen' para el cálculo
+            # Calcular porcentajes POR IMAGEN para template detalles
             total_img_correcto = num_racimos_detectados_en_imagen
             conteo_categorias_template = {}
-            # Usar conteo_clases_directo como base
             for clase_int, cantidad in conteo_clases_directo.items():
                  porcentaje = round((cantidad / total_img_correcto) * 100, 1) if total_img_correcto > 0 else 0.0
-                 conteo_categorias_template[clase_int] = {
-                     'cantidad': cantidad,
-                     'porcentaje': porcentaje
-                 }
-            image_result['conteo_categorias'] = conteo_categorias_template # Para el template detalles
+                 conteo_categorias_template[clase_int] = {'cantidad': cantidad, 'porcentaje': porcentaje}
+            image_result['conteo_categorias'] = conteo_categorias_template
 
-            # --- FIN: PROCESAMIENTO CORREGIDO DE RESPUESTA ROBOFLOW ---
-
-
-            # Generar imagen anotada (usa 'detections_processed' que contiene BBOX)
+            # Generar imagen anotada localmente (usa BBOX de detections_processed)
             try:
                 annotated_img_filename = f"{os.path.splitext(img_filename)[0]}_annotated.jpg"
                 annotated_img_path_abs = os.path.join(guia_fotos_dir, annotated_img_filename)
                 generate_annotated_image(img_path, detections_processed, output_path=annotated_img_path_abs)
-                # --- Calcular y guardar ruta relativa SIN url_for ---
                 try:
-                    # Obtener la ruta estática de la app actual
-                    # Nota: Esto podría fallar si current_app no está disponible aquí,
-                    # pero es más probable que funcione que url_for.
                     static_folder_path = current_app.static_folder
                     rel_annotated_path = os.path.relpath(annotated_img_path_abs, static_folder_path)
-                    # Asegurar formato de slash para web
                     rel_annotated_path_web = rel_annotated_path.replace(os.sep, '/')
                     image_result['ruta_anotada'] = rel_annotated_path_web
-                    image_result['imagen_annotated'] = rel_annotated_path_web # Alias para template
-                    logger.info(f"Imagen anotada generada, ruta relativa guardada: {rel_annotated_path_web}")
+                    image_result['imagen_annotated'] = rel_annotated_path_web
+                    logger.info(f"Imagen anotada local generada, ruta relativa: {rel_annotated_path_web}")
                 except Exception as rel_path_err:
-                     logger.error(f"Error calculando ruta relativa para imagen anotada: {rel_path_err}")
-                     # Guardar la ruta absoluta como fallback o dejar None
-                     image_result['ruta_anotada'] = annotated_img_path_abs # Fallback a ruta absoluta
-                     image_result['imagen_annotated'] = annotated_img_path_abs # Fallback a ruta absoluta
-
+                     logger.error(f"Error calculando ruta relativa anotada: {rel_path_err}")
+                     image_result['ruta_anotada'] = annotated_img_path_abs # Fallback
+                     image_result['imagen_annotated'] = annotated_img_path_abs
             except Exception as annotate_err:
-                logger.error(f"Error generando imagen anotada para {img_filename}: {annotate_err}")
-                image_result['mensaje_error'] = (image_result['mensaje_error'] or "") + f"; Error anotación: {annotate_err}"
+                logger.error(f"Error generando imagen anotada local {img_filename}: {annotate_err}")
+                image_result['mensaje_error'] = (image_result['mensaje_error'] or "") + f"; Error anotación local: {annotate_err}"
 
-            # --- INICIO: Guardar Imagen Etiquetada de Roboflow (label_visualization_1) ---
-            imagen_clasificada_rf_rel_path = None # Inicializar
+            # Guardar Imagen Etiquetada de Roboflow (label_visualization_1)
+            imagen_clasificada_rf_rel_path = None
             try:
-                # Reutilizar primary_output (que contiene la respuesta relevante)
+                img_labeled_base64 = None
                 if isinstance(primary_output, dict):
-                    img_labeled_dict = primary_output.get('label_visualization_1')
-                    img_labeled_base64 = None
-                    if isinstance(img_labeled_dict, dict):
-                        img_labeled_base64 = img_labeled_dict.get('value')
+                    vis_data = primary_output.get('label_visualization_1')
+                    if isinstance(vis_data, dict): img_labeled_base64 = vis_data.get('value')
+                    elif not img_labeled_base64 and 'outputs' in primary_output: # Check outputs again if needed
+                         # ... (logic to check outputs[0]['label_visualization_1'] if needed) ...
+                         pass
 
-                    # Fallback: Buscar en outputs[0] si no está en la raíz
-                    elif not img_labeled_base64 and 'outputs' in primary_output and isinstance(primary_output['outputs'], list) and len(primary_output['outputs']) > 0:
-                        outputs_item = primary_output['outputs'][0]
-                        if isinstance(outputs_item, dict) and 'label_visualization_1' in outputs_item:
-                             img_labeled_outputs = outputs_item.get('label_visualization_1')
-                             if isinstance(img_labeled_outputs, dict):
-                                 img_labeled_base64 = img_labeled_outputs.get('value')
-
-                    # Si encontramos el base64, decodificar y guardar
-                    if img_labeled_base64:
-                        logger.info(f"[DIAG SAVE RF IMG] Encontrado base64 para 'label_visualization_1' para img {idx+1}.")
-                        img_data = base64.b64decode(img_labeled_base64)
-                        labeled_rf_filename = f"{os.path.splitext(img_filename)[0]}_labeled_rf.jpg"
-                        labeled_rf_path_abs = os.path.join(guia_fotos_dir, labeled_rf_filename)
-
-                        with open(labeled_rf_path_abs, 'wb') as f_label:
-                            f_label.write(img_data)
-                        logger.info(f"[DIAG SAVE RF IMG] Imagen etiquetada de Roboflow guardada en: {labeled_rf_path_abs}")
-
-                        # Calcular ruta relativa para guardar en JSON
+                if img_labeled_base64:
+                    logger.info(f"[DIAG SAVE RF IMG] Base64 'label_visualization_1' encontrado img {idx+1}.")
+                    img_data = base64.b64decode(img_labeled_base64)
+                    labeled_rf_filename = f"{os.path.splitext(img_filename)[0]}_labeled_rf.jpg"
+                    labeled_rf_path_abs = os.path.join(guia_fotos_dir, labeled_rf_filename)
+                    with open(labeled_rf_path_abs, 'wb') as f_label: f_label.write(img_data)
+                    logger.info(f"Imagen Roboflow etiquetada guardada: {labeled_rf_path_abs}")
+                    try:
                         static_folder_path = current_app.static_folder
                         rel_labeled_rf_path = os.path.relpath(labeled_rf_path_abs, static_folder_path)
                         imagen_clasificada_rf_rel_path = rel_labeled_rf_path.replace(os.sep, '/')
-                        logger.info(f"[DIAG SAVE RF IMG] Ruta relativa para imagen etiquetada RF: {imagen_clasificada_rf_rel_path}")
-                    else:
-                        logger.warning(f"[DIAG SAVE RF IMG] No se encontró base64 para 'label_visualization_1' en la respuesta para img {idx+1}.")
-                else:
-                     logger.warning(f"[DIAG SAVE RF IMG] 'primary_output' no es un diccionario, no se puede buscar 'label_visualization_1'.")
+                        logger.info(f"Ruta relativa imagen Roboflow etiquetada: {imagen_clasificada_rf_rel_path}")
+                    except Exception as rel_rf_err: logger.error(f"Error ruta relativa img RF: {rel_rf_err}")
+                else: logger.warning(f"No se encontró base64 para 'label_visualization_1' img {idx+1}.")
 
-            except base64.binascii.Error as b64_err:
-                logger.error(f"[DIAG SAVE RF IMG] Error decodificando base64 para imagen etiquetada RF (img {idx+1}): {b64_err}")
             except Exception as save_rf_err:
-                logger.error(f"[DIAG SAVE RF IMG] Error guardando imagen etiquetada de Roboflow (img {idx+1}): {save_rf_err}")
+                logger.error(f"Error guardando img etiquetada RF {idx+1}: {save_rf_err}")
                 logger.error(traceback.format_exc())
 
-            # Guardar la ruta relativa (o None) en el resultado de la imagen
             image_result['ruta_clasificada_rf'] = imagen_clasificada_rf_rel_path
-            # --- FIN: Guardar Imagen Etiquetada de Roboflow ---
-
-
-            # Generar imagen anotada localmente (código existente)
-            # ... (código para llamar a generate_annotated_image y guardar ruta_anotada) ...
-
-            # Marcar como OK
             image_result['estado'] = 'procesada_ok'
 
         # --- Manejo de Errores por Imagen ---
         except Exception as e:
             logger.error(f"Error procesando imagen {idx+1} ({img_filename}): {str(e)}")
-            tb_str = traceback.format_exc()
-            logger.error(tb_str)
+            tb_str = traceback.format_exc(); logger.error(tb_str)
             image_result['estado'] = 'error_procesamiento'
             image_result['mensaje_error'] = str(e)
             image_result['traceback'] = tb_str
-            # Añadir error a la lista principal también
-            results_data['errores'].append({
-                'indice': idx + 1,
-                'nombre_original': img_filename,
-                'mensaje_error': str(e),
-                'traceback': tb_str
-            })
+            results_data['errores'].append({'indice': idx + 1, 'nombre_original': img_filename,
+                                           'mensaje_error': str(e), 'traceback': tb_str})
         finally:
-            # Calcular tiempo y añadir el resultado de esta imagen a la lista principal
             end_time_img = time.time()
             image_result['tiempo_procesamiento_seg'] = round(end_time_img - start_time_img, 2)
             # --- MODIFICACIÓN: Usar deepcopy ---
-            # Añadir una copia profunda para evitar problemas de referencia
             results_data['imagenes_procesadas'].append(copy.deepcopy(image_result))
             # ------------------------------------
 
     # --- Fin del Bucle de Imágenes ---
 
+    # --- INICIO: Calcular Resumen Agregado para 'clasificacion_automatica' ---
+    logger.info("[AGREGACIÓN] Calculando resumen agregado de clasificación automática...")
+    summary_clasificacion_automatica = {}
+    claves_internas_unicas = set(class_mapping.values()) # Usa el mapping definido antes
+    total_counts = {key: 0 for key in claves_internas_unicas}
+    grand_total_racimos = 0
+
+    for img_res in results_data.get('imagenes_procesadas', []):
+        grand_total_racimos += img_res.get('num_racimos_detectados', 0)
+        conteo_imagen = img_res.get('conteo_por_clase', {})
+        for clase_interna, cantidad in conteo_imagen.items():
+            if clase_interna in total_counts:
+                total_counts[clase_interna] += cantidad
+            else:
+                 logger.warning(f"[AGREGACIÓN] Clase interna inesperada: {clase_interna}. Ignorando.")
+
+    logger.info(f"[AGREGACIÓN] Total racimos (todas imgs): {grand_total_racimos}")
+    logger.info(f"[AGREGACIÓN] Conteos totales por clase: {total_counts}")
+
+    # Mapeo inverso clave interna -> clave JSON para el resumen final
+    db_key_to_json_key = {
+        'verde': 'verdes',
+        'sobremaduro': 'sobremaduros',
+        'danio_corona': 'danio_corona', # Clave JSON consistente
+        'pendunculo_largo': 'pendunculo_largo', # Clave JSON consistente
+        'podrido': 'podridos',
+        'maduro': 'maduros' # Si existe
+    }
+
+    for clase_interna, total_cantidad in total_counts.items():
+        porcentaje_final = round((total_cantidad / grand_total_racimos) * 100, 1) if grand_total_racimos > 0 else 0.0
+        json_key = db_key_to_json_key.get(clase_interna)
+        if json_key:
+            # Estructura que espera guardar_clasificacion_final
+            summary_clasificacion_automatica[json_key] = {'porcentaje': porcentaje_final}
+            # summary_clasificacion_automatica[json_key]['cantidad_total'] = total_cantidad # Opcional
+        else:
+            logger.warning(f"[AGREGACIÓN] No se encontró mapeo JSON para clase interna: {clase_interna}.")
+
+    # Añadir el resumen al diccionario principal
+    if summary_clasificacion_automatica:
+        results_data['clasificacion_automatica'] = summary_clasificacion_automatica
+        logger.info(f"[AGREGACIÓN] Resumen 'clasificacion_automatica' añadido a results_data: {summary_clasificacion_automatica}")
+    else:
+         logger.warning("[AGREGACIÓN] No se generó resumen 'clasificacion_automatica'.")
+    # --- FIN: Calcular Resumen Agregado ---
+
     # Calcular tiempo total final
     end_time_total = time.time()
     results_data['tiempo_total_procesamiento_seg'] = round(end_time_total - start_time_total, 2)
 
-    # Log antes de guardar - Asegúrate que los datos aquí son correctos
-    logger.info(f"[DIAG DUMP PRE-SAVE] Contenido final de results_data ANTES de json.dump: {json.dumps(results_data, indent=2)}")
+    # Log antes de guardar JSON
+    logger.info(f"[DIAG DUMP PRE-SAVE] Contenido final results_data ANTES de json.dump:")
+    try:
+        # Usar default=str para manejar objetos no serializables si los hubiera
+        logger.info(json.dumps(results_data, indent=2, ensure_ascii=False, default=str))
+    except Exception as log_dump_err:
+        logger.error(f"Error al hacer log dump de results_data: {log_dump_err}")
+        logger.info(f"Intentando log dump parcial: { {k: v for k, v in results_data.items() if k != 'imagenes_procesadas'} }")
+
 
     try:
-        # Crear el directorio si no existe
+        # Guardar JSON
         json_dir = os.path.dirname(json_path)
         os.makedirs(json_dir, exist_ok=True)
         logger.info(f"Asegurando directorio para JSON: {json_dir}")
-
-        # --- Intento de Escritura Forzada y Verificación ---
         logger.info(f"Intentando escribir JSON en: {json_path}")
-        f = open(json_path, 'w', encoding='utf-8')
-        json.dump(results_data, f, ensure_ascii=False, indent=4)
-        f.flush() # Forzar escritura del buffer al archivo
-        try:
-            # os.fsync() asegura que los datos se escriban físicamente al disco
-            # Puede no estar disponible o necesario en todos los SO, pero es bueno intentarlo
+        with open(json_path, 'w', encoding='utf-8') as f:
+            # Usar default=str aquí también por seguridad
+            json.dump(results_data, f, ensure_ascii=False, indent=4, default=str)
+            f.flush()
             if hasattr(os, 'fsync'):
-                 os.fsync(f.fileno())
-                 logger.info("[DIAG WRITE] os.fsync() ejecutado.")
-            else:
-                 logger.info("[DIAG WRITE] os.fsync() no disponible en este sistema.")
-        except Exception as fsync_err:
-            logger.warning(f"[DIAG WRITE] Error durante os.fsync(): {fsync_err}")
-        f.close() # Cerrar el archivo explícitamente
-        logger.info(f"[DIAG WRITE] Escritura JSON completada y archivo cerrado explícitamente.")
+                try: os.fsync(f.fileno()); logger.info("[DIAG WRITE] os.fsync() ejecutado.")
+                except OSError as fsync_err: logger.warning(f"Error en os.fsync(): {fsync_err}") # Cambiado a warning
+            else: logger.info("[DIAG WRITE] os.fsync() no disponible.")
+        logger.info("[DIAG WRITE] Escritura JSON completada.")
 
-        # --- Espera corta (para descartar problemas de timing/caché del SO) ---
-        time.sleep(0.5) # Esperar medio segundo
-        logger.info("[DIAG WRITE] Pausa de 0.5s completada después de escribir JSON.")
-
-        # Verificar si el archivo existe y su tamaño después de escribir y cerrar
+        # Verificar existencia y tamaño
+        time.sleep(0.5)
         if os.path.exists(json_path):
             file_size = os.path.getsize(json_path)
-            logger.info(f"[DIAG WRITE] Verificación post-escritura: Archivo JSON existe en {json_path} (Tamaño: {file_size} bytes)")
-            if file_size == 0:
-                 logger.warning("[DIAG WRITE] ¡Advertencia! El archivo JSON parece tener tamaño 0 después de escribir.")
+            logger.info(f"[DIAG WRITE] Verificación post-escritura: OK (Tamaño: {file_size} bytes)")
+            if file_size == 0: logger.warning("[DIAG WRITE] Advertencia! Archivo JSON con tamaño 0.")
         else:
-            logger.error(f"[DIAG WRITE] ¡ERROR CRÍTICO! Archivo JSON NO existe en {json_path} después de intentar escribir y cerrar.")
-        # --- Fin de Escritura Forzada ---
+            logger.error(f"[DIAG WRITE] ¡ERROR CRÍTICO! Archivo JSON NO existe después de escribir: {json_path}")
 
     except Exception as e:
-        logger.error(f"Error crítico durante la escritura del archivo JSON en {json_path}: {str(e)}")
+        logger.error(f"Error crítico escribiendo JSON en {json_path}: {str(e)}")
         logger.error(traceback.format_exc())
-        # Podrías querer re-lanzar la excepción aquí o manejarla de otra forma
+        # Considerar devolver error aquí si la escritura falla
 
-    # Actualizar la base de datos con el timestamp y estado
-    # ... (resto del código para actualizar db_operations.update_clasificacion_record, etc.) ...
+    # Actualizar la base de datos si es necesario (ej. timestamp, estado)
+    # Esta parte puede necesitar lógica adicional o hacerse en otro lugar
 
-    # Determinar éxito basado en si hubo errores en la lista principal
     success = len(results_data['errores']) == 0
     message = "Procesamiento completado." if success else "Procesamiento completado con errores."
 
     return success, message, results_data
+
 
 
 @bp.route('/clasificaciones')
@@ -3200,25 +3131,96 @@ def guardar_clasificacion_final(codigo_guia):
                 # Agregar datos de clasificación automática si existen
                 if 'clasificacion_automatica' in clasificacion_data:
                     auto = clasificacion_data['clasificacion_automatica']
-                    # Guardar el JSON completo para facilitar recuperación
+                    logger.info(f"Clasificación automática encontrada en JSON: {auto}") # Log para ver qué se leyó
+
+                    # Guardar el JSON crudo original como respaldo/diagnóstico
                     datos_clasificacion['clasificacion_automatica_json'] = json.dumps(auto)
-                    
-                    # Obtener porcentajes o cantidades según lo que esté disponible
+
+                    # --- INICIO: Generar datos para clasificacion_consolidada ---
+                    consolidada_data = {}
+                    # Mapeo de clave interna (usada en dashboard) a clave posible en JSON 'auto'
+                    key_mapping_auto = {
+                        'verde': 'verdes',
+                        'sobremaduro': 'sobremaduros',
+                        'danio_corona': 'danio_corona', # Ajustar si nombre en JSON es diferente
+                        'pendunculo_largo': 'pendunculo_largo', # Ajustar si nombre en JSON es diferente
+                        'podrido': 'podridos'
+                    }
+
+                    for db_key, json_key in key_mapping_auto.items():
+                        valor_obj = auto.get(json_key) # Obtener valor del JSON leído
+                        porcentaje = 0.0 # Usar float por defecto
+
+                        if isinstance(valor_obj, dict) and 'porcentaje' in valor_obj:
+                            # Caso 1: Estructura {'porcentaje': P}
+                            porcentaje_raw = valor_obj['porcentaje']
+                            try:
+                                if isinstance(porcentaje_raw, (int, float)):
+                                    porcentaje = float(porcentaje_raw)
+                                elif isinstance(porcentaje_raw, str):
+                                     porcentaje = float(porcentaje_raw.replace('%','').strip())
+                                else:
+                                     logger.warning(f"Tipo inesperado para 'porcentaje' en {json_key}: {type(porcentaje_raw)}. Usando 0.")
+                            except (ValueError, TypeError):
+                                 logger.warning(f"No se pudo convertir el porcentaje '{porcentaje_raw}' para {json_key}. Usando 0.")
+
+                        elif isinstance(valor_obj, (int, float)):
+                            # Caso 2: Valor numérico directo P
+                            porcentaje = float(valor_obj)
+                        elif isinstance(valor_obj, str):
+                            # Caso 3: Valor string "P" o "P%"
+                            try:
+                                porcentaje = float(valor_obj.replace('%','').strip())
+                            except (ValueError, TypeError):
+                                logger.warning(f"No se pudo convertir el valor string '{valor_obj}' para {json_key}. Usando 0.")
+                        elif valor_obj is not None:
+                             logger.warning(f"Tipo inesperado para el valor de {json_key}: {type(valor_obj)}. Usando 0.")
+
+                        # Crear la estructura {'porcentaje': valor_numerico}
+                        # El dashboard espera leer esta estructura desde clasificacion_consolidada
+                        consolidada_data[db_key] = {'porcentaje': porcentaje}
+                        logger.debug(f"  -> Consolidada[{db_key}] = {consolidada_data[db_key]}")
+
+                    # Convertir el diccionario consolidado a JSON y añadirlo
+                    if consolidada_data:
+                        datos_clasificacion['clasificacion_consolidada'] = json.dumps(consolidada_data)
+                        logger.info(f"JSON de clasificación consolidada generado: {datos_clasificacion['clasificacion_consolidada']}")
+                    else:
+                        logger.warning("No se generaron datos para clasificación consolidada (posiblemente JSON 'auto' vacío o con claves inesperadas).")
+                    # --- FIN: Generar datos para clasificacion_consolidada ---
+
+
+                    # Obtener porcentajes o cantidades según lo que esté disponible (Código anterior para columnas individuales, se puede mantener o eliminar si clasificacion_consolidada es suficiente)
+                    # Mantener por ahora como respaldo o si se usan estas columnas individuales en otro lugar.
                     try:
-                        # Verificar si es un diccionario con estructura completa
+                        # Extraer el valor numérico del diccionario consolidado recién creado
                         datos_clasificacion.update({
-                            'verde_automatico': auto.get('verdes', {}).get('porcentaje', 0) if isinstance(auto.get('verdes'), dict) else auto.get('verdes', 0),
-                            'sobremaduro_automatico': auto.get('sobremaduros', {}).get('porcentaje', 0) if isinstance(auto.get('sobremaduros'), dict) else auto.get('sobremaduros', 0),
-                            'danio_corona_automatico': auto.get('danio_corona', {}).get('porcentaje', 0) if isinstance(auto.get('danio_corona'), dict) else auto.get('danio_corona', 0),
-                            'pendunculo_largo_automatico': auto.get('pendunculo_largo', {}).get('porcentaje', 0) if isinstance(auto.get('pendunculo_largo'), dict) else auto.get('pendunculo_largo', 0),
-                            'podrido_automatico': auto.get('podridos', {}).get('porcentaje', 0) if isinstance(auto.get('podridos'), dict) else auto.get('podridos', 0)
+                            'verde_automatico': consolidada_data.get('verde', {}).get('porcentaje', 0.0),
+                            'sobremaduro_automatico': consolidada_data.get('sobremaduro', {}).get('porcentaje', 0.0),
+                            'danio_corona_automatico': consolidada_data.get('danio_corona', {}).get('porcentaje', 0.0),
+                            'pendunculo_largo_automatico': consolidada_data.get('pendunculo_largo', {}).get('porcentaje', 0.0),
+                            'podrido_automatico': consolidada_data.get('podrido', {}).get('porcentaje', 0.0)
                         })
+                        logger.info("Columnas _automatico individuales actualizadas desde datos consolidados.")
                     except Exception as e:
-                        logger.error(f"Error procesando clasificación automática: {str(e)}")
-                
+                        logger.error(f"Error actualizando columnas _automatico individuales: {str(e)}")
+
+                else:
+                     logger.warning("No se encontró la clave 'clasificacion_automatica' en el archivo JSON leído.") # Log si falta la clave
+
                 # Guardar datos en la base de datos usando store_clasificacion
                 from db_operations import store_clasificacion
                 logger.info(f"Calling store_clasificacion from guardar_clasificacion_final with: {datos_clasificacion}")
+                # --- INICIO: Log detallado ANTES de guardar ---
+                try:
+                    # Intentar loguear como JSON para mejor legibilidad
+                    datos_log = json.dumps(datos_clasificacion, indent=2, ensure_ascii=False, default=str)
+                    logger.info(f"[GUARDAR_FINAL PRE-SAVE] Datos a enviar a store_clasificacion:\n{datos_log}")
+                except Exception as log_err:
+                    # Fallback si json.dumps falla
+                    logger.error(f"[GUARDAR_FINAL PRE-SAVE] Error al dumpear datos_clasificacion para log: {log_err}")
+                    logger.info(f"[GUARDAR_FINAL PRE-SAVE] Datos a enviar (raw): {datos_clasificacion}")
+                # --- FIN: Log detallado ANTES de guardar ---
                 success = store_clasificacion(datos_clasificacion, clasificacion_data.get('fotos', []))
                 logger.info(f"Datos de clasificación guardados en la base de datos para {codigo_guia}: {'Éxito' if success else 'Falló'}")
         

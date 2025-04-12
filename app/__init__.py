@@ -191,6 +191,8 @@ def register_blueprints(app):
     from app.blueprints.admin import bp as admin_bp
     from app.blueprints.api import bp as api_bp
     from app.blueprints.misc import bp as misc_bp
+    # Importar el nuevo blueprint de presupuesto
+    from app.blueprints.presupuesto import bp as presupuesto_bp
     
     # Registrar blueprints con sus prefijos de URL
     app.register_blueprint(entrada_bp)
@@ -201,6 +203,8 @@ def register_blueprints(app):
     app.register_blueprint(admin_bp, url_prefix='/admin')
     app.register_blueprint(api_bp, url_prefix='/api')
     app.register_blueprint(misc_bp)
+    # Registrar el blueprint de presupuesto
+    app.register_blueprint(presupuesto_bp) # Ya tiene el prefijo definido en su __init__.py
     
     logger.info("Todos los blueprints registrados correctamente.")
 

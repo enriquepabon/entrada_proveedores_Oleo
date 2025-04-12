@@ -7,12 +7,17 @@ import sqlite3
 import os
 import logging
 import json
-from datetime import datetime
+from datetime import datetime, time
 from flask import current_app
+import pytz
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Define timezones
+UTC = pytz.utc
+BOGOTA_TZ = pytz.timezone('America/Bogota')
 
 #-----------------------
 # Operaciones para Pesajes Bruto
@@ -350,8 +355,18 @@ def store_clasificacion(clasificacion_data, fotos=None):
                 set_clause = ', '.join([f"{k} = ?" for k in update_fields.keys()])
                 valores = list(update_fields.values()) + [codigo_guia]
                 update_query = f"UPDATE clasificaciones SET {set_clause} WHERE codigo_guia = ?"
-                logger.info(f"STORE_CLASIF: Ejecutando UPDATE: {update_query}")
-                logger.debug(f"STORE_CLASIF: Valores para UPDATE: {valores}")
+                logger.info(f"STORE_CLASIF: Preparando UPDATE para {codigo_guia}.")
+                # --- INICIO: Logs detallados de UPDATE ---
+                logger.info(f"STORE_CLASIF [UPDATE SQL]: {update_query}")
+                # Loguear parámetros con cuidado, especialmente si pueden ser muy largos
+                try:
+                    # Intentar loguear como JSON para valores largos
+                    params_log = json.dumps(valores, indent=2, ensure_ascii=False, default=str)
+                    logger.info(f"STORE_CLASIF [UPDATE PARAMS]:\n{params_log}")
+                except Exception as log_err:
+                    logger.error(f"STORE_CLASIF [UPDATE PARAMS] Error al dumpear params para log: {log_err}")
+                    logger.info(f"STORE_CLASIF [UPDATE PARAMS] (raw - puede estar truncado): {valores}")
+                # --- FIN: Logs detallados de UPDATE ---
                 cursor.execute(update_query, valores)
                 logger.info(f"STORE_CLASIF: UPDATE ejecutado para {codigo_guia}.")
         else:
@@ -460,18 +475,39 @@ def get_clasificaciones(filtros=None):
         if filtros:
             conditions = []
             
-            if filtros.get('fecha_desde') and filtros.get('fecha_hasta'):
+            if filtros.get('fecha_desde'):
                 try:
-                    # No reformatear, usar YYYY-MM-DD directamente
-                    fecha_desde = filtros['fecha_desde'] + ' 00:00:00'
-                    fecha_hasta = filtros['fecha_hasta'] + ' 23:59:59'
+                    fecha_desde_str = filtros['fecha_desde'] # YYYY-MM-DD
+                    # Convertir a UTC desde Bogotá
+                    naive_dt_desde = datetime.strptime(fecha_desde_str, '%Y-%m-%d')
+                    naive_dt_desde = datetime.combine(naive_dt_desde.date(), time.min)
+                    bogota_dt_desde = BOGOTA_TZ.localize(naive_dt_desde)
+                    utc_dt_desde = bogota_dt_desde.astimezone(UTC)
+                    utc_timestamp_desde = utc_dt_desde.strftime('%Y-%m-%d %H:%M:%S')
                     
-                    # Usar timestamp_clasificacion_utc para el rango
-                    conditions.append("timestamp_clasificacion_utc BETWEEN ? AND ?")
-                    params.extend([fecha_desde, fecha_hasta])
-                except Exception as e: 
-                    logger.warning(f"Error processing date filter values: {e}. Skipping date filter.")
+                    conditions.append("timestamp_clasificacion_utc >= ?")
+                    params.append(utc_timestamp_desde)
+                    logger.info(f"[Clasificaciones] Filtro fecha_desde (Bogotá: {fecha_desde_str} 00:00:00) -> UTC: {utc_timestamp_desde}")
+                except (ValueError, TypeError) as e:
+                     logger.warning(f"[Clasificaciones] Error procesando fecha_desde '{filters['fecha_desde']}': {e}. Saltando filtro.")
                 
+            if filtros.get('fecha_hasta'):
+                try:
+                    fecha_hasta_str = filtros['fecha_hasta'] # YYYY-MM-DD
+                    # Convertir a UTC desde Bogotá
+                    naive_dt_hasta = datetime.strptime(fecha_hasta_str, '%Y-%m-%d')
+                    naive_dt_hasta = datetime.combine(naive_dt_hasta.date(), time.max.replace(microsecond=0))
+                    bogota_dt_hasta = BOGOTA_TZ.localize(naive_dt_hasta)
+                    utc_dt_hasta = bogota_dt_hasta.astimezone(UTC)
+                    utc_timestamp_hasta = utc_dt_hasta.strftime('%Y-%m-%d %H:%M:%S')
+                    
+                    conditions.append("timestamp_clasificacion_utc <= ?")
+                    params.append(utc_timestamp_hasta)
+                    logger.info(f"[Clasificaciones] Filtro fecha_hasta (Bogotá: {fecha_hasta_str} 23:59:59) -> UTC: {utc_timestamp_hasta}")
+                except (ValueError, TypeError) as e:
+                     logger.warning(f"[Clasificaciones] Error procesando fecha_hasta '{filters['fecha_hasta']}': {e}. Saltando filtro.")
+            
+            # Mantener los otros filtros como estaban
             if filtros.get('codigo_proveedor'):
                 conditions.append("codigo_proveedor LIKE ?")
                 params.append(f"%{filtros['codigo_proveedor']}%")
@@ -678,17 +714,38 @@ def get_pesajes_neto(filtros=None):
         if filtros:
             conditions = []
             
-            if filtros.get('fecha_desde') and filtros.get('fecha_hasta'):
+            # Convertir fechas de filtro de Bogotá a UTC
+            if filtros.get('fecha_desde'):
                 try:
-                    # No reformatear, usar YYYY-MM-DD directamente
-                    fecha_desde = filtros['fecha_desde'] + ' 00:00:00'
-                    fecha_hasta = filtros['fecha_hasta'] + ' 23:59:59'
+                    fecha_desde_str = filtros['fecha_desde'] # YYYY-MM-DD
+                    naive_dt_desde = datetime.strptime(fecha_desde_str, '%Y-%m-%d')
+                    naive_dt_desde = datetime.combine(naive_dt_desde.date(), time.min)
+                    bogota_dt_desde = BOGOTA_TZ.localize(naive_dt_desde)
+                    utc_dt_desde = bogota_dt_desde.astimezone(UTC)
+                    utc_timestamp_desde = utc_dt_desde.strftime('%Y-%m-%d %H:%M:%S')
                     
-                    # Usar timestamp_pesaje_neto_utc para el rango
-                    conditions.append("timestamp_pesaje_neto_utc BETWEEN ? AND ?")
-                    params.extend([fecha_desde, fecha_hasta])
-                except Exception as e: 
-                    logger.warning(f"Error processing date filter values: {e}. Skipping date filter.")
+                    conditions.append("timestamp_pesaje_neto_utc >= ?")
+                    params.append(utc_timestamp_desde)
+                    logger.info(f"[Pesajes Neto] Filtro fecha_desde (Bogotá: {fecha_desde_str} 00:00:00) -> UTC: {utc_timestamp_desde}")
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"[Pesajes Neto] Error procesando fecha_desde '{filters['fecha_desde']}': {e}. Saltando filtro.")
+
+            if filtros.get('fecha_hasta'):
+                try:
+                    fecha_hasta_str = filtros['fecha_hasta'] # YYYY-MM-DD
+                    naive_dt_hasta = datetime.strptime(fecha_hasta_str, '%Y-%m-%d')
+                    naive_dt_hasta = datetime.combine(naive_dt_hasta.date(), time.max.replace(microsecond=0))
+                    bogota_dt_hasta = BOGOTA_TZ.localize(naive_dt_hasta)
+                    utc_dt_hasta = bogota_dt_hasta.astimezone(UTC)
+                    utc_timestamp_hasta = utc_dt_hasta.strftime('%Y-%m-%d %H:%M:%S')
+                    
+                    conditions.append("timestamp_pesaje_neto_utc <= ?")
+                    params.append(utc_timestamp_hasta)
+                    logger.info(f"[Pesajes Neto] Filtro fecha_hasta (Bogotá: {fecha_hasta_str} 23:59:59) -> UTC: {utc_timestamp_hasta}")
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"[Pesajes Neto] Error procesando fecha_hasta '{filters['fecha_hasta']}': {e}. Saltando filtro.")
+
+            # Otros filtros
             if filtros.get('codigo_guia'):
                 conditions.append("codigo_guia LIKE ?")
                 params.append(f"%{filtros['codigo_guia']}%")
@@ -698,6 +755,7 @@ def get_pesajes_neto(filtros=None):
             if filtros.get('nombre_proveedor'):
                 conditions.append("nombre_proveedor LIKE ?")
                 params.append(f"%{filtros['nombre_proveedor']}%")
+            
             if conditions:
                 query += " WHERE " + " AND ".join(conditions)
                 

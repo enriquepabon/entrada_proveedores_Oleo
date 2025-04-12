@@ -218,13 +218,23 @@
                 </div>
             </div>
         </div>
-        <!-- Peso Neto Fruta (Antes Peso Neto Total) -->
+        <!-- Peso Neto Fruta y Presupuesto -->
         <div class="col-md-3">
             <div class="dashboard-card text-center">
                 <h5><i class="fas fa-balance-scale"></i> Peso Neto Fruta</h5>
-                <div class="kpi-value" id="kpi-peso-neto-valor">0.0 t</div>
-                <div class="kpi-label">
-                    <span class="kpi-trend-up"><i class="fas fa-arrow-up"></i> 8%</span> vs. ayer
+                <div class="row">
+                    <div class="col-6 border-end">
+                        <div class="kpi-label mb-0">Real</div>
+                        <div class="kpi-value" id="kpi-peso-neto-valor" style="font-size: 1.6rem;">0.0 t</div> <!-- Tamaño ajustado -->
+                    </div>
+                    <div class="col-6">
+                        <div class="kpi-label mb-0">Ppto.</div>
+                        <div class="kpi-value text-danger" id="kpi-peso-presupuesto-valor" style="font-size: 1.6rem;">0.0 t</div> <!-- Nuevo ID y color -->
+                    </div>
+                </div>
+                 <!-- Puedes mantener o ajustar la línea de tendencia si es relevante -->
+                <div class="kpi-label mt-2"> 
+                    <span class="kpi-trend-up"><i class="fas fa-arrow-up"></i> 8%</span> vs. ayer (Real)
                 </div>
             </div>
         </div>
@@ -713,6 +723,35 @@
         </div>
     </div>
 </div>
+
+<!-- Card para Carga de Presupuesto (Insertado aquí) -->
+<div class="row mt-4">
+    <div class="col-lg-6 mb-4">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Cargar Presupuesto Mensual</h6>
+            </div>
+            <div class="card-body">
+                <p>Selecciona el archivo Excel (.xlsx) o CSV (.csv) con el presupuesto:</p>
+                <!-- Formulario de carga -->
+                <form id="uploadBudgetForm" method="POST" action="{{ url_for('presupuesto.upload_budget') }}" enctype="multipart/form-data"> <!-- Asegúrate que es upload_budget -->
+                    <div class="input-group mb-3">
+                        <input type="file" class="form-control" id="budgetFile" name="file" accept=".xlsx, .csv" required> <!-- Cambiado name a "file" -->
+                    </div>
+                    <button type="submit" class="btn btn-success btn-icon-split">
+                        <span class="icon text-white-50">
+                            <i class="fas fa-upload"></i>
+                        </span>
+                        <span class="text">Subir Archivo</span>
+                    </button>
+                </form>
+                <!-- Área para mostrar mensajes de éxito/error (opcional, requiere JS) -->
+                <div id="uploadStatus" class="mt-3"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Fin Card Carga de Presupuesto -->
 {% endblock %}
 
 {% block scripts %}
@@ -984,29 +1023,60 @@ function cargarGraficos() {
         window.pesoNetoDiarioChartInstance.destroy();
     }
     window.pesoNetoDiarioChartInstance = new Chart(ctxPesoNeto, {
-        type: 'line',
+        type: 'bar', // <<-- CAMBIADO A 'bar'
         data: {
             labels: [], // Inicialmente vacío
-            datasets: [{
-                label: 'Peso Neto (t)',
-                data: [], // Inicialmente vacío
-                backgroundColor: 'rgba(40, 167, 69, 0.2)',
-                borderColor: 'rgba(40, 167, 69, 1)',
-                borderWidth: 2,
-                tension: 0.2,
-                fill: true
-            }]
+            datasets: [
+                 // Dataset Real (Peso Neto) - Asegurar que esté primero si se quiere ese orden
+                {
+                    label: 'Peso Neto (t)',
+                    data: [], // Inicialmente vacío
+                    backgroundColor: 'rgba(40, 167, 69, 0.7)', // Verde más sólido para barra
+                    borderColor: 'rgba(40, 167, 69, 1)',
+                    borderWidth: 1
+                    // No necesita tension, fill
+                },
+                // Dataset Presupuesto
+                {
+                    label: 'Presupuesto (t)',
+                    data: [], // Inicialmente vacío
+                    backgroundColor: 'rgba(255, 99, 132, 0.7)', // Rojo más sólido para barra
+                    borderColor: 'rgba(255, 99, 132, 1)',
+                    borderWidth: 1
+                    // No necesita tension, fill, borderDash para barras
+                }
+            ]
         },
         options: {
             responsive: true,
             plugins: {
                 legend: {
-                    display: false
+                    position: 'bottom' // Mantener leyenda abajo
+                },
+                tooltip: { // Tooltips para barras
+                    mode: 'index', // Mostrar tooltip para ambas barras al pasar sobre el índice (fecha)
+                    intersect: false
+                },
+                 // Datalabels para barras (opcional, puede saturar)
+                datalabels: {
+                   display: true, // Activado para mostrar valores
+                   anchor: 'end', // Posicionar en el extremo superior de la barra
+                   align: 'top',  // Alinear arriba
+                   formatter: (value) => value ? parseFloat(value).toFixed(0) : '', // Formatear a 0 decimales
+                   color: '#333' 
                 }
             },
             scales: {
-                y: {
-                    beginAtZero: false
+                x: { // Eje X (fechas)
+                   stacked: false // Barras agrupadas, no apiladas
+                },
+                y: { // Eje Y (toneladas)
+                    beginAtZero: true, // Empezar desde cero es bueno para barras
+                    stacked: false,
+                     title: {
+                         display: true,
+                         text: 'Toneladas (t)'
+                     }
                 }
             }
         }
@@ -1322,11 +1392,10 @@ function actualizarDashboardData() {
                 console.warn("La respuesta de la API no contiene 'total_racimos_filtrados'.");
             }
 
-            // Actualizar KPI Peso Neto Total
+            // Actualizar KPI Peso Neto Total (Real)
             if (data.peso_neto_total_filtrado !== undefined) {
                 const kpiPesoNetoElement = document.querySelector('#kpi-peso-neto-valor');
                 if (kpiPesoNetoElement) {
-                    // Formatear el valor a toneladas con un decimal
                     const pesoEnToneladas = (data.peso_neto_total_filtrado / 1000).toFixed(1);
                     kpiPesoNetoElement.textContent = `${pesoEnToneladas} t`;
                 } else {
@@ -1341,6 +1410,24 @@ function actualizarDashboardData() {
             } else {
                  console.warn("La respuesta de la API no contiene 'peso_neto_total_filtrado'.");
             }
+
+            // --- NUEVO: Actualizar KPI Presupuesto Total ---
+            if (data.peso_presupuesto_total_filtrado !== undefined) {
+                const kpiPesoPresupuestoElement = document.querySelector('#kpi-peso-presupuesto-valor');
+                if (kpiPesoPresupuestoElement) {
+                    // Asumiendo que viene en kg como el peso real, convertir a toneladas
+                    const presupuestoEnToneladas = (data.peso_presupuesto_total_filtrado / 1000).toFixed(1);
+                    kpiPesoPresupuestoElement.textContent = `${presupuestoEnToneladas} t`;
+                } else {
+                     console.warn("Elemento no encontrado para KPI Peso Presupuesto Total (#kpi-peso-presupuesto-valor).");
+                }
+            } else {
+                console.warn("La respuesta API no contiene 'peso_presupuesto_total_filtrado'.");
+                // Opcional: resetear si falta
+                const kpiPesoPresupuestoElement = document.querySelector('#kpi-peso-presupuesto-valor');
+                if (kpiPesoPresupuestoElement) kpiPesoPresupuestoElement.textContent = '0.0 t';
+            }
+            // --- FIN NUEVO ---
 
             // Actualizar KPIs de Calidad Manual
             if (data.calidad_promedios_manual) {
@@ -1474,14 +1561,87 @@ function actualizarDashboardData() {
             }
 
             // Actualizar Gráfico Peso Neto Diario
-            if (data.peso_neto_diario_chart_data) {
-                if (window.pesoNetoDiarioChartInstance) {
-                    window.pesoNetoDiarioChartInstance.data.labels = data.peso_neto_diario_chart_data.labels;
-                    window.pesoNetoDiarioChartInstance.data.datasets[0].data = data.peso_neto_diario_chart_data.data;
-                    window.pesoNetoDiarioChartInstance.update();
-                } else {
-                    console.error("La instancia del gráfico de peso neto diario no está lista.");
+            if (data.peso_neto_diario_chart_data && window.pesoNetoDiarioChartInstance) {
+                const pesoNetoChart = window.pesoNetoDiarioChartInstance;
+                const labels = data.peso_neto_diario_chart_data.labels; // Ej: ['01/04', '02/04', ...]
+                const pesoNetoRealData = data.peso_neto_diario_chart_data.data; // Datos reales en toneladas
+
+                pesoNetoChart.data.labels = labels;
+
+                // --- Procesar y añadir/actualizar datos de presupuesto ---
+                const datosPresupuesto = data.datos_presupuesto || {}; // { 'YYYY-MM-DD': toneladas, ... }
+                const pesoPresupuestoData = [];
+
+                // Mapear fechas del label (DD/MM) a YYYY-MM-DD para buscar en presupuesto
+                // Obtener el año del rango de fechas actual para construir la clave YYYY-MM-DD
+                try { // Envolver en try-catch por si daterangepicker no está listo
+                    const dateRangePicker = $('#dateRange').data('daterangepicker');
+                    // Usar el año de la fecha de inicio como referencia
+                    // ¡Importante! Esto asume que el rango está dentro del mismo año.
+                    // Si el rango puede cruzar años, se necesitaría una lógica más compleja.
+                    const year = dateRangePicker.startDate.year(); 
+
+                    labels.forEach(label => {
+                        const [day, month] = label.split('/');
+                        if (day && month) {
+                             // Construir la clave YYYY-MM-DD
+                            const fecha_key = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`; 
+                            // Buscar el valor en los datos de presupuesto, default a null si no existe
+                            const toneladasPresupuestadas = datosPresupuesto[fecha_key] !== undefined ? datosPresupuesto[fecha_key] : null; 
+                            pesoPresupuestoData.push(toneladasPresupuestadas);
+                        } else {
+                            pesoPresupuestoData.push(null); // Añadir null si la label no tiene formato DD/MM
+                            console.warn(`Label de gráfico inválida encontrada: ${label}`);
+                        }
+                    });
+                    console.log("Datos de presupuesto mapeados al gráfico:", pesoPresupuestoData);
+                } catch (e) {
+                    console.error("Error obteniendo año del DateRangePicker o procesando labels:", e);
+                     // Llenar con nulls si hay error para evitar romper el gráfico
+                    pesoPresupuestoData.fill(null, 0, labels.length); 
                 }
+
+                // Buscar si ya existe el dataset de presupuesto
+                const presupuestoDatasetIndex = pesoNetoChart.data.datasets.findIndex(dataset => dataset.label === 'Presupuesto (t)');
+
+                if (presupuestoDatasetIndex > -1) {
+                    // Actualizar dataset existente
+                    pesoNetoChart.data.datasets[presupuestoDatasetIndex].data = pesoPresupuestoData;
+                     console.log("Dataset de presupuesto actualizado.");
+                } else {
+                    // Añadir nuevo dataset para el presupuesto
+                    pesoNetoChart.data.datasets.push({
+                        label: 'Presupuesto (t)',
+                        data: pesoPresupuestoData,
+                        borderColor: 'rgba(255, 99, 132, 1)', // Color rojo
+                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                        borderWidth: 2,
+                        tension: 0.2,
+                        fill: false,
+                        borderDash: [5, 5] // Línea punteada
+                    });
+                    console.log("Dataset de presupuesto añadido.");
+                }
+
+                // Asegurar que el dataset de Peso Neto Real esté correcto (generalmente el índice 0)
+                if (pesoNetoChart.data.datasets.length > 0 && pesoNetoChart.data.datasets[0].label === 'Peso Neto (t)') {
+                    pesoNetoChart.data.datasets[0].data = pesoNetoRealData;
+                } else {
+                    console.warn("Dataset 'Peso Neto (t)' no encontrado en el índice 0. Buscando...");
+                    // Buscar y actualizar si no está en el índice 0
+                    const realDatasetIndex = pesoNetoChart.data.datasets.findIndex(dataset => dataset.label === 'Peso Neto (t)');
+                     if(realDatasetIndex > -1) {
+                         pesoNetoChart.data.datasets[realDatasetIndex].data = pesoNetoRealData;
+                     } else {
+                         console.error("No se encontró el dataset 'Peso Neto (t)' para actualizar los datos reales.");
+                          // Considerar añadirlo si realmente falta, aunque no debería
+                     }
+                }
+                // --- FIN Procesar datos de presupuesto ---
+
+                pesoNetoChart.update(); // Actualizar el gráfico
+            } else {
+                console.error("La instancia del gráfico de peso neto diario no está lista o faltan datos (peso_neto_diario_chart_data).");
             }
 
             // Actualizar Gráfico Distribución Calidad Manual (Dona)

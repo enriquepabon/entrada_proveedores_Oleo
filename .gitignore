@@ -1,9 +1,97 @@
-api_keys.env
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Entorno Virtual
+venv/
+env/
+ENV/
+.env
+.venv
+env.bak/
+venv.bak/
+
+# Archivos de configuración y claves
+*.env
+api_keys.env
+config.local.py
+instance/
+
+# Base de datos
 *.db
+*.sqlite
+*.sqlite3
+
+# Archivos generados
 static/uploads/*
 static/pdfs/*
 static/qr/*
-.env
+static/capturas_revision/*
+static/excels/*
+static/images/*
+!static/images/default/*
+static/guias/*
+
+# Logs y archivos temporales
 logs/
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+
+# Archivos de respaldo
+*~
+*.bak
+*.swp
+*.swo
+*_backup*
+*.old
+
+# Archivos JSON de datos
+*.json
+!package.json
+!package-lock.json
+
+# Mantener directorios vacíos con .gitkeep
+!static/uploads/.gitkeep
+!static/pdfs/.gitkeep
+!static/qr/.gitkeep
+!static/images/.gitkeep
+!static/guias/.gitkeep
+!static/excels/.gitkeep
+
+# IDE y editores
+.idea/
+.vscode/
+*.sublime-workspace
+*.sublime-project
+.project
+.pydevproject
+.settings/
+*.code-workspace
+
+# Archivos específicos del sistema
+.DS_Store
+.directory
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

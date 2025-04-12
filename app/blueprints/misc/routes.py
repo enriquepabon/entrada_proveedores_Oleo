@@ -5,13 +5,12 @@ from flask import (
 import os
 import logging
 import traceback
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 import json
 import glob
 from werkzeug.utils import secure_filename
 from app.blueprints.misc import bp
-from app.utils.common import CommonUtils as Utils
-from app.utils.common import standardize_template_data
+from app.utils.common import CommonUtils as Utils, standardize_template_data, get_estado_guia, UTC, BOGOTA_TZ
 import time
 import sqlite3
 import base64
@@ -20,6 +19,11 @@ from app.utils.image_processing import process_plate_image
 from app.utils.common import get_estado_guia
 import pytz
 from app.blueprints.clasificacion.routes import get_clasificacion_by_codigo_guia
+# Importar la nueva función de operaciones de presupuesto
+from app.utils.db_budget_operations import obtener_datos_presupuesto
+# Importar funciones de db_operations y db_utils desde la raíz
+from db_operations import get_clasificaciones, get_pesajes_neto, get_pesaje_bruto_by_codigo_guia
+from db_utils import get_entry_records # Corregido para buscar en la raíz
 
 # Database path (assuming it's at the workspace root)
 DB_PATH = 'tiquetes.db'
@@ -228,21 +232,6 @@ def reprocess_plate():
 
 
 @bp.route('/revalidation_results')
-def revalidation_results():
-    """
-    Renderiza la página de resultados de revalidación
-    """
-    # Inicializar Utils dentro del contexto de la aplicación
-    utils = Utils(current_app)
-    
-    try:
-        return render_template('revalidation_results.html')
-    except Exception as e:
-        logger.error(f"Error en revalidation_results: {str(e)}")
-        return render_template('error.html', message="Error al mostrar resultados de revalidación"), 500
-
-
-@bp.route('/revalidation_success')
 def revalidation_success():
     """
     Renderiza la página de éxito de revalidación
@@ -351,7 +340,6 @@ def ver_resultados_pesaje(codigo_guia):
         import db_utils
         
         # Buscar el registro de pesaje por código de guía
-        from db_operations import get_pesaje_bruto_by_codigo_guia
         pesaje_data = get_pesaje_bruto_by_codigo_guia(codigo_guia)
         
         if not pesaje_data:
@@ -1833,1011 +1821,425 @@ def dashboard():
         flash(f"Error al cargar el dashboard: {str(e)}", "danger")
         return redirect(url_for('entrada.home'))
 
-@bp.route('/api/dashboard/stats')
+@bp.route('/api/dashboard/stats', methods=['GET'])
 def dashboard_stats():
-    """
-    API para obtener estadísticas básicas para el dashboard, aceptando filtros.
-    Filtros soportados (query parameters):
-    - startDate (YYYY-MM-DD)
-    - endDate (YYYY-MM-DD)
-    - proveedores (lista separada por comas de códigos de proveedor)
-    - estado (valor del estado)
-    """
-    # Initialize ALL crucial response variables FIRST with defaults, BEFORE the main try block
-    calidad_promedios = {
+    logger.info("API endpoint /api/dashboard/stats called")
+    
+    # Definir zonas horarias
+    # UTC = pytz.utc <-- Eliminado
+    # BOGOTA_TZ = pytz.timezone('America/Bogota') <-- Eliminado
+
+    # Inicializar respuestas
+    response = {
+        'calidad_promedios': {
         'Verde': 0, 'Sobremaduro': 0, 'Daño Corona': 0,
         'Pendunculo Largo': 0, 'Podrido': 0
-    }
-    calidad_promedios_auto = {
+        },
+        'calidad_promedios_auto': {
         'Verde': 0, 'Sobremaduro': 0, 'Daño Corona': 0,
         'Pendunculo Largo': 0, 'Podrido': 0
-    }
-    registros_filtrados_count = 0
-    total_racimos = 0
-    peso_neto_total = 0
-    peso_neto_pepa = 0
-    pesajes_pendientes = 0
-    clasificaciones_pendientes = 0
-    peso_neto_hoy = 0
-    registros_diarios_chart_data = {'labels': [], 'data': []}
-    peso_neto_diario_chart_data = {'labels': [], 'data': []}
-    racimos_peso_promedio_chart_data = {'labels': [], 'data_racimos': [], 'data_peso_promedio': []}
-    ultimos_registros_tabla = []
-    tiempos_promedio_proceso = {
+        },
+        'registros_filtrados_count': 0,
+        'total_racimos': 0,
+        'peso_neto_total': 0,
+        'peso_neto_pepa': 0,
+        'pesajes_pendientes': 0,
+        'clasificaciones_pendientes': 0,
+        'peso_neto_hoy': 0,
+        'registros_diarios_chart_data': {'labels': [], 'data': []},
+        'peso_neto_diario_chart_data': {'labels': [], 'data': []},
+        'racimos_peso_promedio_chart_data': {'labels': [], 'data_racimos': [], 'data_peso_promedio': []},
+        'ultimos_registros_tabla': [],
+        'tiempos_promedio_proceso': {
         'entrada_a_bruto': 0.0, 'bruto_a_clasif': 0.0, 'clasif_a_neto': 0.0,
         'neto_a_salida': 0.0, 'total': 0.0
+        },
+        'top_5_peso_neto_tabla': [],
+        'alertas_calidad_tabla': []
     }
-    top_5_peso_neto_tabla = []
-    alertas_calidad_tabla = []
 
     try:
         # Obtener parámetros de filtro de la solicitud
         start_date_str = request.args.get('startDate')
         end_date_str = request.args.get('endDate')
-        proveedores_str = request.args.get('proveedores') # Códigos de proveedor
-        estado_filter = request.args.get('estado')
+        proveedores_str = request.args.get('proveedores') # Códigos de proveedor separados por coma
+        estado_filtro = request.args.get('estado') # 'activo', 'completado', o None
 
-        logger.info(f"Filtros recibidos - Start: {start_date_str}, End: {end_date_str}, Proveedores: {proveedores_str}, Estado: {estado_filter}")
+        logger.debug(f"Filtros recibidos: startDate={start_date_str}, endDate={end_date_str}, proveedores={proveedores_str}, estado={estado_filtro}")
 
-        # Convertir fechas si existen
-        start_date = None
-        end_date = None
+        # --- Validación y conversión INICIAL de fechas ---
+        # Convertir las strings de fecha del filtro a objetos datetime (naive)
+        # La conversión a UTC para la consulta se hace en las funciones get_...
         try:
-            if start_date_str:
-                start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
-            if end_date_str:
-                # Añadir un día para que la comparación sea inclusiva hasta el final del día
-                end_date = datetime.strptime(end_date_str, '%Y-%m-%d') + timedelta(days=1)
-        except ValueError:
-            logger.warning("Formato de fecha inválido recibido.")
-            # Considerar devolver un error o usar valores por defecto
-            start_date = None
-            end_date = None
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+        except (ValueError, TypeError) as e:
+            logger.error(f"Fechas de filtro inválidas: {start_date_str}, {end_date_str}. Usando últimos 7 días. Error: {e}")
+            end_date = datetime.now(BOGOTA_TZ).date()
+            start_date = end_date - timedelta(days=6)
+            start_date_str = start_date.strftime('%Y-%m-%d')
+            end_date_str = end_date.strftime('%Y-%m-%d')
 
-        # Convertir lista de proveedores (códigos)
-        proveedores_list = []
+
+        # Preparar lista de códigos de proveedor
+        lista_codigos_proveedor = []
         if proveedores_str:
-            proveedores_list = [p.strip() for p in proveedores_str.split(',') if p.strip()]
+            lista_codigos_proveedor = [p.strip() for p in proveedores_str.split(',') if p.strip()]
+            logger.debug(f"Filtrando por códigos de proveedor: {lista_codigos_proveedor}")
 
-        # Obtener todos los registros usando db_utils
-        import db_utils
-        all_records = db_utils.get_entry_records()
-        logger.info(f"Total de registros obtenidos de DB: {len(all_records)}")
-
-        # Filtrar registros en Python
-        filtered_records = []
-        for record in all_records:
-            # 1. Filtrar por fecha
-            try:
-                # Intentar parsear la fecha del registro (asumiendo DD/MM/YYYY)
-                record_date_str = record.get('fecha_registro', '01/01/1970')
-                record_date = datetime.strptime(record_date_str, '%d/%m/%Y')
-
-                if start_date and record_date < start_date:
-                    continue # Saltar si es anterior a la fecha de inicio
-                if end_date and record_date >= end_date:
-                     # Saltar si es igual o posterior a la fecha de fin (ya que sumamos 1 día a end_date)
-                    continue
-            except ValueError:
-                 logger.warning(f"Omitiendo registro {record.get('codigo_guia')} por fecha inválida: {record_date_str}")
-                 continue # Saltar si la fecha del registro no es válida
-
-            # 2. Filtrar por proveedor (código)
-            if proveedores_list:
-                codigo_proveedor = record.get('codigo_proveedor')
-                if not codigo_proveedor or codigo_proveedor not in proveedores_list:
-                    continue # Saltar si no coincide con los proveedores seleccionados
-
-            # 3. Filtrar por estado
-            # Asumiendo que el estado se guarda en la tabla 'entry_records' o se debe obtener de otra forma
-            # Por ahora, este filtro no se aplica si no hay campo 'estado' en entry_records
-            # if estado_filter and estado_filter != "":
-            #     record_estado = record.get('estado') # Ajustar si el campo tiene otro nombre
-            #     if not record_estado or record_estado != estado_filter:
-            #         continue
-
-            # Si pasa todos los filtros, añadir a la lista
-            filtered_records.append(record)
-
-        registros_filtrados_count = len(filtered_records)
-        logger.info(f"Total de registros después de filtrar: {registros_filtrados_count}")
-
-        # Calcular suma de racimos de los registros filtrados
-        total_racimos = 0
-        for record in filtered_records:
-            try:
-                # Intentar convertir a entero, manejar 'N/A' o no numéricos
-                racimos_str = record.get('cantidad_racimos', '0')
-                if isinstance(racimos_str, str) and racimos_str.isdigit():
-                     total_racimos += int(racimos_str)
-                elif isinstance(racimos_str, (int, float)): # Si ya es numérico
-                     total_racimos += int(racimos_str)
-                # Ignorar si no es un número válido
-            except (ValueError, TypeError):
-                logger.warning(f"Valor no numérico para cantidad_racimos en guía {record.get('codigo_guia')}: {record.get('cantidad_racimos')}")
-                continue # Saltar este registro si no se puede convertir
-        logger.info(f"Total de racimos calculados (filtrados): {total_racimos}")
-
-        # Obtener códigos de guía de los registros filtrados
-        codigos_guia_filtrados = [record.get('codigo_guia') for record in filtered_records if record.get('codigo_guia')]
-
-        # --- Calcular Peso Neto Total (filtrado) --- 
-        peso_neto_total = 0
-        if codigos_guia_filtrados:
-            try:
-                conn_peso = sqlite3.connect('tiquetes.db')
-                cursor_peso = conn_peso.cursor()
-                
-                # Crear placeholders para la consulta IN
-                placeholders = ', '.join('?' * len(codigos_guia_filtrados))
-                query = f"SELECT SUM(peso_neto) FROM pesajes_neto WHERE codigo_guia IN ({placeholders})"
-                
-                cursor_peso.execute(query, codigos_guia_filtrados)
-                result = cursor_peso.fetchone()
-                if result and result[0] is not None:
-                    peso_neto_total = result[0]
-                
-                conn_peso.close()
-                logger.info(f"Peso Neto Total calculado (filtrado): {peso_neto_total}")
-            except sqlite3.Error as db_err:
-                 logger.error(f"Error consultando peso_neto: {db_err}")
-        else:
-            logger.info("No hay guías filtradas para calcular el peso neto.")
-
-        # --- Calcular Promedios de Calidad Manual (filtrado) --- 
-        calidad_promedios = {
-            'Verde': 0, 'Sobremaduro': 0, 'Daño Corona': 0, 
-            'Pendunculo Largo': 0, 'Podrido': 0 # Añadido Podrido que faltaba
+        # --- Obtención de Datos (usando funciones que ya convierten filtros) ---
+        # Crear diccionario de filtros para pasar a las funciones
+        db_filtros = {
+            'fecha_desde': start_date_str,
+            'fecha_hasta': end_date_str,
         }
-        count_clasificaciones_validas = 0
-        sumas_calidad = {k: 0 for k in calidad_promedios.keys()}
-        counts_calidad = {k: 0 for k in calidad_promedios.keys()}
-        
-        logger.info(f"Intentando calcular calidad para {len(codigos_guia_filtrados)} guías filtradas.") # Log guías
-        if codigos_guia_filtrados:
-            try:
-                conn_clasif = sqlite3.connect('tiquetes.db')
-                conn_clasif.row_factory = sqlite3.Row # Para acceder por nombre de columna
-                cursor_clasif = conn_clasif.cursor()
-                
-                placeholders = ', '.join('?' * len(codigos_guia_filtrados))
-                query = f"SELECT * FROM clasificaciones WHERE codigo_guia IN ({placeholders})"
-                cursor_clasif.execute(query, codigos_guia_filtrados)
-                clasificaciones_raw = cursor_clasif.fetchall()
-                conn_clasif.close()
-                
-                # Log para ver la fila completa recuperada por Python
-                if clasificaciones_raw:
-                    logger.debug(f"Contenido completo de la primera fila recuperada: {dict(clasificaciones_raw[0])}")
-                else:
-                    logger.debug("No se recuperaron filas de clasificaciones.")
-                
-                logger.info(f"Se encontraron {len(clasificaciones_raw)} registros de clasificación para las guías filtradas.") # Log filas encontradas
-                
-                # Resetear sumas y conteos antes del bucle
-                sumas_calidad = {k: 0 for k in calidad_promedios.keys()}
-                counts_calidad = {k: 0 for k in calidad_promedios.keys()}
-                count_clasificaciones_validas = 0 # Resetear contador
+        if lista_codigos_proveedor:
+             # Asumimos que las funciones de BD esperan 'codigo_proveedor' como filtro
+             # Si esperan una lista, adaptar aquí. Por ahora, filtro simple si es un solo proveedor
+             # o se omite si son varios (dejando que el filtro post-obtención actúe)
+             if len(lista_codigos_proveedor) == 1:
+                 db_filtros['codigo_proveedor'] = lista_codigos_proveedor[0]
+             # Nota: Si las funciones 'get_*' pueden aceptar una lista de códigos,
+             # se debería pasar 'lista_codigos_proveedor' directamente en db_filtros.
 
-                for row_index, row in enumerate(clasificaciones_raw):
-                    clasif_json_str = row['clasificacion_manual']
-                    logger.debug(f"Procesando fila {row_index}, JSON crudo: {clasif_json_str}") # Log JSON crudo
-                    if not clasif_json_str:
-                        logger.debug(f"  -> JSON vacío, saltando fila.")
+
+        # Importar funciones de DB aquí para asegurar contexto de app
+        from db_operations import get_clasificaciones, get_pesajes_neto
+        from db_utils import get_entry_records, get_pesaje_bruto_by_codigo_guia # Asumiendo que get_pesajes_bruto no se usa directamente para stats
+
+        # Obtener todos los registros relevantes DENTRO del rango UTC equivalente a Bogotá
+        # Las funciones get_* ya hacen la conversión UTC internamente para estos filtros
+        logger.info(f"Llamando get_entry_records con filtros: {db_filtros}")
+        all_entry_records = get_entry_records(db_filtros)
+        logger.info(f"Llamando get_clasificaciones con filtros: {db_filtros}")
+        all_clasificaciones = get_clasificaciones(db_filtros)
+        logger.info(f"Llamando get_pesajes_neto con filtros: {db_filtros}")
+        all_pesajes_neto = get_pesajes_neto(db_filtros)
+
+        # --- Filtrado POST-obtención (si es necesario) y combinación de datos ---
+        # Combinar datos y aplicar filtros adicionales (proveedor si eran múltiples, estado)
+
+        # Crear un diccionario para unificar datos por codigo_guia
+        datos_combinados = {}
+
+        # Procesar entry_records
+        for record in all_entry_records:
+            cg = record.get('codigo_guia')
+            if not cg: continue
+            # Aplicar filtro de proveedor si había múltiples seleccionados
+            if lista_codigos_proveedor and len(lista_codigos_proveedor) > 1:
+                 if record.get('codigo_proveedor') not in lista_codigos_proveedor:
+                     continue # Saltar si no coincide
+
+            datos_combinados[cg] = record.copy() # Copiar para no modificar original
+            datos_combinados[cg]['clasificacion'] = {} # Inicializar sub-diccionarios
+            datos_combinados[cg]['pesaje_neto'] = {}
+            datos_combinados[cg]['pesaje_bruto'] = {} # Aunque no llamamos a get_pesajes_bruto, preparamos
+
+        # Procesar clasificaciones
+        for clasif in all_clasificaciones:
+            cg = clasif.get('codigo_guia')
+            if cg in datos_combinados:
+                # Solo añadir si el proveedor coincide (si aplica filtro múltiple)
+                 if lista_codigos_proveedor and len(lista_codigos_proveedor) > 1:
+                    if datos_combinados[cg].get('codigo_proveedor') != clasif.get('codigo_proveedor'):
+                         logger.warning(f"Inconsistencia de proveedor para {cg} entre entry y clasif.")
+                         continue # O manejar como se prefiera
+                 datos_combinados[cg]['clasificacion'] = clasif
+            # Considerar qué hacer si hay una clasificación sin registro de entrada (poco probable)
+
+        # Procesar pesajes neto
+        for p_neto in all_pesajes_neto:
+            cg = p_neto.get('codigo_guia')
+            if cg in datos_combinados:
+                if lista_codigos_proveedor and len(lista_codigos_proveedor) > 1:
+                    if datos_combinados[cg].get('codigo_proveedor') != p_neto.get('codigo_proveedor'):
+                         logger.warning(f"Inconsistencia de proveedor para {cg} entre entry y p.neto.")
+                         continue
+                datos_combinados[cg]['pesaje_neto'] = p_neto
+            # Considerar p.neto sin entrada
+
+        # Obtener datos de pesaje bruto individualmente (necesario para tiempos)
+        # Esto podría ser ineficiente si hay muchas guías
+        for cg in list(datos_combinados.keys()): # Usar list para evitar modificar dict durante iteración
+            pesaje_bruto_data = get_pesaje_bruto_by_codigo_guia(cg)
+            if pesaje_bruto_data:
+                 datos_combinados[cg]['pesaje_bruto'] = pesaje_bruto_data
+
+        # --- Filtrar por estado final ---
+        registros_filtrados_final = []
+        for cg, data in datos_combinados.items():
+            # Determinar estado (podríamos reusar get_estado_guia o una lógica similar aquí)
+            # Por simplicidad, asumimos que necesitamos datos de salida para 'completado'
+            es_completado = bool(data.get('pesaje_neto') and data['pesaje_neto'].get('timestamp_pesaje_neto_utc')) # Simplificado
+            # O usar el estado almacenado si existe
+            estado_actual_db = data.get('estado') or data.get('pesaje_bruto', {}).get('estado') or data.get('pesaje_neto', {}).get('estado')
+
+            if estado_actual_db == 'completado':
+                 es_completado = True
+
+            if estado_filtro == 'completado' and not es_completado:
                         continue
-                    try:
-                        clasif_data = json.loads(clasif_json_str)
-                        logger.debug(f"  -> JSON parseado: {clasif_data}") # Log JSON parseado
-                        # Incrementar conteo general si la clasificación es válida y no vacía
-                        if clasif_data: 
-                             count_clasificaciones_validas += 1
-                        else:
-                             logger.debug("  -> JSON parseado vacío, no se cuenta como válida.")
+            if estado_filtro == 'activo' and es_completado:
                              continue
                         
-                        processed_keys_in_row = set()
-                        # Mapeo de la clave interna del código a la clave REAL en el JSON
-                        key_mapping_manual = {
-                            'Verde': 'verdes',
-                            'Sobremaduro': 'sobremaduros',
-                            'Daño Corona': 'danio_corona',
-                            'Pendunculo Largo': 'pendunculo_largo',
-                            'Podrido': 'podridos'
-                        }
-                        
-                        for internal_key, json_key in key_mapping_manual.items():
-                            valor_str = None
-                            if json_key in clasif_data:
-                                valor_str = clasif_data[json_key]
-                                found_key = json_key # Guardamos la clave encontrada
-                            else:
-                                logger.debug(f"    -> Clave JSON esperada '{json_key}' no encontrada para clave interna '{internal_key}'.")
-                                continue # Clave no encontrada en este JSON
-                            
-                            logger.debug(f"    -> Clave encontrada: '{found_key}' (para '{internal_key}'), Valor crudo: '{valor_str}'")
-                            processed_keys_in_row.add(internal_key) # Marcar clave INTERNA como procesada
-                            
-                            try:
-                                # Limpiar posible '%' y convertir a float
-                                if isinstance(valor_str, str):
-                                    valor_num = float(valor_str.replace('%', '').strip())
-                                elif isinstance(valor_str, (int, float)):
-                                     valor_num = float(valor_str)
-                                else:
-                                     raise ValueError("Tipo no numérico")
-                                     
-                                sumas_calidad[internal_key] += valor_num
-                                counts_calidad[internal_key] += 1
-                                logger.debug(f"      -> Suma[{internal_key}] = {sumas_calidad[internal_key]}, Count[{internal_key}] = {counts_calidad[internal_key]}")
-                            except (ValueError, TypeError) as e:
-                                logger.warning(f"    -> Valor no numérico/inválido para '{internal_key}' ('{found_key}'='{valor_str}'): {e}")
-                                pass # Ignorar si no es un número válido
-                        
-                        # Log si no se procesó ninguna clave esperada en esta fila
-                        if not processed_keys_in_row:
-                             logger.warning(f"  -> No se procesó ninguna clave de calidad esperada para esta fila.")
-                             
-                    except json.JSONDecodeError:
-                        logger.warning(f"  -> Error parseando JSON: {clasif_json_str}")
-                        continue
-                
-                logger.info(f"Sumas finales: {sumas_calidad}") # Log sumas
-                logger.info(f"Conteos finales: {counts_calidad}") # Log conteos
-                logger.info(f"Clasificaciones válidas procesadas: {count_clasificaciones_validas}") # Log válidas
+            registros_filtrados_final.append(data) # Añadir el diccionario completo
 
-                # Calcular promedios Manuales
-                for key in calidad_promedios.keys():
-                    if counts_calidad[key] > 0:
-                        calidad_promedios[key] = sumas_calidad[key] / counts_calidad[key]
-                    else:
-                        calidad_promedios[key] = 0 # O manejar como N/A
-                logger.info(f"Promedios de Calidad Manual calculados: {calidad_promedios}")
+        logger.info(f"Total registros combinados: {len(datos_combinados)}. Después de filtro estado '{estado_filtro}': {len(registros_filtrados_final)}")
 
-                # --- Calcular Promedios de Calidad Automática (filtrado) --- 
-                # Initialize OUTSIDE the if block
-                calidad_promedios_auto = {
-                    'Verde': 0, 'Sobremaduro': 0, 'Daño Corona': 0,
-                    'Pendunculo Largo': 0, 'Podrido': 0
-                }
-                sumas_calidad_auto = {k: 0 for k in calidad_promedios_auto.keys()} # Also init sums here
-                counts_calidad_auto = {k: 0 for k in calidad_promedios_auto.keys()} # And counts
-                count_clasificaciones_auto_validas = 0 # And valid count
 
-                # Define mapping outside the loop for efficiency
-                key_mapping_auto = {
-                    'Verde': 'verde',
-                    'Sobremaduro': 'sobremaduro',
-                    'Daño Corona': 'danio_corona',
-                    'Pendunculo Largo': 'pendunculo_largo',
-                    'Podrido': 'podrido'
-                }
+        # --- Cálculos para KPIs y Gráficos ---
+        # Utilizar 'registros_filtrados_final' para todos los cálculos
 
-                logger.info(f"Calculando calidad automática para {len(clasificaciones_raw)} filas crudas.")
+        total_racimos = 0
+        peso_neto_total = 0.0
+        peso_neto_pepa = 0.0 # Sumar 'peso_producto' si existe
 
-                # Check if there are guides before proceeding with DB calls/processing
-                if codigos_guia_filtrados: # Keep the check
+        # Para promedios de calidad
+        calidad_sumas_manual = {'Verde': 0, 'Sobremaduro': 0, 'Daño Corona': 0, 'Pendunculo Largo': 0, 'Podrido': 0}
+        calidad_contadores_manual = calidad_sumas_manual.copy() # Contador por categoría
+        calidad_sumas_automatica = calidad_sumas_manual.copy()
+        calidad_contadores_automatica = calidad_sumas_manual.copy()
+        num_guias_con_clasif_manual = 0
+        num_guias_con_clasif_automatica = 0
 
-                    # Remove the old initialization that was here
+        # Para tiempos promedio
+        tiempos_diff = {
+            'entrada_a_bruto': [], 'bruto_a_clasif': [], 'clasif_a_neto': [], 'neto_a_salida': [], 'total': []
+        }
 
-                    for row_index, row in enumerate(clasificaciones_raw):
-                        # --- LEER DE LA NUEVA COLUMNA --- 
-                        clasif_auto_json_str = None # Inicializar como None
-                        if 'clasificacion_consolidada' in row.keys(): # Verificar si la columna existe
-                            clasif_auto_json_str = row['clasificacion_consolidada'] # <--- CAMBIO DE COLUMNA
-                        else:
-                            logger.warning(f"Columna 'clasificacion_consolidada' no encontrada en la fila {row_index}. Verificando 'clasificacion_automatica' como fallback.")
-                            # Fallback a la columna vieja si la nueva no existe (transición)
-                            if 'clasificacion_automatica' in row.keys():
-                                 clasif_auto_json_str = row['clasificacion_automatica']
-                        
-                        logger.debug(f"Procesando fila {row_index} para AUTO, JSON crudo leído: {clasif_auto_json_str}") # Log actualizado
-                        
-                        # --- CORREGIR EL SALTO INNECESARIO --- 
-                        # Solo continuar si realmente no hay JSON para procesar
-                        if not clasif_auto_json_str: 
-                            logger.debug("  -> JSON automático/consolidado realmente vacío o None, saltando fila.") 
-                            continue
-                            
-                        # Si llegamos aquí, tenemos un JSON (de consolidada o automática) para intentar procesar
-                        try:
-                            clasif_auto_data = json.loads(clasif_auto_json_str)
-                            logger.debug(f"  -> JSON automático parseado: {clasif_auto_data}")
-                            if clasif_auto_data:
-                                count_clasificaciones_auto_validas += 1
-                            else:
-                                logger.debug("  -> JSON automático parseado vacío, no se cuenta.")
-                                continue
+        # Para gráficos diarios
+        registros_por_dia = {}
+        peso_neto_por_dia = {}
+        racimos_por_dia = {} # Para nuevo gráfico
+        peso_prom_por_dia_sum = {} # Suma de pesos para promedio
+        peso_prom_por_dia_count = {} # Conteo para promedio
 
-                            processed_keys_auto_in_row = set()
-                            for internal_key, json_key in key_mapping_auto.items():
-                                valor_obj = None
-                                if json_key in clasif_auto_data:
-                                    valor_obj = clasif_auto_data[json_key]
-                                    found_key = json_key
-                                    logger.debug(f"    -> AUTO: Got valor_obj for key '{json_key}'. Type: {type(valor_obj)}, Value: {valor_obj}") # Log type and value
-                                else:
-                                    logger.debug(f"    -> AUTO: Clave JSON '{json_key}' no encontrada para '{internal_key}'.")
-                                    continue
-                                
-                                # Extraer el porcentaje del objeto interno
-                                valor_str = None
-                                if isinstance(valor_obj, dict) and 'porcentaje' in valor_obj:
-                                    valor_str = valor_obj['porcentaje']
-                                else:
-                                    reason = "Not a dict" if not isinstance(valor_obj, dict) else "Missing 'porcentaje' key"
-                                    logger.warning(f"    -> AUTO: Failed to get percentage for '{json_key}'. Reason: {reason}. Object: {valor_obj}")
-                                    continue # No podemos obtener el porcentaje
+        # Generar rango de fechas completo para los gráficos
+        date_range = [start_date + timedelta(days=x) for x in range((end_date - start_date).days + 1)]
 
-                                logger.debug(f"    -> AUTO: Clave '{found_key}' ('{internal_key}'), Porcentaje crudo: '{valor_str}'")
-                                processed_keys_auto_in_row.add(internal_key)
-                                
-                                try:
-                                    if isinstance(valor_str, str):
-                                        valor_num = float(valor_str.replace('%', '').strip())
-                                    elif isinstance(valor_str, (int, float)):
-                                         valor_num = float(valor_str)
-                                    else:
-                                         raise ValueError("Tipo no numérico")
-                                         
-                                    sumas_calidad_auto[internal_key] += valor_num
-                                    counts_calidad_auto[internal_key] += 1
-                                    logger.debug(f"      -> AUTO: Suma[{internal_key}]={sumas_calidad_auto[internal_key]}, Count[{internal_key}]={counts_calidad_auto[internal_key]}")
-                                except (ValueError, TypeError) as e:
-                                    logger.warning(f"    -> AUTO: Valor no numérico para '{internal_key}' ('{found_key}'='{valor_str}'): {e}")
-                                    pass
-                                    
-                            if not processed_keys_auto_in_row:
-                                 logger.warning(f"  -> AUTO: No se procesó ninguna clave esperada.")
-                                 
-                        except json.JSONDecodeError:
-                            logger.warning(f"  -> AUTO: Error parseando JSON: {clasif_auto_json_str}")
-                            continue
 
-                    logger.info(f"Sumas finales AUTO: {sumas_calidad_auto}")
-                    logger.info(f"Conteos finales AUTO: {counts_calidad_auto}")
-                    logger.info(f"Clasificaciones AUTO válidas: {count_clasificaciones_auto_validas}")
-
-                    # Calcular promedios Automáticos
-                    # This calculation is now safe even if the loop didn't run
-                    for key in calidad_promedios_auto.keys():
-                        if counts_calidad_auto[key] > 0: # Check if count for this key is > 0
-                            calidad_promedios_auto[key] = sumas_calidad_auto[key] / counts_calidad_auto[key]
-                        # No else needed, initialized to 0
-                    logger.info(f"Promedios de Calidad Automática calculados: {calidad_promedios_auto}")
-                    # -- Fin cálculo calidad automática --
-
-            except sqlite3.Error as db_err:
-                 logger.error(f"Error consultando clasificaciones: {db_err}")
-        else:
-             logger.info("No hay guías filtradas para calcular calidad.")
-
-        # --- Calcular otros KPIs ... ---
-        # Por ahora, solo devolvemos el conteo de registros de entrada filtrado
-        # Los otros valores se mantienen como estaban (sin filtrar)
-        # TODO: Aplicar filtros a los cálculos de pesajes pendientes, clasificaciones, peso neto, etc.
-        conn = sqlite3.connect('tiquetes.db') # Conexión temporal para otros KPIs no filtrados
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        # Pesajes pendientes (sin filtrar por ahora)
-        cursor.execute("SELECT COUNT(*) as count FROM entry_records e LEFT JOIN pesajes_neto p ON e.codigo_guia = p.codigo_guia WHERE p.codigo_guia IS NULL")
-        pesajes_pendientes = cursor.fetchone()['count']
-        # Clasificaciones pendientes (sin filtrar por ahora)
-        cursor.execute("SELECT COUNT(*) as count FROM entry_records e LEFT JOIN clasificaciones c ON e.codigo_guia = c.codigo_guia WHERE c.codigo_guia IS NULL")
-        clasificaciones_pendientes = cursor.fetchone()['count']
-        # Peso neto hoy (sin filtrar por ahora)
-        today = datetime.now().strftime('%d/%m/%Y') # Ajustado a formato DD/MM/YYYY
-        cursor.execute("SELECT SUM(peso_neto) as total FROM pesajes_neto WHERE fecha_pesaje = ?", (today,))
-        result = cursor.fetchone()
-        peso_neto_hoy = result['total'] if result and result['total'] is not None else 0
-        conn.close()
-        # --- Fin cálculos KPIs temporales --- 
-
-        # --- Calcular Peso Neto Pepa --- 
-        peso_neto_pepa = 0
-        codigos_guia_pepa = []
-        for record in filtered_records:
-            cantidad_racimos_str = str(record.get('cantidad_racimos', '')).strip().lower()
-            if cantidad_racimos_str == 'pepa':
-                codigo_guia = record.get('codigo_guia')
-                if codigo_guia:
-                    codigos_guia_pepa.append(codigo_guia)
-        
-        logger.info(f"Encontradas {len(codigos_guia_pepa)} guías marcadas como 'Pepa'.")
-
-        if codigos_guia_pepa:
+        for data in registros_filtrados_final:
+            # --- Racimos ---
             try:
-                conn_pepa = sqlite3.connect('tiquetes.db')
-                cursor_pepa = conn_pepa.cursor()
-                placeholders_pepa = ', '.join('?' * len(codigos_guia_pepa))
-                query_pepa = f"SELECT SUM(peso_neto) FROM pesajes_neto WHERE codigo_guia IN ({placeholders_pepa})"
-                cursor_pepa.execute(query_pepa, codigos_guia_pepa)
-                result_pepa = cursor_pepa.fetchone()
-                if result_pepa and result_pepa[0] is not None:
-                    peso_neto_pepa = result_pepa[0]
-                conn_pepa.close()
-                logger.info(f"Peso Neto Pepa calculado: {peso_neto_pepa}")
-            except sqlite3.Error as db_err:
-                logger.error(f"Error consultando peso_neto para Pepa: {db_err}")
-        # --- Fin Calcular Peso Neto Pepa ---
+                racimos_guia = int(data.get('cantidad_racimos', 0) or 0)
+                total_racimos += racimos_guia
+            except (ValueError, TypeError):
+                pass # Ignorar si no es un número
 
-        # --- Calcular Registros Diarios para Gráfico ---
-        registros_diarios_chart_data = {'labels': [], 'data': []}
-        if filtered_records:
-            # Agrupar registros por fecha
-            registros_por_fecha = {}
-            for record in filtered_records:
-                fecha_str = record.get('fecha_registro')
-                if fecha_str:
-                    try:
-                        # Validar formato DD/MM/YYYY
-                        fecha_dt = datetime.strptime(fecha_str, '%d/%m/%Y')
-                        fecha_key = fecha_dt.strftime('%Y-%m-%d') # Usar YYYY-MM-DD como clave
-                        registros_por_fecha[fecha_key] = registros_por_fecha.get(fecha_key, 0) + 1
-                    except ValueError:
-                        logger.warning(f"Formato de fecha inválido en registro diario: {fecha_str}")
-                        continue
+            # --- Peso Neto y Pepa ---
+            p_neto_data = data.get('pesaje_neto', {})
+            try:
+                peso_neto_guia = float(p_neto_data.get('peso_neto', 0.0) or 0.0)
+                peso_neto_total += peso_neto_guia
+            except (ValueError, TypeError):
+                pass
+            try:
+                # Usar 'peso_producto' para pepa si existe, si no, default a 0
+                peso_pepa_guia = float(p_neto_data.get('peso_producto', 0.0) or 0.0)
+                peso_neto_pepa += peso_pepa_guia
+            except (ValueError, TypeError):
+                 pass # Ignorar si no se puede convertir
 
-            # Determinar el rango de fechas (últimos 7 días desde endDate o hoy)
-            if end_date: # end_date ya tiene sumado 1 día, restamos para obtener el último día real
-                fecha_fin_rango = end_date - timedelta(days=1)
+
+            # --- Calidad Manual ---
+            clasif_data = data.get('clasificacion', {})
+            manual_json_str = clasif_data.get('clasificacion_manual_json')
+            manual_data = {}
+            if manual_json_str:
+                try:
+                    manual_data = json.loads(manual_json_str)
+                except json.JSONDecodeError: pass
+
+            # Mapeo nombres JSON a claves internas
+            map_manual = {'verdes': 'Verde', 'sobremaduros': 'Sobremaduro', 'danio_corona': 'Daño Corona', 'pedunculo_largo': 'Pendunculo Largo', 'podridos': 'Podrido'}
+            tiene_clasif_manual = False
+            for json_key, internal_key in map_manual.items():
+                try:
+                    valor = float(manual_data.get(json_key, 0.0) or 0.0) # Asegurar float
+                    calidad_sumas_manual[internal_key] += valor
+                    calidad_contadores_manual[internal_key] += 1 # Contar si hay dato
+                    tiene_clasif_manual = True
+                except (ValueError, TypeError):
+                    pass # Ignorar si no es número
+
+            if tiene_clasif_manual:
+                 num_guias_con_clasif_manual += 1
+
+
+            # --- Calidad Automática ---
+            auto_json_str = clasif_data.get('clasificacion_automatica_json')
+            auto_data = {}
+            if auto_json_str:
+                try:
+                    auto_data = json.loads(auto_json_str)
+                except json.JSONDecodeError: pass
+
+            # Mapeo nombres JSON a claves internas (asumiendo estructura anidada)
+            # {'verdes': {'cantidad': X, 'porcentaje': Y}, ...}
+            map_auto = {'verdes': 'Verde', 'sobremaduros': 'Sobremaduro', 'danio_corona': 'Daño Corona', 'pedunculo_largo': 'Pendunculo Largo', 'podridos': 'Podrido'}
+            tiene_clasif_automatica = False
+            for json_key, internal_key in map_auto.items():
+                 try:
+                    # Obtener el porcentaje
+                    valor_pct = float(auto_data.get(json_key, {}).get('porcentaje', 0.0) or 0.0)
+                    calidad_sumas_automatica[internal_key] += valor_pct
+                    calidad_contadores_automatica[internal_key] += 1
+                    tiene_clasif_automatica = True
+                 except (ValueError, TypeError):
+                     pass
+
+            if tiene_clasif_automatica:
+                 num_guias_con_clasif_automatica += 1
+
+            # --- Tiempos Promedio ---
+            # Helper para parsear timestamp UTC y manejar errores
+            def parse_utc_timestamp(ts_str):
+                if not ts_str: return None
+                try:
+                    # Asegurar formato YYYY-MM-DD HH:MM:SS
+                    return datetime.strptime(ts_str.split('.')[0], '%Y-%m-%d %H:%M:%S')
+                except (ValueError, TypeError):
+                    logger.warning(f"No se pudo parsear timestamp: {ts_str}")
+                    return None
+
+            # !! CORRECCIÓN DE COLUMNA !! Usar timestamp_registro_utc
+            ts_entrada = parse_utc_timestamp(data.get('timestamp_registro_utc'))
+            ts_bruto = parse_utc_timestamp(data.get('pesaje_bruto', {}).get('timestamp_pesaje_utc'))
+            ts_clasif = parse_utc_timestamp(clasif_data.get('timestamp_clasificacion_utc'))
+            ts_neto = parse_utc_timestamp(p_neto_data.get('timestamp_pesaje_neto_utc'))
+            # ts_salida no está en el modelo actual, estimar o usar p_neto como fin temporal
+
+            if ts_entrada and ts_bruto:
+                tiempos_diff['entrada_a_bruto'].append((ts_bruto - ts_entrada).total_seconds() / 60)
+            if ts_bruto and ts_clasif:
+                tiempos_diff['bruto_a_clasif'].append((ts_clasif - ts_bruto).total_seconds() / 60)
+            if ts_clasif and ts_neto:
+                tiempos_diff['clasif_a_neto'].append((ts_neto - ts_clasif).total_seconds() / 60)
+            # if ts_neto and ts_salida: # Si tuviéramos salida
+            #     tiempos_diff['neto_a_salida'].append((ts_salida - ts_neto).total_seconds() / 60)
+            if ts_entrada and ts_neto: # Usar neto como fin temporal para 'total'
+                 tiempos_diff['total'].append((ts_neto - ts_entrada).total_seconds() / 60)
+
+
+            # --- Agrupación para Gráficos Diarios (CON CONVERSIÓN A BOGOTÁ) ---
+            ts_referencia_utc_str = data.get('timestamp_registro_utc') # Usar registro como referencia
+            if ts_referencia_utc_str:
+                 try:
+                     # Timezones UTC and BOGOTA_TZ are now available from the function scope
+                     
+                     # Parsear UTC
+                     naive_utc = datetime.strptime(ts_referencia_utc_str.split('.')[0], '%Y-%m-%d %H:%M:%S')
+                     aware_utc = UTC.localize(naive_utc)
+                     # Convertir a Bogotá
+                     bogota_dt = aware_utc.astimezone(BOGOTA_TZ)
+                     # Obtener la FECHA LOCAL de Bogotá para agrupar
+                     fecha_local_bogota = bogota_dt.strftime('%d/%m') # Formato para label de gráfico
+
+                     # Solo considerar si la fecha local está dentro del rango del filtro original
+                     if start_date <= bogota_dt.date() <= end_date:
+                        registros_por_dia[fecha_local_bogota] = registros_por_dia.get(fecha_local_bogota, 0) + 1
+                        peso_neto_por_dia[fecha_local_bogota] = peso_neto_por_dia.get(fecha_local_bogota, 0.0) + peso_neto_guia
+                        racimos_por_dia[fecha_local_bogota] = racimos_por_dia.get(fecha_local_bogota, 0) + racimos_guia
+
+                        # Para peso promedio por racimo
+                        if racimos_guia > 0:
+                             peso_prom_por_dia_sum[fecha_local_bogota] = peso_prom_por_dia_sum.get(fecha_local_bogota, 0.0) + peso_neto_guia
+                             peso_prom_por_dia_count[fecha_local_bogota] = peso_prom_por_dia_count.get(fecha_local_bogota, 0) + racimos_guia
+                 except Exception as e: # Asegurar que el except esté al nivel del try
+                     logger.error(f"Error procesando fecha para gráfico diario: {ts_referencia_utc_str} - {e}")
+
+
+        # --- Finalizar Cálculos ---
+        # Promedios de Calidad
+        calidad_promedios_manual = {k: (calidad_sumas_manual[k] / num_guias_con_clasif_manual if num_guias_con_clasif_manual > 0 else 0) for k in calidad_sumas_manual}
+        calidad_promedios_automatica = {k: (calidad_sumas_automatica[k] / num_guias_con_clasif_automatica if num_guias_con_clasif_automatica > 0 else 0) for k in calidad_sumas_automatica}
+
+        # Promedios de Tiempos
+        tiempos_promedio_proceso = {}
+        for key, times in tiempos_diff.items():
+            if times:
+                tiempos_promedio_proceso[key] = sum(times) / len(times)
             else:
-                fecha_fin_rango = datetime.now()
+                tiempos_promedio_proceso[key] = 0.0
+
+        # Datos para gráficos diarios (asegurando todas las fechas del rango)
+        labels_diarios = [d.strftime('%d/%m') for d in date_range]
+        data_registros_diarios = [registros_por_dia.get(label, 0) for label in labels_diarios]
+        # Convertir peso neto a toneladas para el gráfico
+        data_peso_neto_diario = [(peso_neto_por_dia.get(label, 0.0) / 1000.0) for label in labels_diarios]
+        data_racimos_diarios = [racimos_por_dia.get(label, 0) for label in labels_diarios]
+        # Calcular peso promedio por racimo (kg)
+        data_peso_prom_diario = []
+        for label in labels_diarios:
+            suma_peso = peso_prom_por_dia_sum.get(label, 0.0)
+            conteo_racimos = peso_prom_por_dia_count.get(label, 0)
+            promedio = (suma_peso / conteo_racimos) if conteo_racimos > 0 else 0.0
+            data_peso_prom_diario.append(promedio)
+
+        # --- NUEVO: Obtener Datos del Presupuesto ---
+        logger.info(f"Obteniendo datos de presupuesto para el rango: {start_date_str} a {end_date_str}")
+        datos_presupuesto_dict = obtener_datos_presupuesto(start_date_str, end_date_str)
+        logger.debug(f"Datos de presupuesto obtenidos: {datos_presupuesto_dict}")
+        # --- FIN NUEVO ---
+
+        # --- Finalizar Cálculos ---
+        # ... (promedios de calidad, tiempos, datos para gráficos diarios) ...
+
+
+        # --- Preparar Respuesta JSON ---
+        response_data = {
+            "registros_entrada_filtrados": len(registros_filtrados_final), 
+            "total_racimos_filtrados": total_racimos,
+            "peso_neto_total_filtrado": peso_neto_total, 
+            "peso_neto_pepa": peso_neto_pepa, 
+
+            "calidad_promedios_manual": calidad_promedios_manual,
+            "calidad_promedios_automatica": calidad_promedios_automatica, 
+
+            "tiempos_promedio_proceso": tiempos_promedio_proceso,
+
+            # Datos para gráficos
+            "registros_diarios_chart_data": {
+                "labels": labels_diarios,
+                "data": data_registros_diarios
+            },
+            "peso_neto_diario_chart_data": {
+                "labels": labels_diarios,
+                "data": data_peso_neto_diario 
+            },
+             "racimos_peso_promedio_chart_data": {
+                "labels": labels_diarios,
+                "data_racimos": data_racimos_diarios,
+                "data_peso_promedio": data_peso_prom_diario 
+            },
             
-            fechas_labels = []
-            conteos_data = []
-            for i in range(6, -1, -1): # Iterar 7 días hacia atrás
-                fecha_actual = fecha_fin_rango - timedelta(days=i)
-                fecha_key = fecha_actual.strftime('%Y-%m-%d')
-                fechas_labels.append(fecha_actual.strftime('%d/%m')) # Label corto DD/MM
-                conteos_data.append(registros_por_fecha.get(fecha_key, 0)) # Conteo para esa fecha, 0 si no hay
-            
-            registros_diarios_chart_data['labels'] = fechas_labels
-            registros_diarios_chart_data['data'] = conteos_data
-            logger.info(f"Datos para gráfico Registros Diarios: {registros_diarios_chart_data}")
-        else:
-             logger.info("No hay registros filtrados para generar gráfico de registros diarios.")
-        # --- Fin Calcular Registros Diarios ---
+            # --- NUEVO: Añadir datos de presupuesto a la respuesta --- 
+            "datos_presupuesto": datos_presupuesto_dict, # { 'YYYY-MM-DD': toneladas, ... }
+            # --- FIN NUEVO ---
 
-        # --- Calcular Peso Neto Diario para Gráfico ---
-        peso_neto_diario_chart_data = {'labels': [], 'data': []}
-        if codigos_guia_filtrados: # Solo si hay guías filtradas
-            try:
-                conn_peso_diario = sqlite3.connect('tiquetes.db')
-                conn_peso_diario.row_factory = sqlite3.Row
-                cursor_peso_diario = conn_peso_diario.cursor()
-                
-                placeholders_peso = ', '.join('?' * len(codigos_guia_filtrados))
-                query_peso_diario = f"""
-                    SELECT fecha_pesaje, SUM(peso_neto) as suma_peso 
-            FROM pesajes_neto 
-                    WHERE codigo_guia IN ({placeholders_peso}) 
-            GROUP BY fecha_pesaje
-                """
-                cursor_peso_diario.execute(query_peso_diario, codigos_guia_filtrados)
-                pesos_por_fecha_raw = cursor_peso_diario.fetchall()
-                conn_peso_diario.close()
-                logger.info(f"Se encontraron {len(pesos_por_fecha_raw)} días con peso neto para guías filtradas.")
+            # Datos para tablas (simplificado, adaptar según necesidad real)
+            "ultimos_registros_tabla": [
+                # ... 
+            ],
+            "top_5_peso_neto_tabla": [
+                 # ... 
+            ],
+             "alertas_calidad_tabla": [
+                 # ... 
+             ]
 
-                # Procesar y agrupar por fecha YYYY-MM-DD
-                pesos_por_fecha_dict = {}
-                for row in pesos_por_fecha_raw:
-                    fecha_str = row['fecha_pesaje']
-                    suma_peso = row['suma_peso'] if row['suma_peso'] else 0
-                    if fecha_str:
-                        try:
-                            # Asumir formato DD/MM/YYYY
-                            fecha_dt = datetime.strptime(fecha_str, '%d/%m/%Y')
-                            fecha_key = fecha_dt.strftime('%Y-%m-%d')
-                            pesos_por_fecha_dict[fecha_key] = pesos_por_fecha_dict.get(fecha_key, 0) + suma_peso
-                        except ValueError:
-                            logger.warning(f"Formato de fecha inválido en pesaje neto: {fecha_str}")
-                            continue
-                
-                # Usar el mismo rango de fechas que registros diarios
-                # fecha_fin_rango ya está definida arriba
-                fechas_labels_peso = []
-                pesos_data = []
-                for i in range(6, -1, -1): # Iterar 7 días hacia atrás
-                    fecha_actual = fecha_fin_rango - timedelta(days=i)
-                    fecha_key = fecha_actual.strftime('%Y-%m-%d')
-                    fechas_labels_peso.append(fecha_actual.strftime('%d/%m')) # Label corto DD/MM
-                    # Convertir kg a toneladas con 1 decimal
-                    peso_kg = pesos_por_fecha_dict.get(fecha_key, 0)
-                    peso_toneladas = round(peso_kg / 1000, 1)
-                    pesos_data.append(peso_toneladas)
-                
-                peso_neto_diario_chart_data['labels'] = fechas_labels_peso
-                peso_neto_diario_chart_data['data'] = pesos_data
-                logger.info(f"Datos para gráfico Peso Neto Diario (toneladas): {peso_neto_diario_chart_data}")
-
-            except sqlite3.Error as db_err:
-                 logger.error(f"Error consultando peso_neto diario: {db_err}")
-        else:
-            logger.info("No hay guías filtradas para generar gráfico de peso neto diario.")
-        # --- Fin Calcular Peso Neto Diario ---
-
-        # --- Calcular Racimos y Peso Promedio Diario para Gráfico ---
-        racimos_peso_promedio_chart_data = {'labels': [], 'data_racimos': [], 'data_peso_promedio': []}
-        if filtered_records: # Usamos los registros de entrada ya filtrados
-            racimos_por_fecha = {}
-            peso_kg_por_fecha = pesos_por_fecha_dict # Usamos el dict ya calculado arriba con peso en KG
-            
-            # 1. Agrupar racimos por fecha desde entry_records
-            for record in filtered_records:
-                fecha_str = record.get('fecha_registro')
-                racimos_str = record.get('cantidad_racimos', '0')
-                if fecha_str:
-                    try:
-                        fecha_dt = datetime.strptime(fecha_str, '%d/%m/%Y')
-                        fecha_key = fecha_dt.strftime('%Y-%m-%d')
-                        
-                        # Intentar convertir racimos a entero
-                        try:
-                            racimos_count = int(racimos_str) if racimos_str and racimos_str != 'No disponible' else 0
-                        except (ValueError, TypeError):
-                            racimos_count = 0
-                            logger.warning(f"Valor de racimos no numérico encontrado: '{racimos_str}' para fecha {fecha_key}")
-                            
-                        racimos_por_fecha[fecha_key] = racimos_por_fecha.get(fecha_key, 0) + racimos_count
-                    except ValueError:
-                         # Fecha inválida ya advertida en gráfico de registros diarios
-                        continue
-            
-            # 2. Iterar por el rango de fechas y calcular datos
-            # fecha_fin_rango y fechas_labels_peso ya están definidas
-            data_racimos = []
-            data_peso_promedio = []
-            
-            for i in range(6, -1, -1): # Mismo rango de 7 días
-                fecha_actual = fecha_fin_rango - timedelta(days=i)
-                fecha_key = fecha_actual.strftime('%Y-%m-%d')
-                
-                # Obtener total racimos y peso para el día
-                total_racimos_dia = racimos_por_fecha.get(fecha_key, 0)
-                total_peso_kg_dia = peso_kg_por_fecha.get(fecha_key, 0)
-                
-                # Calcular peso promedio por racimo (kg/racimo)
-                peso_promedio_dia = 0
-                if total_racimos_dia > 0:
-                    peso_promedio_dia = round(total_peso_kg_dia / total_racimos_dia, 1)
-                    
-                data_racimos.append(total_racimos_dia)
-                data_peso_promedio.append(peso_promedio_dia)
-                
-            racimos_peso_promedio_chart_data['labels'] = fechas_labels_peso # Usar las mismas labels
-            racimos_peso_promedio_chart_data['data_racimos'] = data_racimos
-            racimos_peso_promedio_chart_data['data_peso_promedio'] = data_peso_promedio
-            logger.info(f"Datos para gráfico Racimos/Peso Promedio: {racimos_peso_promedio_chart_data}")
-        else:
-             logger.info("No hay registros filtrados para generar gráfico de racimos/peso promedio.")
-        # --- Fin Calcular Racimos y Peso Promedio Diario ---
-
-        # --- Preparar datos para Tabla Últimos Registros ---
-        ultimos_registros_tabla = []
-        codigos_guias_ultimos_5 = [rec.get('codigo_guia') for rec in filtered_records[:5] if rec.get('codigo_guia')]
-        
-        # Consultar estados de salida para los últimos 5 de una vez
-        estados_salida = {}
-        if codigos_guias_ultimos_5:
-            try:
-                conn_salida = sqlite3.connect('tiquetes.db')
-                cursor_salida = conn_salida.cursor()
-                placeholders_salida = ', '.join('?' * len(codigos_guias_ultimos_5))
-                cursor_salida.execute(f"SELECT codigo_guia FROM salidas WHERE codigo_guia IN ({placeholders_salida})", codigos_guias_ultimos_5)
-                guias_con_salida = {row[0] for row in cursor_salida.fetchall()}
-                estados_salida = {codigo: 'Completado' for codigo in guias_con_salida}
-                conn_salida.close()
-            except sqlite3.Error as db_err:
-                logger.error(f"Error consultando tabla salidas: {db_err}")
-
-        if filtered_records:
-            # Iterar sobre los primeros 5 registros (ya están ordenados desc)
-            for record in filtered_records[:5]:
-                codigo_guia_actual = record.get('codigo_guia', 'N/A')
-                cantidad_racimos_str = str(record.get('cantidad_racimos', '')).strip()
-
-                # Determinar Tipo Fruta
-                tipo_fruta_display = "N/A"
-                if cantidad_racimos_str.isdigit():
-                    tipo_fruta_display = "Fruta"
-                elif 'pepa' in cantidad_racimos_str.lower():
-                    tipo_fruta_display = "Pepa"
-                
-                # Determinar Estado basado en consulta previa
-                estado_display = estados_salida.get(codigo_guia_actual, "En proceso")
-                badge_class = "bg-success" if estado_display == "Completado" else "bg-warning"
-                
-                ultimos_registros_tabla.append({
-                    'codigo_guia': codigo_guia_actual,
-                    'proveedor': record.get('nombre_proveedor', 'N/A'),
-                    'fecha_hora': f"{record.get('fecha_registro', '')} {record.get('hora_registro', '')}",
-                    'tipo_fruta': tipo_fruta_display, # Usar el tipo determinado
-                    'estado': estado_display, # Usar el estado determinado
-                    'badge_class': badge_class # Usar la clase determinada
-                })
-        # --- Fin Preparar Tabla Últimos Registros ---
-
-        # --- Calcular Tiempos Promedio de Procesos --- 
-        tiempos_promedio_proceso = {
-            'entrada_a_bruto': 0.0, # Horas
-            'bruto_a_clasif': 0.0,
-            'clasif_a_neto': 0.0,
-            'neto_a_salida': 0.0,
-            'total': 0.0
-        }
-        duraciones = {
-            'entrada_a_bruto': [], 
-            'bruto_a_clasif': [],
-            'clasif_a_neto': [],
-            'neto_a_salida': [],
-            'total': []
-        }
-        
-        if codigos_guia_filtrados:
-            try:
-                conn_tiempos = sqlite3.connect('tiquetes.db')
-                conn_tiempos.row_factory = sqlite3.Row
-                cursor_tiempos = conn_tiempos.cursor()
-                
-                placeholders_tiempos = ', '.join('?' * len(codigos_guia_filtrados))
-                query_tiempos = f"""
-                    SELECT 
-                        e.codigo_guia, 
-                        e.fecha_registro, e.hora_registro, 
-                        pb.fecha_pesaje AS fecha_pesaje_bruto, pb.hora_pesaje AS hora_pesaje_bruto, 
-                        c.fecha_clasificacion, c.hora_clasificacion, 
-                        pn.fecha_pesaje AS fecha_pesaje_neto, pn.hora_pesaje AS hora_pesaje_neto, 
-                        s.fecha_salida, s.hora_salida
-                    FROM 
-                        entry_records e
-                    LEFT JOIN pesajes_bruto pb ON e.codigo_guia = pb.codigo_guia
-                    LEFT JOIN clasificaciones c ON e.codigo_guia = c.codigo_guia
-                    LEFT JOIN pesajes_neto pn ON e.codigo_guia = pn.codigo_guia
-                    LEFT JOIN salidas s ON e.codigo_guia = s.codigo_guia
-                    WHERE e.codigo_guia IN ({placeholders_tiempos})
-                """
-                cursor_tiempos.execute(query_tiempos, codigos_guia_filtrados)
-                registros_tiempo = cursor_tiempos.fetchall()
-                conn_tiempos.close()
-                logger.info(f"Se recuperaron {len(registros_tiempo)} registros de tiempo para guías filtradas.")
-
-                for row in registros_tiempo:
-                    t_entrada = parse_datetime_str(row['fecha_registro'], row['hora_registro'])
-                    t_bruto = parse_datetime_str(row['fecha_pesaje_bruto'], row['hora_pesaje_bruto'])
-                    # Usar fecha/hora de actualización de consolidado si existe, si no, la de clasificación
-                    t_clasif = parse_datetime_str(row['fecha_actualizacion'], row['hora_actualizacion']) if 'fecha_actualizacion' in row.keys() and row['fecha_actualizacion'] else parse_datetime_str(row['fecha_clasificacion'], row['hora_clasificacion'])
-                    t_neto = parse_datetime_str(row['fecha_pesaje_neto'], row['hora_pesaje_neto'])
-                    t_salida = parse_datetime_str(row['fecha_salida'], row['hora_salida'])
-
-                    # Calcular duraciones solo si los timestamps necesarios existen
-                    if t_entrada and t_bruto:
-                        duracion = (t_bruto - t_entrada).total_seconds()
-                        if duracion >= 0: duraciones['entrada_a_bruto'].append(duracion)
-                    if t_bruto and t_clasif:
-                        duracion = (t_clasif - t_bruto).total_seconds()
-                        if duracion >= 0: duraciones['bruto_a_clasif'].append(duracion)
-                    if t_clasif and t_neto:
-                        duracion = (t_neto - t_clasif).total_seconds()
-                        if duracion >= 0: duraciones['clasif_a_neto'].append(duracion)
-                    if t_neto and t_salida:
-                        duracion = (t_salida - t_neto).total_seconds()
-                        if duracion >= 0: duraciones['neto_a_salida'].append(duracion)
-                    if t_entrada and t_salida:
-                        duracion = (t_salida - t_entrada).total_seconds()
-                        if duracion >= 0: duraciones['total'].append(duracion)
-                
-                # Calcular promedios en horas
-                for key, lista_duraciones in duraciones.items():
-                    if lista_duraciones:
-                        promedio_segundos = sum(lista_duraciones) / len(lista_duraciones)
-                        tiempos_promedio_proceso[key] = promedio_segundos / 60# Convertir a horas
-                
-                logger.info(f"Tiempos promedio calculados (horas): {tiempos_promedio_proceso}")
-
-            except sqlite3.Error as db_err:
-                logger.error(f"Error consultando datos para tiempos promedio: {db_err}")
-            except Exception as e:
-                 logger.error(f"Error calculando tiempos promedio: {e}")
-                 logger.error(traceback.format_exc())
-        else:
-            logger.info("No hay guías filtradas para calcular tiempos promedio.")
-        
-        # Añadir al diccionario de respuesta
-        response = {
-            # KPI principal filtrado
-            'registros_entrada_filtrados': registros_filtrados_count,
-            # Nuevo KPI calculado
-            'total_racimos_filtrados': total_racimos,
-            # Nuevo KPI Peso Neto Total
-            'peso_neto_total_filtrado': peso_neto_total,
-            # Nuevo KPI Peso Neto Pepa (en kg inicialmente)
-            'peso_neto_pepa': peso_neto_pepa, 
-            # Nuevos KPIs de Calidad
-            'calidad_promedios_manual': calidad_promedios, # Promedios manuales
-            'calidad_promedios_automatica': calidad_promedios_auto, # Promedios automáticos
-            # Otros KPIs (aún no filtrados - placeholder)
-            'pesajes_pendientes': pesajes_pendientes,
-            'clasificaciones_pendientes': clasificaciones_pendientes,
-            'peso_neto_hoy': peso_neto_hoy,
-            # Datos para gráficos (aún no filtrados - placeholder)
-            'registros_diarios': {},
-            'peso_neto_diario': {},
-            'registros_diarios_chart_data': registros_diarios_chart_data,
-            'peso_neto_diario_chart_data': peso_neto_diario_chart_data,
-            'racimos_peso_promedio_chart_data': racimos_peso_promedio_chart_data,
-            'ultimos_registros_tabla': ultimos_registros_tabla
-        }
-        
-        # --- Preparar Tabla Top 5 Guías por Peso Neto ---
-        top_5_peso_neto_tabla = []
-        try:
-            conn_top5 = sqlite3.connect('tiquetes.db')
-            conn_top5.row_factory = sqlite3.Row
-            cursor_top5 = conn_top5.cursor()
-
-            # 1. Obtener los códigos de guía de los registros filtrados
-            filtered_guia_codes = [rec.get('codigo_guia') for rec in filtered_records if rec.get('codigo_guia')]
-            
-            # 2. Consultar pesajes_neto para esos códigos y ordenar por peso_neto
-            top_pesajes = []
-            if filtered_guia_codes:
-                placeholders_top5 = ', '.join('?' * len(filtered_guia_codes))
-                # Asegurarse que peso_neto es numérico antes de ordenar
-                query_top5 = f"""
-                    SELECT codigo_guia, peso_neto 
-                    FROM pesajes_neto 
-                    WHERE codigo_guia IN ({placeholders_top5}) AND typeof(peso_neto) IN ('integer', 'real')
-                    ORDER BY peso_neto DESC 
-                    LIMIT 5
-                """
-                cursor_top5.execute(query_top5, filtered_guia_codes)
-                top_pesajes = cursor_top5.fetchall()
-            
-            # 3. Obtener información adicional para las guías del top 5
-            top_guia_codes = [row['codigo_guia'] for row in top_pesajes]
-            if top_guia_codes:
-                # Crear diccionarios para buscar info rápidamente
-                pesos_netos = {row['codigo_guia']: row['peso_neto'] for row in top_pesajes}
-                info_entry = {}
-                info_clasif = {}
-
-                placeholders_info = ', '.join('?' * len(top_guia_codes))
-                
-                # Info de entry_records
-                cursor_top5.execute(f"SELECT codigo_guia, nombre_proveedor, cantidad_racimos FROM entry_records WHERE codigo_guia IN ({placeholders_info})", top_guia_codes)
-                for row in cursor_top5.fetchall():
-                    info_entry[row['codigo_guia']] = {'nombre': row['nombre_proveedor'], 'racimos': row['cantidad_racimos']}
-                
-                # Info de clasificaciones (manual para calidad simple)
-                cursor_top5.execute(f"SELECT codigo_guia, clasificacion_manual FROM clasificaciones WHERE codigo_guia IN ({placeholders_info})", top_guia_codes)
-                for row in cursor_top5.fetchall():
-                    try:
-                        # Usar el campo clasificacion_manual que ahora es JSON
-                        manual_data = json.loads(row['clasificacion_manual'] or '{}') 
-                        # Calcular calidad simple (ej: % no defectuoso)
-                        # Definir defectos (ajustar claves según el JSON real)
-                        defectos = ['verde', 'sobremaduro', 'danio_corona', 'pendunculo_largo', 'podrido']
-                        total_defectos_pct = sum(float(manual_data.get(d, 0) or 0) for d in defectos)
-                        calidad_pct = max(0, 100 - total_defectos_pct)
-                        info_clasif[row['codigo_guia']] = calidad_pct
-                    except (json.JSONDecodeError, ValueError, TypeError):
-                         info_clasif[row['codigo_guia']] = 0 # Calidad 0 si hay error
-
-                # 4. Construir la tabla final
-                rank = 1
-                for codigo_guia in top_guia_codes:
-                    entry_data = info_entry.get(codigo_guia, {})
-                    peso_neto_kg = pesos_netos.get(codigo_guia, 0)
-                    calidad = info_clasif.get(codigo_guia, 0) # 0 si no hay clasificación
-                    
-                    # Determinar tipo fruta
-                    cantidad_racimos_str = str(entry_data.get('racimos', '')).strip()
-                    tipo_fruta_display = "N/A"
-                    if cantidad_racimos_str.isdigit():
-                        tipo_fruta_display = "Fruta"
-                    elif 'pepa' in cantidad_racimos_str.lower():
-                        tipo_fruta_display = "Pepa"
-                    
-                    top_5_peso_neto_tabla.append({
-                        'rank': rank,
-                        'codigo_guia': codigo_guia,
-                        'proveedor': entry_data.get('nombre', 'N/A'),
-                        'tipo_fruta': tipo_fruta_display,
-                        'peso_neto': f"{(peso_neto_kg / 1000):.1f} t" if peso_neto_kg else "0.0 t",
-                        'calidad': round(calidad) # Porcentaje de calidad redondeado
-                    })
-                    rank += 1
-
-            conn_top5.close()
-            logger.info(f"Preparada tabla Top 5 Peso Neto con {len(top_5_peso_neto_tabla)} registros.")
-        except sqlite3.Error as db_err:
-            logger.error(f"Error preparando tabla Top 5 Peso Neto: {db_err}")
-            if 'conn_top5' in locals() and conn_top5:
-                conn_top5.close()
-        except Exception as e:
-            logger.error(f"Error inesperado preparando Top 5 Peso Neto: {e}")
-
-        response['top_5_peso_neto_tabla'] = top_5_peso_neto_tabla
-        # --- Fin Preparar Tabla Top 5 Guías por Peso Neto ---
-
-        # --- Calcular Promedios de Calidad POR PROVEEDOR ---
-        calidad_por_proveedor_manual = {}
-        calidad_por_proveedor_auto = {}
-        # Asumiendo que 'clasificacion_consolidada' está disponible y actualizada
-        # Necesitamos obtener las clasificaciones para los registros filtrados
-        codigos_guias_filtradas = [rec['codigo_guia'] for rec in filtered_records if rec.get('codigo_guia')]
-        
-        if codigos_guias_filtradas:
-            try:
-                conn_clasif_prov = sqlite3.connect(DB_PATH) # Use DB_PATH
-                conn_clasif_prov.row_factory = sqlite3.Row
-                cursor_clasif_prov = conn_clasif_prov.cursor()
-                
-                placeholders_clasif = ', '.join('?' * len(codigos_guias_filtradas))
-                # Obtener clasificacion_manual y codigo_proveedor
-                query_clasif = f"""
-                    SELECT c.codigo_guia, c.codigo_proveedor, c.clasificacion_manual, c.clasificacion_automatica 
-                    FROM clasificaciones c 
-                    WHERE c.codigo_guia IN ({placeholders_clasif})
-                """
-                cursor_clasif_prov.execute(query_clasif, codigos_guias_filtradas)
-                clasificaciones_filtradas = cursor_clasif_prov.fetchall()
-                conn_clasif_prov.close()
-
-                # Agrupar datos por proveedor
-                datos_agrupados_manual = {}
-                datos_agrupados_auto = {}
-                # Define key_mapping_manual here or ensure it's defined/imported above
-                key_mapping_manual = {
-                    'Verde': 'verdes',
-                    'Sobremaduro': 'sobremaduros',
-                    'Daño Corona': 'danio_corona',
-                    'Pendunculo Largo': 'pendunculo_largo',
-                    'Podrido': 'podridos'
-                }
-                categorias_calidad = list(key_mapping_manual.values()) # Use values from the defined map
-                
-                for row in clasificaciones_filtradas:
-                    proveedor = row['codigo_proveedor'] # Usar código como clave
-                    if not proveedor:
-                        continue # Omitir si no hay código de proveedor
-                        
-                    # Inicializar si es la primera vez que vemos al proveedor
-                    if proveedor not in datos_agrupados_manual:
-                        datos_agrupados_manual[proveedor] = {cat: {'sum': 0, 'count': 0} for cat in categorias_calidad}
-                        datos_agrupados_auto[proveedor] = {cat: {'sum': 0, 'count': 0} for cat in categorias_calidad}
-                    
-                    # Procesar manual
-                    try:
-                        manual_data = json.loads(row['clasificacion_manual'] or '{}')
-                        for key_original, key_mapped in key_mapping_manual.items():
-                            valor = manual_data.get(key_original)
-                            if valor is not None:
-                                try:
-                                    valor_float = float(valor)
-                                    datos_agrupados_manual[proveedor][key_mapped]['sum'] += valor_float
-                                    datos_agrupados_manual[proveedor][key_mapped]['count'] += 1
-                                except (ValueError, TypeError):
-                                    pass # Ignorar valores no numéricos
-                    except json.JSONDecodeError:
-                        pass # Ignorar JSON inválido
-                        
-                    # Procesar automático (similar a manual, usando key_mapping_auto)
-                    try:
-                        auto_data = json.loads(row['clasificacion_automatica'] or '{}')
-                        for key_original, key_mapped in key_mapping_auto.items(): # Reusar el mapeo si es igual o definir uno específico
-                            valor = auto_data.get(key_original)
-                            if valor is not None:
-                                try:
-                                    valor_float = float(valor)
-                                    datos_agrupados_auto[proveedor][key_mapped]['sum'] += valor_float
-                                    datos_agrupados_auto[proveedor][key_mapped]['count'] += 1
-                                except (ValueError, TypeError):
-                                    pass
-                    except json.JSONDecodeError:
-                         pass
-                         
-                # Calcular promedios finales por proveedor
-                for proveedor, data in datos_agrupados_manual.items():
-                    calidad_por_proveedor_manual[proveedor] = {}
-                    for cat, values in data.items():
-                        calidad_por_proveedor_manual[proveedor][cat] = (values['sum'] / values['count']) if values['count'] > 0 else 0
-                        
-                for proveedor, data in datos_agrupados_auto.items():
-                     calidad_por_proveedor_auto[proveedor] = {}
-                     for cat, values in data.items():
-                         calidad_por_proveedor_auto[proveedor][cat] = (values['sum'] / values['count']) if values['count'] > 0 else 0
-
-            except sqlite3.Error as db_err:
-                logger.error(f"Error obteniendo clasificaciones por proveedor: {db_err}")
-            except Exception as e:
-                logger.error(f"Error procesando calidad por proveedor: {e}")
-        # --- Fin Calcular Promedios POR PROVEEDOR ---
-
-        # --- Generar Alertas de Calidad ---
-        alertas_calidad_tabla = []
-        # Mapeo de clave interna a nombre legible para alerta
-        nombres_defectos = {
-            'verdes': 'Verde', # Match keys used in categorias_calidad
-            'sobremaduros': 'Sobremaduro',
-            'danio_corona': 'Daño Corona',
-            'pendunculo_largo': 'Pedúnculo Largo',
-            'podridos': 'Podrido'
-        }
-        # Usar calidad_por_proveedor_manual para las alertas
-        for proveedor_codigo, promedios in calidad_por_proveedor_manual.items():
-            # Intentar obtener nombre del proveedor de filtered_records
-            nombre_prov = proveedor_codigo # Por defecto usar código
-            for rec in filtered_records:
-                if rec.get('codigo_proveedor') == proveedor_codigo:
-                    nombre_prov = rec.get('nombre_proveedor', proveedor_codigo)
-                    break # Encontramos el primero, salir
-                    
-            for defecto_key, valor_pct in promedios.items():
-                severidad_texto = ""
-                severidad_badge = ""
-                
-                if valor_pct > 4:
-                    severidad_texto = "Alta"
-                    severidad_badge = "bg-danger"
-                elif valor_pct > 2:
-                    severidad_texto = "Media"
-                    severidad_badge = "bg-warning"
-                    
-                if severidad_texto: # Solo añadir si es Media o Alta
-                    nombre_problema = nombres_defectos.get(defecto_key, defecto_key.capitalize())
-                    alertas_calidad_tabla.append({
-                        'proveedor': f"{nombre_prov} ({proveedor_codigo})",
-                        'problema': f"Alto % {nombre_problema}",
-                        'valor_problema': f"{valor_pct:.1f}%",
-                        'severidad_texto': severidad_texto,
-                        'severidad_badge': severidad_badge
-                    })
-                    
-        # Ordenar alertas por proveedor y luego por severidad (Alta primero)
-        alertas_calidad_tabla.sort(key=lambda x: (x['proveedor'], 0 if x['severidad_texto'] == 'Alta' else 1))
-        response['alertas_calidad_tabla'] = alertas_calidad_tabla
-        # --- Fin Generar Alertas de Calidad ---
-
-        # DEBUG: Log the variable right before use
-        logger.info(f"DEBUG: Value of calidad_promedios_auto before response: {calidad_promedios_auto}")
-        logger.info(f"DEBUG: Type of calidad_promedios_auto before response: {type(calidad_promedios_auto)}")
-
-        # Devolver todos los datos calculados
-        response = {
-            # KPI principal filtrado
-            'registros_entrada_filtrados': registros_filtrados_count,
-            # Nuevo KPI calculado
-            'total_racimos_filtrados': total_racimos,
-            # Nuevo KPI Peso Neto Total
-            'peso_neto_total_filtrado': peso_neto_total,
-            # Nuevo KPI Peso Neto Pepa (en kg inicialmente)
-            'peso_neto_pepa': peso_neto_pepa,
-            # Nuevos KPIs de Calidad
-            'calidad_promedios_manual': calidad_promedios, # Promedios manuales
-            'calidad_promedios_automatica': calidad_promedios_auto, # Promedios automáticos
-            # Otros KPIs (aún no filtrados - placeholder)
-            'pesajes_pendientes': pesajes_pendientes,
-            'clasificaciones_pendientes': clasificaciones_pendientes,
-            'peso_neto_hoy': peso_neto_hoy,
-            # Datos para gráficos (ya filtrados)
-            'registros_diarios_chart_data': registros_diarios_chart_data,
-            'peso_neto_diario_chart_data': peso_neto_diario_chart_data,
-            'racimos_peso_promedio_chart_data': racimos_peso_promedio_chart_data,
-            'ultimos_registros_tabla': ultimos_registros_tabla,
-            'tiempos_promedio_proceso': tiempos_promedio_proceso,
-            'top_5_peso_neto_tabla': top_5_peso_neto_tabla,
-            'alertas_calidad_tabla': alertas_calidad_tabla
-            # Note: calidad_por_proveedor results aren't directly returned, used for alerts
         }
 
-        # --- Fin Generar Alertas de Calidad ---
+        logger.info("--- Finalizando /api/dashboard/stats exitosamente ---")
+        # logger.debug(f"Response data: {response_data}")
 
-        return jsonify(response)
+        return jsonify(response_data)
+
     except Exception as e:
-        logger.error(f"Error al obtener estadísticas del dashboard: {str(e)}")
-        logger.error(traceback.format_exc())
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Error en dashboard_stats: {str(e)}", exc_info=True)
+        # Devolver error 500 con un JSON que indique el problema
+        return jsonify({"error": "Error interno procesando estadísticas del dashboard", "details": str(e)}), 500
 
 def parse_datetime_str(date_str, time_str, default_time=None):
     """Parsea fecha (DD/MM/YYYY o YYYY-MM-DD) y hora (HH:MM:SS) a datetime."""

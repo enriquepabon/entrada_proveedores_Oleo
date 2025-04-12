@@ -149,6 +149,17 @@ CREATE TABLE IF NOT EXISTS fotos_clasificacion (
 );
 """
 
+# --- NUEVO: Esquema para la tabla de Presupuesto Mensual --- 
+CREATE_PRESUPUESTO_MENSUAL_TABLE = """
+CREATE TABLE IF NOT EXISTS presupuesto_mensual (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fecha_presupuesto TEXT UNIQUE NOT NULL, -- Fecha del día del presupuesto (YYYY-MM-DD)
+    toneladas_proyectadas REAL,          -- Cantidad proyectada en toneladas
+    fecha_carga TIMESTAMP DEFAULT CURRENT_TIMESTAMP -- Cuándo se cargó/actualizó este dato
+);
+"""
+# --- FIN NUEVO --- 
+
 def create_tables():
     """
     Crea las tablas necesarias en la base de datos si no existen.
@@ -176,6 +187,9 @@ def create_tables():
         cursor.execute(CREATE_PESAJES_NETO_TABLE)
         cursor.execute(CREATE_FOTOS_CLASIFICACION_TABLE)
         cursor.execute(CREATE_SALIDAS_TABLE)
+        # --- NUEVO: Crear tabla de presupuesto ---
+        cursor.execute(CREATE_PRESUPUESTO_MENSUAL_TABLE)
+        # --- FIN NUEVO ---
         
         # --- Helper function to add column if not exists ---
         def add_column_if_not_exists(table_name, column_name, column_definition):
@@ -256,6 +270,10 @@ def create_tables():
         # Check and add columns for fotos_clasificacion
         add_column_if_not_exists('fotos_clasificacion', 'fecha_creacion', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
         # Add other checks for fotos_clasificacion if needed
+
+        # --- NUEVO: Verificar/añadir columnas para presupuesto_mensual (si fuera necesario en el futuro) --- 
+        # add_column_if_not_exists('presupuesto_mensual', 'nueva_columna', 'TEXT')
+        # --- FIN NUEVO ---
 
         logger.info(f"Table schema verification completed for: {db_path}")
         return True
