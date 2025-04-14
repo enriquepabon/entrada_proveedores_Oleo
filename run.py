@@ -3,17 +3,23 @@ import os
 import logging
 from logging.handlers import RotatingFileHandler
 
-# Crear directorio de logs si no existe
-os.makedirs('logs', exist_ok=True)
+# Obtener el directorio base del proyecto (donde se encuentra run.py)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Configurar logging
-handler = RotatingFileHandler('logs/app.log', maxBytes=10000, backupCount=3)
+# Crear directorio de logs dentro del proyecto si no existe
+logs_dir = os.path.join(BASE_DIR, 'logs')
+os.makedirs(logs_dir, exist_ok=True)
+
+# Configurar logging con ruta absoluta
+log_file_path = os.path.join(logs_dir, 'app.log')
+handler = RotatingFileHandler(log_file_path, maxBytes=10000, backupCount=3)
+
 handler.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 handler.setFormatter(formatter)
 
-# Asegurar que el directorio actual está en el path
-sys.path.insert(0, os.getcwd())
+# Asegurar que el directorio actual está en el path (ya no es tan crítico con rutas absolutas, pero no hace daño)
+sys.path.insert(0, os.getcwd()) # Consider removing or changing to sys.path.insert(0, BASE_DIR) if needed
 
 from app import create_app
 
@@ -35,8 +41,8 @@ logger.addHandler(handler)
 
 logger.info(f"Iniciando aplicación con host={CONFIG_HOST}, port={CONFIG_PORT}")
 
-# Crear la aplicación con la configuración
-app = create_app({
+# Agregar BASE_DIR a la configuración para que la app pueda usarlo
+app_config = {
     'CONFIG_HOST': CONFIG_HOST,
     'CONFIG_PORT': CONFIG_PORT,
     'PREFERRED_URL_SCHEME': 'http',
@@ -44,8 +50,13 @@ app = create_app({
     'ROBOFLOW_WORKSPACE': ROBOFLOW_WORKSPACE,
     'ROBOFLOW_PROJECT': ROBOFLOW_PROJECT,
     'ROBOFLOW_VERSION': ROBOFLOW_VERSION,
-    'ROBOFLOW_WORKFLOW_ID': ROBOFLOW_WORKFLOW_ID
-})
+    'ROBOFLOW_WORKFLOW_ID': ROBOFLOW_WORKFLOW_ID,
+    'BASE_DIR': BASE_DIR, # Pasar el directorio base a la app
+    'LOG_FILE_PATH': log_file_path # Pasar la ruta del log si es necesario
+}
+
+# Crear la aplicación con la configuración actualizada
+app = create_app(app_config)
 
 logger.setLevel(logging.DEBUG)
 app.logger.info('Iniciando servidor Flask...')

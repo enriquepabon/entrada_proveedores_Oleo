@@ -16,16 +16,32 @@ def create_app(test_config=None):
     """
     Función de fábrica para crear la aplicación Flask
     """
-    # Crear la instancia de la aplicación Flask
+    # Obtener BASE_DIR de la configuración si se pasó
+    base_dir = test_config.get('BASE_DIR') if test_config else None
+    if not base_dir:
+        # Fallback si BASE_DIR no se pasó (no debería ocurrir si run.py está bien)
+        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+        logger.warning(f"BASE_DIR no encontrado en la configuración, usando fallback: {base_dir}")
+
+    # Definir rutas absolutas para static y templates
+    static_folder_path = os.path.join(base_dir, 'static')
+    template_folder_path = os.path.join(base_dir, 'templates')
+
+    # Crear la instancia de la aplicación Flask con rutas absolutas
     app = Flask(__name__,
-                template_folder=os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'templates')),
-                static_folder='../static',
+                template_folder=template_folder_path,
+                static_folder=static_folder_path,
                 instance_relative_config=True)
+    
+    # Guardar BASE_DIR en la configuración de la app para usarlo después
+    app.config['BASE_DIR'] = base_dir
     
     # Aplicar configuración desde parámetro test_config si existe
     if test_config is not None:
-        app.config.update(test_config)
-        logger.info(f"Aplicada configuración externa: {test_config}")
+        # Excluir BASE_DIR para evitar sobreescribir la que ya establecimos
+        config_to_update = {k: v for k, v in test_config.items() if k != 'BASE_DIR'}
+        app.config.update(config_to_update)
+        logger.info(f"Aplicada configuración externa (excluyendo BASE_DIR si estaba): {config_to_update}")
         
         # Configurar correctamente SERVER_NAME si está definido
         if 'SERVER_NAME' in test_config:
@@ -35,10 +51,13 @@ def create_app(test_config=None):
     try:
         import glob
         
+        # Usar static_folder_path absoluto
+        qr_folder_path = os.path.join(static_folder_path, 'qr')
+        
         # QRs específicamente problemáticos a eliminar de forma permanente
         specific_problem_qrs = [
-            os.path.join(app.static_folder, 'qr', 'default_qr_20250311143540.png'),
-            os.path.join(app.static_folder, 'qr', 'default_qr.png')
+            os.path.join(qr_folder_path, 'default_qr_20250311143540.png'),
+            os.path.join(qr_folder_path, 'default_qr.png')
         ]
         
         # Eliminar los archivos problemáticos permanentemente
@@ -58,8 +77,8 @@ def create_app(test_config=None):
         
         # Patrón para limpiar archivos similares (búsqueda con glob)
         problem_qr_patterns = [
-            os.path.join(app.static_folder, 'qr', 'default_qr*.png'),
-            os.path.join(app.static_folder, 'qr', 'default_qr*_*.png')
+            os.path.join(qr_folder_path, 'default_qr*.png'),
+            os.path.join(qr_folder_path, 'default_qr*_*.png')
         ]
         
         for qr_pattern in problem_qr_patterns:
@@ -88,10 +107,12 @@ def create_app(test_config=None):
     app.config['USAR_NUEVOS_TEMPLATES_REPORTES'] = False  # Para futura implementación del módulo de reportes
     logger.info("Feature flags para nuevos templates configurados")
     
-    # Cargar configuración
+    # Cargar configuración - Esto podría sobreescribir rutas si config.py usa rutas relativas
     try:
         from config import app as config_app
+        # Considerar no cargar todo, o asegurarse que config.py también use BASE_DIR
         app.config.update(config_app.config)
+        logger.info("Configuración cargada desde config.py (puede sobreescribir rutas si son relativas)")
     except ImportError:
         app.logger.warning("No se pudo importar la configuración desde config.py")
     
@@ -101,13 +122,8 @@ def create_app(test_config=None):
         # No incluir x_port=1 para evitar problemas con el puerto
     )
     
-    # --- Define Database Paths --- 
-    # Define path relative to the app root, not instance path
-    # Assuming tiquetes.db is in the project root directory (TiquetesApp)
-    project_root = os.path.abspath(os.path.join(app.root_path, os.pardir))
-    app.config['TIQUETES_DB_PATH'] = os.path.join(project_root, 'tiquetes.db')
-    # Remove the potentially confusing DATABASE_DB_PATH
-    # app.config['DATABASE_DB_PATH'] = os.path.join(instance_path, 'database.db') 
+    # --- Define Database Paths using BASE_DIR --- 
+    app.config['TIQUETES_DB_PATH'] = os.path.join(base_dir, 'tiquetes.db')
     logger.info(f"Using Tiquetes DB Path: {app.config['TIQUETES_DB_PATH']}")
     # logger.info(f"Database DB Path: {app.config['DATABASE_DB_PATH']}")
     
@@ -117,19 +133,21 @@ def create_app(test_config=None):
         # Consider if you need to copy a default DB or stop the app here
     # --- End Define Database Paths ---
     
-    # Definir rutas de carpetas críticas y asegurar que existan
-    app.config['UPLOAD_FOLDER'] = os.path.join(app.static_folder, 'uploads')
-    app.config['PDF_FOLDER'] = os.path.join(app.static_folder, 'pdfs')
-    app.config['GUIAS_FOLDER'] = os.path.join(app.static_folder, 'guias')
-    app.config['QR_FOLDER'] = os.path.join(app.static_folder, 'qr')
-    app.config['IMAGES_FOLDER'] = os.path.join(app.static_folder, 'images')
-    app.config['FOTOS_RACIMOS_FOLDER'] = os.path.join(app.static_folder, 'uploads', 'clasificacion')
+    # Definir rutas de carpetas críticas y asegurar que existan using BASE_DIR
+    app.config['UPLOAD_FOLDER'] = os.path.join(static_folder_path, 'uploads')
+    app.config['PDF_FOLDER'] = os.path.join(static_folder_path, 'pdfs')
+    app.config['GUIAS_FOLDER'] = os.path.join(static_folder_path, 'guias')
+    app.config['QR_FOLDER'] = os.path.join(static_folder_path, 'qr')
+    app.config['IMAGES_FOLDER'] = os.path.join(static_folder_path, 'images')
+    app.config['FOTOS_RACIMOS_FOLDER'] = os.path.join(static_folder_path, 'uploads', 'clasificacion')
     
     # Aseguramos que todas las carpetas existan
     for folder_key in ['UPLOAD_FOLDER', 'PDF_FOLDER', 'GUIAS_FOLDER', 'QR_FOLDER', 'IMAGES_FOLDER', 'FOTOS_RACIMOS_FOLDER']:
         folder_path = app.config.get(folder_key)
         if folder_path:
-            os.makedirs(folder_path, exist_ok=True)
+            # No necesitamos crear static_folder_path de nuevo, ya debería existir si la app se inició
+            if folder_path != static_folder_path:
+                 os.makedirs(folder_path, exist_ok=True)
             logger.info(f"Directorio {folder_key} asegurado: {folder_path}")
     
     # Registrar blueprints
