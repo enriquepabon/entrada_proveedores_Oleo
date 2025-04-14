@@ -107,12 +107,12 @@ def create_app(test_config=None):
     app.config['USAR_NUEVOS_TEMPLATES_REPORTES'] = False  # Para futura implementación del módulo de reportes
     logger.info("Feature flags para nuevos templates configurados")
     
-    # Cargar configuración - Esto podría sobreescribir rutas si config.py usa rutas relativas
+    # Cargar configuración desde config.py (ahora debería tener rutas absolutas)
     try:
-        from config import app as config_app
-        # Considerar no cargar todo, o asegurarse que config.py también use BASE_DIR
-        app.config.update(config_app.config)
-        logger.info("Configuración cargada desde config.py (puede sobreescribir rutas si son relativas)")
+        # Importamos la instancia 'app' de config.py para obtener su config
+        from config import app as config_app_instance
+        app.config.update(config_app_instance.config) # Actualiza con la configuración cargada
+        logger.info("Configuración cargada desde config.py (ahora con rutas absolutas)")
     except ImportError:
         app.logger.warning("No se pudo importar la configuración desde config.py")
     
@@ -133,22 +133,23 @@ def create_app(test_config=None):
         # Consider if you need to copy a default DB or stop the app here
     # --- End Define Database Paths ---
     
-    # Definir rutas de carpetas críticas y asegurar que existan using BASE_DIR
-    app.config['UPLOAD_FOLDER'] = os.path.join(static_folder_path, 'uploads')
-    app.config['PDF_FOLDER'] = os.path.join(static_folder_path, 'pdfs')
-    app.config['GUIAS_FOLDER'] = os.path.join(static_folder_path, 'guias')
-    app.config['QR_FOLDER'] = os.path.join(static_folder_path, 'qr')
-    app.config['IMAGES_FOLDER'] = os.path.join(static_folder_path, 'images')
-    app.config['FOTOS_RACIMOS_FOLDER'] = os.path.join(static_folder_path, 'uploads', 'clasificacion')
-    
-    # Aseguramos que todas las carpetas existan
-    for folder_key in ['UPLOAD_FOLDER', 'PDF_FOLDER', 'GUIAS_FOLDER', 'QR_FOLDER', 'IMAGES_FOLDER', 'FOTOS_RACIMOS_FOLDER']:
+    # --- Mantenemos la creación de directorios como una salvaguarda ---
+    # Ahora usará las rutas cargadas desde config.py
+    folder_keys_to_ensure = ['UPLOAD_FOLDER', 'PDF_FOLDER', 'GUIAS_FOLDER', 'QR_FOLDER', 'IMAGES_FOLDER', 'FOTOS_RACIMOS_FOLDER']
+    # Aseguramos static_folder principal también
+    if not os.path.exists(static_folder_path):
+         os.makedirs(static_folder_path, exist_ok=True)
+         logger.info(f"Directorio static asegurado: {static_folder_path}")
+
+    for folder_key in folder_keys_to_ensure:
         folder_path = app.config.get(folder_key)
         if folder_path:
-            # No necesitamos crear static_folder_path de nuevo, ya debería existir si la app se inició
-            if folder_path != static_folder_path:
+            if not os.path.exists(folder_path):
                  os.makedirs(folder_path, exist_ok=True)
-            logger.info(f"Directorio {folder_key} asegurado: {folder_path}")
+                 logger.info(f"Directorio {folder_key} asegurado: {folder_path}")
+        else:
+            logger.warning(f"La clave de configuración para la carpeta '{folder_key}' no se encontró o está vacía.")
+    # --- END CHANGES ---
     
     # Registrar blueprints
     register_blueprints(app)
@@ -170,8 +171,13 @@ def create_app(test_config=None):
     image_processing_utils = init_image_processing_utils(app)
     
     # Guardar la instancia de utils en la configuración de la aplicación
-    from config import init_utils_in_app
-    init_utils_in_app(app, utils_instance)
+    try:
+        # Usamos la función importada de config.py
+        from config import init_utils_in_app
+        init_utils_in_app(app, utils_instance) # Pasamos la instancia 'app' creada aquí
+    except ImportError:
+         app.config['utils'] = utils_instance
+         logger.warning("No se pudo importar 'init_utils_in_app' desde config.py. Utils guardados directamente.")
 
     # Crear tablas y verificar esquema DENTRO del contexto de la aplicación
     with app.app_context():
