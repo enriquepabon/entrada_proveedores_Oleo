@@ -955,3 +955,49 @@ def get_estado_guia(codigo_guia):
             'siguiente_paso': None
         }
 
+def get_db_connection():
+    """
+    Establece y devuelve una conexión a la base de datos utilizando la ruta
+    configurada en la aplicación.
+
+    Returns:
+        sqlite3.Connection: Objeto de conexión a la base de datos.
+
+    Raises:
+        KeyError: Si 'TIQUETES_DB_PATH' no está en current_app.config.
+        sqlite3.Error: Si ocurre un error al conectar a la base de datos.
+        Exception: Para cualquier otro error inesperado.
+    """
+    try:
+        # Asegurarse de importar current_app aquí si no está disponible globalmente en este punto
+        from flask import current_app, g 
+        # También importar sqlite3 y logging si es necesario
+        import sqlite3
+        import logging
+        logger = logging.getLogger(__name__)
+
+        db_path = current_app.config['TIQUETES_DB_PATH']
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row # Mantener consistencia con get_datos_guia
+        logger.debug(f"Conexión a BD establecida: {db_path}")
+        return conn
+    except KeyError as ke:
+        logger.error(f"Error de configuración: {ke}. Asegúrese que TIQUETES_DB_PATH esté configurado.", exc_info=True)
+        raise # Relanzar para que el error sea visible en la capa superior
+    except sqlite3.Error as e:
+        logger.error(f"Error al conectar a la base de datos en {db_path}: {e}", exc_info=True)
+        raise # Relanzar para que el error sea visible
+    except Exception as e:
+        logger.error(f"Error inesperado al obtener conexión a BD: {e}", exc_info=True)
+        raise
+
+def get_utc_timestamp_str():
+    """
+    Devuelve el timestamp actual en UTC como un string formateado.
+    """
+    # Asegurarse de importar datetime y pytz si no están globales
+    from datetime import datetime
+    import pytz
+    
+    return datetime.now(pytz.utc).strftime('%Y-%m-%d %H:%M:%S')
+

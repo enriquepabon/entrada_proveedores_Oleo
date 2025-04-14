@@ -24,6 +24,8 @@ from app.utils.db_budget_operations import obtener_datos_presupuesto
 # Importar funciones de db_operations y db_utils desde la raíz
 from db_operations import get_clasificaciones, get_pesajes_neto, get_pesaje_bruto_by_codigo_guia
 from db_utils import get_entry_records # Corregido para buscar en la raíz
+# Al principio de app/blueprints/misc/routes.py
+from app.utils.common import get_db_connection, get_utc_timestamp_str # ¡Ambas deben estar aquí!
 
 # Database path (assuming it's at the workspace root)
 DB_PATH = 'tiquetes.db'
@@ -1582,50 +1584,83 @@ def sync_clasificacion_from_json(codigo_guia):
 def ensure_entry_records_schema():
     """
     Asegura que la tabla entry_records tenga todas las columnas necesarias.
+    Utiliza la conexión centralizada.
     """
+    conn = None # Inicializar conexión
     try:
-        conn = sqlite3.connect('tiquetes.db')
+        # >>> CAMBIO: Usar la función de utilidad <<<
+        conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         # Verificar si la tabla existe
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='entry_records'")
         if not cursor.fetchone():
-            logger.warning("La tabla entry_records no existe")
-            return False
-            
+            logger.warning("La tabla entry_records no existe. Considera ejecutar migraciones o setup inicial.")
+            # Podríamos decidir crearla aquí si es apropiado para esta función
+            # Por ahora, solo advertimos y salimos.
+            return False # O True si no consideramos esto un fallo aquí
+
         # Verificar columnas existentes
         cursor.execute("PRAGMA table_info(entry_records)")
         columns = {col[1] for col in cursor.fetchall()}
-        
-        # Lista de columnas requeridas
+
+        # Lista de columnas requeridas (puedes ajustar según necesidad)
         required_columns = [
-            'codigo_guia',
-            'codigo_proveedor',
-            'nombre_proveedor',
-            'cantidad_racimos',
-            'placa',
-            'transportador',
-            'fecha_registro',
-            'hora_registro'
+            'id', 'codigo_guia', 'nombre_proveedor', 'codigo_proveedor',
+            'timestamp_registro_utc', 'num_cedula', 'num_placa', 'placa',
+            'conductor', 'transportador', 'codigo_transportador', 'tipo_fruta',
+            'cantidad_racimos', 'acarreo', 'cargo', 'nota', 'lote',
+            'image_filename', 'modified_fields', 'fecha_tiquete',
+            'pdf_filename', 'qr_filename', 'estado', 'fecha_creacion'
         ]
-        
+
         # Verificar y añadir columnas faltantes
+        added_columns = False
         for column in required_columns:
             if column not in columns:
                 try:
+                    # Determinar el tipo basado en convenciones o un mapeo
+                    col_type = "TEXT" # Default a TEXT
+                    if column.endswith('_utc') or column.startswith('fecha') or column.startswith('timestamp'):
+                        col_type = "TEXT" # Almacenar como ISO string
+                    elif column == 'id':
+                        col_type = "INTEGER PRIMARY KEY AUTOINCREMENT"
+                        # Evitar añadir si ya existe (SQLite no permite añadir PRIMARY KEY así)
+                        if 'id' in columns: continue
+                    elif 'cantidad' in column or column.endswith('_id') or column == 'lote':
+                         col_type = "INTEGER" # O REAL si pueden tener decimales
+
+                    # SQLite tiene limitaciones con ALTER TABLE, mejor TEXT para flexibilidad inicial
                     cursor.execute(f"ALTER TABLE entry_records ADD COLUMN {column} TEXT")
                     logger.info(f"Columna {column} añadida a entry_records")
+                    added_columns = True
                 except sqlite3.OperationalError as e:
-                    logger.error(f"Error añadiendo columna {column}: {str(e)}")
-                    
-        conn.commit()
+                    # Ignorar error "duplicate column name" si intentamos añadirla de nuevo
+                    if "duplicate column name" in str(e):
+                        logger.warning(f"Columna {column} ya existe en entry_records.")
+                    else:
+                        logger.error(f"Error añadiendo columna {column} a entry_records: {str(e)}")
+                        # Podríamos querer detenernos o continuar dependiendo de la severidad
+
+        if added_columns:
+            conn.commit()
+            logger.info("Commit realizado tras añadir columnas a entry_records.")
+        else:
+            logger.info("No se añadieron nuevas columnas a entry_records.")
+
         return True
+    except sqlite3.Error as e:
+        logger.error(f"Error de base de datos en ensure_entry_records_schema: {str(e)}")
+        logger.error(traceback.format_exc())
+        return False
     except Exception as e:
-        logger.error(f"Error en ensure_entry_records_schema: {str(e)}")
+        logger.error(f"Error inesperado en ensure_entry_records_schema: {str(e)}")
+        logger.error(traceback.format_exc())
         return False
     finally:
         if conn:
             conn.close()
+            logger.debug("Conexión a BD cerrada en ensure_entry_records_schema.")
 
 def ensure_clasificaciones_schema():
     """

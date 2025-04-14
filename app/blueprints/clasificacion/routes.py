@@ -17,6 +17,8 @@ from io import BytesIO
 from pathlib import Path
 from urllib.parse import unquote
 import copy
+# Al principio de app/blueprints/clasificacion/routes.py
+from app.utils.common import get_db_connection, get_utc_timestamp_str
 
 # Third-party Library Imports
 from flask import (
@@ -3628,140 +3630,170 @@ def regenerar_imagenes(url_guia):
 
 @bp.route('/sync_clasificacion/<codigo_guia>')
 def sync_clasificacion(codigo_guia):
-    conn = None
+    """
+    Sincroniza los datos de clasificación desde el archivo JSON a la base de datos.
+    Utiliza la conexión centralizada. (Versión API/directa)
+    """
+    conn = None # Inicializar conexión
     try:
+        # Construir ruta al archivo JSON
         json_filename = f"clasificacion_{codigo_guia}.json"
-        json_path = os.path.join(current_app.static_folder, 'clasificaciones', json_filename)
+        clasificaciones_dir = current_app.config.get('CLASIFICACIONES_DIR', os.path.join(current_app.static_folder, 'clasificaciones'))
+        json_path = os.path.join(clasificaciones_dir, json_filename)
 
         if not os.path.exists(json_path):
+            current_app.logger.warning(f"Archivo JSON no encontrado para sync: {json_path}")
             return jsonify({'success': False, 'message': 'Archivo JSON no encontrado'}), 404
 
         with open(json_path, 'r') as f:
             clasificacion_data = json.load(f)
 
-        conn = sqlite3.connect(current_app.config['TIQUETES_DB_PATH'])
+        # >>> CAMBIO PRINCIPAL: Usar la función de utilidad <<<
+        conn = get_db_connection()
         cursor = conn.cursor()
 
-        # Preparar los datos para la actualización
-        datos = {
-            'codigo_guia': codigo_guia,
-            'fecha_clasificacion': clasificacion_data.get('fecha_registro'),
-            'hora_clasificacion': clasificacion_data.get('hora_registro'),
-            'clasificacion_manual': json.dumps(clasificacion_data.get('clasificacion_manual', {})),
-            'clasificacion_automatica': json.dumps(clasificacion_data.get('clasificacion_automatica', {})),
-            'estado': clasificacion_data.get('estado', 'activo')
-        }
+        # Preparar los datos para la actualización/inserción
+        timestamp_clasificacion = clasificacion_data.get('timestamp_clasificacion_utc', get_utc_timestamp_str())
+        manual_json = json.dumps(clasificacion_data.get('clasificacion_manual', {}))
+        auto_json = json.dumps(clasificacion_data.get('clasificacion_automatica', {}))
+        estado_clasificacion = clasificacion_data.get('estado_clasificacion', clasificacion_data.get('estado', 'completado'))
 
         # Intentar actualizar primero
-        cursor.execute("""
-            UPDATE clasificaciones 
-            SET fecha_clasificacion = :fecha_clasificacion,
-                hora_clasificacion = :hora_clasificacion,
-                clasificacion_manual = :clasificacion_manual,
-                clasificacion_automatica = :clasificacion_automatica,
-                estado = :estado
-            WHERE codigo_guia = :codigo_guia
-        """, datos)
+        update_sql = """
+            UPDATE clasificaciones
+            SET timestamp_clasificacion_utc = ?,
+                clasificacion_manual_json = ?,
+                clasificacion_automatica_json = ?,
+                estado_clasificacion = ?
+            WHERE codigo_guia = ?
+        """
+        cursor.execute(update_sql, (
+            timestamp_clasificacion,
+            manual_json,
+            auto_json,
+            estado_clasificacion,
+            codigo_guia
+        ))
 
         # Si no se actualizó ningún registro, insertar uno nuevo
         if cursor.rowcount == 0:
-            cursor.execute("""
+            insert_sql = """
                 INSERT INTO clasificaciones (
-                    codigo_guia, fecha_clasificacion, hora_clasificacion,
-                    clasificacion_manual, clasificacion_automatica, estado
-                ) VALUES (
-                    :codigo_guia, :fecha_clasificacion, :hora_clasificacion,
-                    :clasificacion_manual, :clasificacion_automatica, :estado
-                )
-            """, datos)
+                    codigo_guia, timestamp_clasificacion_utc,
+                    clasificacion_manual_json, clasificacion_automatica_json,
+                    estado_clasificacion
+                ) VALUES (?, ?, ?, ?, ?)
+            """
+            cursor.execute(insert_sql, (
+                codigo_guia,
+                timestamp_clasificacion,
+                manual_json,
+                auto_json,
+                estado_clasificacion
+            ))
 
         conn.commit()
-        conn.close()
-
-        current_app.logger.info(f"Datos de clasificación sincronizados para guía {codigo_guia}")
+        current_app.logger.info(f"Datos de clasificación sincronizados (vía API) para guía {codigo_guia}")
         return jsonify({
             'success': True,
             'message': 'Datos de clasificación sincronizados correctamente'
         })
 
     except Exception as e:
-        current_app.logger.error(f"Error sincronizando datos de clasificación: {str(e)}")
+        current_app.logger.error(f"Error en sync_clasificacion (API) para {codigo_guia}: {str(e)}")
+        current_app.logger.error(traceback.format_exc())
+        if conn: # Intentar rollback si la conexión se estableció
+            try:
+                conn.rollback()
+                current_app.logger.info(f"Rollback realizado en sync_clasificacion (API) para {codigo_guia} debido a error.")
+            except Exception as rb_err:
+                current_app.logger.error(f"Error durante el rollback en sync_clasificacion (API) para {codigo_guia}: {rb_err}")
+        # Devolver error como JSON
         return jsonify({
             'success': False,
-            'message': f'Error sincronizando datos de clasificación: {str(e)}'
-        })
+            'message': f'Error interno al sincronizar datos de clasificación: {str(e)}'
+        }), 500
     finally:
+        # Asegurarse de cerrar la conexión
         if conn:
             conn.close()
+            current_app.logger.debug(f"Conexión a BD cerrada para {codigo_guia} en sync_clasificacion (API).")
 
 def get_clasificacion_by_codigo_guia(codigo_guia):
     """
     Recupera un registro de clasificación por su código de guía.
-    
+    Utiliza la conexión centralizada.
+
     Args:
         codigo_guia (str): Código de guía a buscar
-        
+
     Returns:
         dict: Datos de la clasificación o None si no se encuentra
     """
-    conn = None # Initialize conn to None before the try block
+    conn = None # Inicializar conexión
     try:
-        db_path = current_app.config['TIQUETES_DB_PATH'] # Get DB path from app config
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
+        # >>> CAMBIO PRINCIPAL: Usar la función de utilidad <<<
+        conn = get_db_connection()
+        # conn.row_factory ya está establecido en get_db_connection()
         cursor = conn.cursor()
-        
+
+        # Obtener datos principales de clasificación
         cursor.execute("SELECT * FROM clasificaciones WHERE codigo_guia = ?", (codigo_guia,))
         row = cursor.fetchone()
-        
+
         if row:
-            clasificacion = {key: row[key] for key in row.keys()}
-            
-            # Obtener fotos asociadas
-            cursor.execute("SELECT ruta_foto FROM fotos_clasificacion WHERE codigo_guia = ? ORDER BY numero_foto", 
-                         (codigo_guia,))
-            fotos = [row[0] for row in cursor.fetchall()]
-            clasificacion['fotos'] = fotos
-            
-            # Si clasificaciones es una cadena JSON, convertirla a lista
-            if isinstance(clasificacion.get('clasificaciones'), str):
-                try:
-                    clasificacion['clasificaciones'] = json.loads(clasificacion['clasificaciones'])
-                except json.JSONDecodeError:
-                    clasificacion['clasificaciones'] = []
-            
-            # Si clasificacion_automatica es una cadena JSON, convertirla a diccionario
-            if isinstance(clasificacion.get('clasificacion_automatica'), str):
-                try:
-                    clasificacion['clasificacion_automatica'] = json.loads(clasificacion['clasificacion_automatica'])
-                except json.JSONDecodeError:
-                    clasificacion['clasificacion_automatica'] = {}
-                # # Limpiar Nones después de cargar desde JSON  <- COMMENTED OUT BLOCK
-                # if isinstance(clasificacion.get('clasificacion_automatica'), dict):
-                #     clasificacion['clasificacion_automatica'] = clean_classification_dict(clasificacion['clasificacion_automatica'])
-                #     logger.info(f"Limpiado clasificacion_automatica tras carga DB: {clasificacion['clasificacion_automatica']}")
-                    
-            # Si clasificacion_manual_json existe, convertirlo y asignarlo a clasificacion_manual
+            # Convertir Row a diccionario mutable
+            clasificacion = dict(row)
+
+            # Procesar JSON si existen
             if 'clasificacion_manual_json' in clasificacion and clasificacion['clasificacion_manual_json']:
                 try:
                     clasificacion['clasificacion_manual'] = json.loads(clasificacion['clasificacion_manual_json'])
-                    logger.info(f"Convertido clasificacion_manual_json a clasificacion_manual: {clasificacion['clasificacion_manual']}")
                 except json.JSONDecodeError:
-                    logger.error(f"Error decodificando clasificacion_manual_json: {clasificacion['clasificacion_manual_json']}")
-                    clasificacion['clasificacion_manual'] = {}
-                # # Limpiar Nones después de cargar desde JSON  <- COMMENTED OUT BLOCK
-                # if isinstance(clasificacion.get('clasificacion_manual'), dict):
-                #      clasificacion['clasificacion_manual'] = clean_classification_dict(clasificacion['clasificacion_manual'])
-                #      logger.info(f"Limpiado clasificacion_manual tras carga DB: {clasificacion['clasificacion_manual']}")
-            
+                    logger.error(f"Error decodificando clasificacion_manual_json para {codigo_guia}: {clasificacion['clasificacion_manual_json']}")
+                    clasificacion['clasificacion_manual'] = {} # Default a dict vacío
+
+            if 'clasificacion_automatica_json' in clasificacion and clasificacion['clasificacion_automatica_json']:
+                try:
+                    clasificacion['clasificacion_automatica'] = json.loads(clasificacion['clasificacion_automatica_json'])
+                except json.JSONDecodeError:
+                    logger.error(f"Error decodificando clasificacion_automatica_json para {codigo_guia}: {clasificacion['clasificacion_automatica_json']}")
+                    clasificacion['clasificacion_automatica'] = {} # Default a dict vacío
+
+            # Obtener fotos asociadas (si la tabla existe y es relevante)
+            # Considerar mover esto a una función separada si la lógica crece
+            try:
+                cursor.execute("SELECT ruta_foto FROM fotos_clasificacion WHERE codigo_guia = ? ORDER BY numero_foto",
+                             (codigo_guia,))
+                fotos = [foto_row[0] for foto_row in cursor.fetchall()]
+                clasificacion['fotos'] = fotos
+            except sqlite3.OperationalError as table_err:
+                # Manejar caso donde la tabla fotos_clasificacion podría no existir aún
+                if "no such table" in str(table_err):
+                    logger.warning(f"Tabla fotos_clasificacion no encontrada para {codigo_guia}. Omitiendo fotos.")
+                    clasificacion['fotos'] = []
+                else:
+                    raise # Relanzar otros errores de SQL
+
+            logger.debug(f"Clasificación encontrada para {codigo_guia}")
             return clasificacion
-        return None
+        else:
+            logger.warning(f"No se encontró registro de clasificación para {codigo_guia}")
+            return None
+
     except sqlite3.Error as e:
-        logger.error(f"Error recuperando registro de clasificación por código de guía: {e}")
-        return None
+        logger.error(f"Error de base de datos recuperando clasificación para {codigo_guia}: {e}")
+        logger.error(traceback.format_exc())
+        return None # Devolver None en caso de error de BD
+    except Exception as e:
+        logger.error(f"Error inesperado recuperando clasificación para {codigo_guia}: {e}")
+        logger.error(traceback.format_exc())
+        return None # Devolver None en caso de error general
     finally:
+        # Asegurarse de cerrar la conexión
         if conn:
             conn.close()
+            logger.debug(f"Conexión a BD cerrada para {codigo_guia} en get_clasificacion_by_codigo_guia.")
 
 @bp.route('/ver_detalles_clasificacion/<url_guia>')
 def ver_detalles_clasificacion(url_guia):
