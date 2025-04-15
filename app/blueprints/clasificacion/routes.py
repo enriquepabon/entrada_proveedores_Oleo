@@ -3078,23 +3078,31 @@ def guardar_clasificacion_final(codigo_guia):
                     # Actualizar datos_clasificacion con valores manual
                     datos_clasificacion.update(valores_manual)
                     
+                    # Asegurar que los campos individuales estén presentes y sean float
+                    datos_clasificacion['verde_manual'] = float(valores_manual.get('verde_manual', 0))
+                    datos_clasificacion['sobremaduro_manual'] = float(valores_manual.get('sobremaduro_manual', 0))
+                    datos_clasificacion['danio_corona_manual'] = float(valores_manual.get('danio_corona_manual', 0))
+                    datos_clasificacion['pendunculo_largo_manual'] = float(valores_manual.get('pendunculo_largo_manual', 0))
+                    datos_clasificacion['podrido_manual'] = float(valores_manual.get('podrido_manual', 0))
+                    # Forzar el estado a 'completado' siempre
+                    datos_clasificacion['estado'] = 'completado'
                     # También crear un diccionario para actualizar datos_guia
                     clasificacion_manual_dict = {
-                        'verdes': valores_manual.get('verde_manual', 0),
-                        'sobremaduros': valores_manual.get('sobremaduro_manual', 0),
-                        'danio_corona': valores_manual.get('danio_corona_manual', 0),
-                        'pendunculo_largo': valores_manual.get('pendunculo_largo_manual', 0),
-                        'podridos': valores_manual.get('podrido_manual', 0)
+                        'verdes': datos_clasificacion['verde_manual'],
+                        'sobremaduros': datos_clasificacion['sobremaduro_manual'],
+                        'danio_corona': datos_clasificacion['danio_corona_manual'],
+                        'pendunculo_largo': datos_clasificacion['pendunculo_largo_manual'],
+                        'podridos': datos_clasificacion['podrido_manual']
                     }
                     
                     # Actualizar los datos de la guía
                     datos_guia['clasificacion_manual'] = clasificacion_manual_dict
-                    datos_guia['timestamp_clasificacion_utc'] = timestamp_utc_str # Add UTC timestamp to datos_guia as well
-                    datos_guia['fecha_clasificacion'] = datetime.now(BOGOTA_TZ).strftime('%d/%m/%Y') # Keep local for display if needed
-                    datos_guia['hora_clasificacion'] = datetime.now(BOGOTA_TZ).strftime('%H:%M:%S') # Keep local for display if needed
-                    datos_guia['clasificacion_completada'] = True # Ensure this flag is set
-                    datos_guia['estado_actual'] = 'clasificacion_completada' # Set state
-                    datos_guia['estado_clasificacion'] = 'completado' # Set state
+                    datos_guia['timestamp_clasificacion_utc'] = timestamp_utc_str  # Add UTC timestamp to datos_guia as well
+                    datos_guia['fecha_clasificacion'] = datetime.now(BOGOTA_TZ).strftime('%d/%m/%Y')  # Keep local for display if needed
+                    datos_guia['hora_clasificacion'] = datetime.now(BOGOTA_TZ).strftime('%H:%M:%S')  # Keep local for display if needed
+                    datos_guia['clasificacion_completada'] = True  # Ensure this flag is set
+                    datos_guia['estado_actual'] = 'clasificacion_completada'  # Set state
+                    datos_guia['estado_clasificacion'] = 'completado'  # Set state
                     utils_instance.update_datos_guia(codigo_guia, datos_guia)
                     logger.info(f"Actualizada clasificación manual en datos_guia: {clasificacion_manual_dict}")
                     
@@ -3107,9 +3115,9 @@ def guardar_clasificacion_final(codigo_guia):
                     clasificacion_data['clasificacion_manual'] = clasificacion_manual_dict
                     # Add timestamp to JSON file as well for consistency
                     clasificacion_data['timestamp_clasificacion_utc'] = timestamp_utc_str
-                    clasificacion_data['fecha_clasificacion'] = datos_guia['fecha_clasificacion'] # Keep local in JSON too
-                    clasificacion_data['hora_clasificacion'] = datos_guia['hora_clasificacion'] # Keep local in JSON too
-                    clasificacion_data['estado_clasificacion'] = 'completado' # Add status to JSON
+                    clasificacion_data['fecha_clasificacion'] = datos_guia['fecha_clasificacion']  # Keep local in JSON too
+                    clasificacion_data['hora_clasificacion'] = datos_guia['hora_clasificacion']  # Keep local in JSON too
+                    clasificacion_data['estado_clasificacion'] = 'completado'  # Add status to JSON
                     with open(clasificacion_file, 'w', encoding='utf-8') as f:
                         json.dump(clasificacion_data, f, indent=4)
                     logger.info(f"Archivo de clasificación actualizado en: {clasificacion_file}")
