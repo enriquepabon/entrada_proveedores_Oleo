@@ -1338,7 +1338,13 @@ def listar_clasificaciones_filtradas():
                         'automatica_completado': 'clasificacion_automatica' in clasificacion_data and clasificacion_data['clasificacion_automatica'] is not None,
                         'automatica_en_proceso': clasificacion_data.get('estado') == 'en_proceso'
                     }
-                    
+
+                    # Normalizar el estado para la UI y filtros
+                    if item['estado'] in ['clasificacion_completada', 'manual_registrada', 'clasificacion_completada', 'completado', 'clasificacion_completada', 'clasificacion_completada', 'clasificacion_completada']:
+                        item['estado'] = 'completado'
+                    elif not item['estado'] or item['estado'] == 'activo':
+                        item['estado'] = 'en_proceso'
+
                     # Aplicar filtros
                     if fecha_desde and item['fecha_clasificacion'] < fecha_desde:
                         continue
