@@ -340,6 +340,7 @@ def store_clasificacion(clasificacion_data, fotos=None):
         # Quitar valores None ANTES de construir el SQL
         datos_finales = {k: v for k, v in datos_para_sql.items() if v is not None}
         logger.debug(f"STORE_CLASIF: Datos finales para SQL (sin None): {datos_finales}")
+        logger.info(f"[DEBUG-ESTADO] Valor de 'estado' a guardar: {datos_finales.get('estado')}")
 
         # Check if record exists
         cursor.execute("SELECT id FROM clasificaciones WHERE codigo_guia = ?", (codigo_guia,))
@@ -356,6 +357,7 @@ def store_clasificacion(clasificacion_data, fotos=None):
                 valores = list(update_fields.values()) + [codigo_guia]
                 update_query = f"UPDATE clasificaciones SET {set_clause} WHERE codigo_guia = ?"
                 logger.info(f"STORE_CLASIF: Preparando UPDATE para {codigo_guia}.")
+                logger.info(f"[DEBUG-ESTADO] Valor de 'estado' en UPDATE: {update_fields.get('estado')}")
                 # --- INICIO: Logs detallados de UPDATE ---
                 logger.info(f"STORE_CLASIF [UPDATE SQL]: {update_query}")
                 # Loguear parámetros con cuidado, especialmente si pueden ser muy largos
@@ -380,12 +382,14 @@ def store_clasificacion(clasificacion_data, fotos=None):
             valores = list(datos_finales.values())
             insert_query = f"INSERT INTO clasificaciones ({campos}) VALUES ({placeholders})"
             logger.info(f"STORE_CLASIF: Ejecutando INSERT: {insert_query}")
+            logger.info(f"[DEBUG-ESTADO] Valor de 'estado' en INSERT: {datos_finales.get('estado')}")
             logger.debug(f"STORE_CLASIF: Valores para INSERT: {valores}")
             cursor.execute(insert_query, valores)
             logger.info(f"STORE_CLASIF: INSERT ejecutado para {codigo_guia}.")
 
         # Commit después de INSERT/UPDATE de clasificación
         conn.commit()
+        logger.info(f"[DEBUG-ESTADO] Commit realizado para {codigo_guia}. Valor de 'estado' guardado: {datos_finales.get('estado')}")
         logger.info(f"STORE_CLASIF: Commit realizado para tabla clasificaciones ({codigo_guia}).")
 
 
