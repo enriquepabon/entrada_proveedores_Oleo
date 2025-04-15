@@ -774,186 +774,126 @@ def standardize_template_data(data, record_type="generic"):
 
 def get_estado_guia(codigo_guia):
     """
-    Determina el estado actual de una guía basado en los datos disponibles.
-    
-    Args:
-        codigo_guia (str): Código de la guía a verificar
-        
-    Returns:
-        dict: Diccionario con la información de estado de la guía
+    Determina el estado actual de la guía y los pasos completados.
+    Devuelve un diccionario con:
+        - pasos_completados: lista de strings
+        - siguiente_paso: string
+        - descripcion: string
+        - porcentaje_avance: int
+        - datos_disponibles: lista de strings
     """
+    pasos_completados = []
+    datos_disponibles = []
+    siguiente_paso = None
+    descripcion = ""
+    porcentaje_avance = 0
+
+    # Obtener datos de la guía
+    datos_guia = None
     try:
-        # Estado por defecto (guía creada pero sin procesos completados)
-        estado_info = {
-            'estado': 'creada',
-            'descripcion': 'Guía registrada sin procesos completados',
-            'porcentaje_avance': 0,
-            'clase_css': 'bg-secondary',
-            'texto_css': 'text-white',
-            'pasos_completados': [],
-            'acciones_disponibles': ['entrada'],
-            'datos_disponibles': [],
-            'siguiente_paso': 'entrada'
-        }
-        
-        # Obtener datos de la guía - versión local
-        from flask import current_app
-        utils_instance = current_app.config.get('utils')
-        if not utils_instance:
-            logger.warning("Utils no disponible en configuración, usando método local")
-            datos_guia = utils_instance.get_datos_guia(codigo_guia)
-        else:
-            datos_guia = utils_instance.get_datos_guia(codigo_guia)
-        
-        if not datos_guia:
-            return estado_info
-        
-        # PRIORIDAD: Verificar si hay datos de salida (esto es lo más importante)
-        # Si hay datos de salida, el proceso está completado
-        if (datos_guia.get('timestamp_salida_utc') and datos_guia.get('timestamp_pesaje_neto_utc')) or datos_guia.get('estado_final') == 'completado' or datos_guia.get('estado_actual') == 'proceso_completado':
-            estado_info['estado'] = 'proceso_completado'
-            estado_info['descripcion'] = 'Proceso completado'
-            estado_info['porcentaje_avance'] = 100
-            estado_info['clase_css'] = 'bg-success'
-            # Asegurar que todos los pasos se marquen como completados
-            pasos_completos = ['entrada', 'pesaje', 'clasificacion', 'pesaje_neto', 'salida']
-            for paso in pasos_completos:
-                if paso not in estado_info['pasos_completados']:
-                    estado_info['pasos_completados'].append(paso)
-                if paso not in estado_info['datos_disponibles']:
-                    estado_info['datos_disponibles'].append(paso)
-            estado_info['siguiente_paso'] = None
-            logger.info(f"Estado determinado para guía {codigo_guia}: {estado_info['estado']} (proceso completado)")
-            return estado_info
-        
-        # SEGUNDA PRIORIDAD: Verificar si ya se completó la clasificación
-        # Cualquiera de estos indicadores muestra que la clasificación está completada
-        if (datos_guia.get('estado_actual') == 'clasificacion_completada' or 
-            datos_guia.get('clasificacion_completada') is True or 
-            datos_guia.get('estado_clasificacion') == 'completado' or
-            (datos_guia.get('pasos_completados') and 'clasificacion' in datos_guia.get('pasos_completados'))):
-            estado_info['estado'] = 'clasificacion_completada'
-            estado_info['descripcion'] = 'Clasificación completada'
-            estado_info['porcentaje_avance'] = 70
-            estado_info['clase_css'] = 'bg-success'
-            estado_info['pasos_completados'] = ['entrada', 'pesaje', 'clasificacion']
-            estado_info['acciones_disponibles'] = ['entrada', 'pesaje', 'clasificacion', 'pesaje_neto']
-            estado_info['datos_disponibles'] = ['entrada', 'pesaje', 'clasificacion']
-            estado_info['siguiente_paso'] = 'pesaje_neto'
-            return estado_info
-        
-        # Verificar primero si hay datos de pesaje
-        peso_bruto = datos_guia.get('peso_bruto')
-        
-        # Si hay datos de pesaje
-        if peso_bruto and str(peso_bruto) not in ['Pendiente', 'N/A', 'No disponible'] and float(str(peso_bruto).replace(',', '.')) > 0:
-            estado_info['estado'] = 'pesaje_completado'
-            estado_info['descripcion'] = 'Pesaje completado'
-            estado_info['porcentaje_avance'] = 50
-            estado_info['clase_css'] = 'bg-info'
-            estado_info['pasos_completados'] = ['entrada', 'pesaje']
-            estado_info['acciones_disponibles'] = ['entrada', 'pesaje', 'clasificacion']
-            estado_info['datos_disponibles'] = ['entrada', 'pesaje']
-            estado_info['siguiente_paso'] = 'clasificacion'
-        else:
-            # Solo hay datos de entrada
-            estado_info['estado'] = 'entrada_completada'
-            estado_info['descripcion'] = 'Entrada registrada'
-            estado_info['porcentaje_avance'] = 25
-            estado_info['clase_css'] = 'bg-primary'
-            estado_info['pasos_completados'] = ['entrada']
-            estado_info['acciones_disponibles'] = ['entrada', 'pesaje']
-            estado_info['datos_disponibles'] = ['entrada']
-            estado_info['siguiente_paso'] = 'pesaje'
-        
-        # Verificar si hay datos de clasificación
-        clasificacion_completada = datos_guia.get('clasificacion_completada')
-        if clasificacion_completada:
-            estado_info['estado'] = 'clasificacion_completada'
-            estado_info['descripcion'] = 'Clasificación completada'
-            estado_info['porcentaje_avance'] = 70
-            estado_info['clase_css'] = 'bg-success'
-            if 'clasificacion' not in estado_info['pasos_completados']:
-                estado_info['pasos_completados'].append('clasificacion')
-            if 'clasificacion' not in estado_info['acciones_disponibles']:
-                estado_info['acciones_disponibles'].append('clasificacion')
-            if 'pesaje_neto' not in estado_info['acciones_disponibles']:
-                estado_info['acciones_disponibles'].append('pesaje_neto')
-            if 'clasificacion' not in estado_info['datos_disponibles']:
-                estado_info['datos_disponibles'].append('clasificacion')
-            estado_info['siguiente_paso'] = 'pesaje_neto'
-        
-        # Verificar si hay datos de peso neto
-        peso_neto = datos_guia.get('peso_neto')
-        pesaje_neto_completado = datos_guia.get('pesaje_neto_completado', False)
-        
-        if (pesaje_neto_completado or 
-            (peso_neto and str(peso_neto) not in ['Pendiente', 'N/A', 'No disponible'] and float(str(peso_neto).replace(',', '.')) > 0)):
-            estado_info['estado'] = 'pesaje_neto_completado'
-            estado_info['descripcion'] = 'Pesaje neto completado'
-            estado_info['porcentaje_avance'] = 80  # Actualizado al 80% para pesaje neto
-            estado_info['clase_css'] = 'bg-success'
-            if 'pesaje_neto' not in estado_info['pasos_completados']:
-                estado_info['pasos_completados'].append('pesaje_neto')
-            if 'salida' not in estado_info['acciones_disponibles']:
-                estado_info['acciones_disponibles'].append('salida')
-            if 'pesaje_neto' not in estado_info['datos_disponibles']:
-                estado_info['datos_disponibles'].append('pesaje_neto')
-            estado_info['siguiente_paso'] = 'salida'
-            
-        # Verificar si hay datos específicos de salida (como respaldo al check inicial)
-        if datos_guia.get('fecha_salida') and datos_guia.get('hora_salida'):
-            estado_info['estado'] = 'proceso_completado'
-            estado_info['descripcion'] = 'Proceso completado'
-            estado_info['porcentaje_avance'] = 100
-            estado_info['clase_css'] = 'bg-success'
-            if 'salida' not in estado_info['pasos_completados']:
-                estado_info['pasos_completados'].append('salida')
-            if 'salida' not in estado_info['datos_disponibles']:
-                estado_info['datos_disponibles'].append('salida')
-            estado_info['siguiente_paso'] = None
-        elif datos_guia.get('estado_salida') == 'Completado':
-            estado_info['estado'] = 'proceso_completado'
-            estado_info['descripcion'] = 'Proceso completado'
-            estado_info['porcentaje_avance'] = 100
-            estado_info['clase_css'] = 'bg-success'
-            if 'salida' not in estado_info['pasos_completados']:
-                estado_info['pasos_completados'].append('salida')
-            if 'salida' not in estado_info['datos_disponibles']:
-                estado_info['datos_disponibles'].append('salida')
-            estado_info['siguiente_paso'] = None
-                
-        # Si hay algún campo extra que indique estado final (como respaldo)
-        estado_final = datos_guia.get('estado_final')
-        if estado_final == 'completado':
-            estado_info['estado'] = 'proceso_completado'
-            estado_info['descripcion'] = 'Proceso completado'
-            estado_info['porcentaje_avance'] = 100
-            estado_info['clase_css'] = 'bg-success'
-            # Asegurar que todos los pasos se marquen como completados
-            pasos_completos = ['entrada', 'pesaje', 'clasificacion', 'pesaje_neto', 'salida']
-            for paso in pasos_completos:
-                if paso not in estado_info['pasos_completados']:
-                    estado_info['pasos_completados'].append(paso)
-                if paso not in estado_info['datos_disponibles']:
-                    estado_info['datos_disponibles'].append(paso)
-            estado_info['siguiente_paso'] = None
-        
-        logger.info(f"Estado determinado para guía {codigo_guia}: {estado_info['estado']}")
-        return estado_info
+        from app.utils.common import CommonUtils
+        utils = CommonUtils(current_app)
+        datos_guia = utils.get_datos_guia(codigo_guia)
     except Exception as e:
-        logger.error(f"Error determinando estado de guía: {str(e)}")
+        print(f"Error obteniendo datos de guía en get_estado_guia: {e}")
         return {
-            'estado': 'error',
-            'descripcion': f'Error: {str(e)}',
-            'porcentaje_avance': 0,
-            'clase_css': 'bg-danger',
-            'texto_css': 'text-white',
-            'pasos_completados': [],
-            'acciones_disponibles': [],
-            'datos_disponibles': [],
-            'siguiente_paso': None
+            "pasos_completados": [],
+            "siguiente_paso": "entrada",
+            "descripcion": "Error obteniendo datos",
+            "porcentaje_avance": 0,
+            "datos_disponibles": []
         }
+
+    # Paso 1: Registro de entrada
+    if datos_guia and datos_guia.get("timestamp_registro_utc"):
+        pasos_completados.append("entrada")
+        datos_disponibles.append("entrada")
+        porcentaje_avance = 20
+        descripcion = "Registro de entrada completado"
+        siguiente_paso = "pesaje"
+    else:
+        siguiente_paso = "entrada"
+        descripcion = "Pendiente registro de entrada"
+        return {
+            "pasos_completados": pasos_completados,
+            "siguiente_paso": siguiente_paso,
+            "descripcion": descripcion,
+            "porcentaje_avance": porcentaje_avance,
+            "datos_disponibles": datos_disponibles
+        }
+
+    # Paso 2: Pesaje bruto
+    if datos_guia.get("peso_bruto") and datos_guia["peso_bruto"] not in [None, "", "Pendiente", "N/A"]:
+        pasos_completados.append("pesaje")
+        datos_disponibles.append("pesaje")
+        porcentaje_avance = 40
+        descripcion = "Pesaje bruto completado, pendiente clasificación"
+        siguiente_paso = "clasificacion"
+    else:
+        siguiente_paso = "pesaje"
+        descripcion = "Pendiente pesaje bruto"
+        return {
+            "pasos_completados": pasos_completados,
+            "siguiente_paso": siguiente_paso,
+            "descripcion": descripcion,
+            "porcentaje_avance": porcentaje_avance,
+            "datos_disponibles": datos_disponibles
+        }
+
+    # Paso 3: Clasificación
+    if datos_guia.get("timestamp_clasificacion_utc"):
+        pasos_completados.append("clasificacion")
+        datos_disponibles.append("clasificacion")
+        porcentaje_avance = 60
+        descripcion = "Clasificación completada, pendiente pesaje neto"
+        siguiente_paso = "pesaje_neto"
+    else:
+        siguiente_paso = "clasificacion"
+        descripcion = "Pendiente clasificación"
+        return {
+            "pasos_completados": pasos_completados,
+            "siguiente_paso": siguiente_paso,
+            "descripcion": descripcion,
+            "porcentaje_avance": porcentaje_avance,
+            "datos_disponibles": datos_disponibles
+        }
+
+    # Paso 4: Pesaje neto
+    if datos_guia.get("peso_neto") and datos_guia["peso_neto"] not in [None, "", "Pendiente", "N/A"]:
+        pasos_completados.append("pesaje_neto")
+        datos_disponibles.append("pesaje_neto")
+        porcentaje_avance = 80
+        descripcion = "Pesaje neto completado, pendiente salida"
+        siguiente_paso = "salida"
+    else:
+        siguiente_paso = "pesaje_neto"
+        descripcion = "Pendiente pesaje neto"
+        return {
+            "pasos_completados": pasos_completados,
+            "siguiente_paso": siguiente_paso,
+            "descripcion": descripcion,
+            "porcentaje_avance": porcentaje_avance,
+            "datos_disponibles": datos_disponibles
+        }
+
+    # Paso 5: Salida
+    if datos_guia.get("timestamp_salida_utc"):
+        pasos_completados.append("salida")
+        datos_disponibles.append("salida")
+        porcentaje_avance = 100
+        descripcion = "Proceso completado"
+        siguiente_paso = None
+    else:
+        siguiente_paso = "salida"
+        descripcion = "Pendiente salida"
+
+    return {
+        "pasos_completados": pasos_completados,
+        "siguiente_paso": siguiente_paso,
+        "descripcion": descripcion,
+        "porcentaje_avance": porcentaje_avance,
+        "datos_disponibles": datos_disponibles
+    }
 
 def get_db_connection():
     """
