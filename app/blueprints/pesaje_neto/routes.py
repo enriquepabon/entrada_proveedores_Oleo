@@ -136,20 +136,22 @@ def ver_resultados_pesaje_neto(codigo_guia):
             conn = sqlite3.connect('tiquetes.db')
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT peso_tara, peso_neto, fecha_pesaje, hora_pesaje, comentarios, respuesta_sap
+                SELECT peso_tara, peso_neto, timestamp_pesaje_neto_utc, comentarios, respuesta_sap
                 FROM pesajes_neto 
                 WHERE codigo_guia = ?
             """, (codigo_guia,))
             result = cursor.fetchone()
             
             if result:
-                peso_tara, peso_neto, fecha_pesaje, hora_pesaje, comentarios, respuesta_sap = result
+                peso_tara, peso_neto, timestamp_pesaje_neto_utc, comentarios, respuesta_sap = result
+                # Convertir timestamp a fecha y hora local
+                fecha_pesaje_neto, hora_pesaje_neto = convertir_timestamp_a_fecha_hora(timestamp_pesaje_neto_utc)
                 # Actualizar los datos con los valores más recientes
                 datos_guia.update({
                     'peso_tara': peso_tara,
                     'peso_neto': peso_neto,
-                    'fecha_pesaje_neto': fecha_pesaje,
-                    'hora_pesaje_neto': hora_pesaje,
+                    'fecha_pesaje_neto': fecha_pesaje_neto,
+                    'hora_pesaje_neto': hora_pesaje_neto,
                     'comentarios_neto': comentarios,
                     'respuesta_sap': respuesta_sap
                 })
@@ -545,6 +547,14 @@ def pesaje_neto(codigo_guia):
         logger.error(traceback.format_exc())
         flash(f"Error al mostrar formulario: {str(e)}", "error")
         return redirect(url_for('misc.upload_file'))
+
+def convertir_timestamp_a_fecha_hora(timestamp_utc):
+    if not timestamp_utc or timestamp_utc in [None, '', 'N/A']:
+        return None, None
+    utc_dt = datetime.strptime(timestamp_utc, '%Y-%m-%d %H:%M:%S')
+    utc_dt = pytz.utc.localize(utc_dt)
+    bogota_dt = utc_dt.astimezone(pytz.timezone('America/Bogota'))
+    return bogota_dt.strftime('%d/%m/%Y'), bogota_dt.strftime('%H:%M:%S')
 
 
 

@@ -240,11 +240,11 @@
                 {% if peso_bruto %}
                 <div class="info-item">
                     <div class="info-label">Fecha de Pesaje</div>
-                    <div class="info-value">{{ fecha_pesaje }}</div>
+                    <div class="info-value">{{ datos_guia.fecha_pesaje or 'Pendiente' }}</div>
                 </div>
                 <div class="info-item">
                     <div class="info-label">Hora de Pesaje</div>
-                    <div class="info-value">{{ hora_pesaje }}</div>
+                    <div class="info-value">{{ datos_guia.hora_pesaje or 'Pendiente' }}</div>
                 </div>
                 <div class="info-item">
                     <div class="info-label">Tipo de Pesaje</div>
@@ -352,7 +352,7 @@
                         {% if peso_bruto %}
                         <div class="timeline-info">
                             <span class="me-3">Peso: {{ peso_bruto }} kg</span>
-                            <span class="me-3">Hora: {{ hora_pesaje }}</span>
+                            <span class="me-3">Hora: {{ datos_guia.hora_pesaje or 'Pendiente' }}</span>
                             <span>Tipo: {{ tipo_pesaje|title }}</span>
                         </div>
                         {% endif %}

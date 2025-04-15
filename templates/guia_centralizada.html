@@ -258,7 +258,7 @@
                         <i class="fas fa-weight"></i>
                     </div>
                     <div class="step-label">Pesaje</div>
-                    <div class="step-date">{{ datos_guia.fecha_pesaje|default('--/--/----') }}</div>
+                    <div class="step-date">{{ fecha_pesaje|default('--/--/----') }}</div>
                     <div class="step-time">{{ datos_guia.hora_pesaje|default('--:--') }}</div>
                 </div>
                 <div class="process-step">
@@ -274,7 +274,7 @@
                         <i class="fas fa-balance-scale"></i>
                     </div>
                     <div class="step-label">Pesaje Neto</div>
-                    <div class="step-date">{{ datos_guia.fecha_pesaje_neto|default('--/--/----') }}</div>
+                    <div class="step-date">{{ fecha_pesaje_neto|default('--/--/----') }}</div>
                     <div class="step-time">{{ datos_guia.hora_pesaje_neto|default('--:--') }}</div>
                 </div>
                 <div class="process-step">
@@ -407,10 +407,10 @@
                         <div class="card-body">
                             <ul class="list-group">
                                 <li class="list-group-item"><strong>Peso Bruto:</strong> {{ datos_guia.peso_bruto|default('Pendiente') }}</li>
-                                {% if datos_guia.fecha_pesaje %}
+                                {% if fecha_pesaje and fecha_pesaje != "Pendiente" %}
                                 <li class="list-group-item">
                                     <div class="fecha-hora">
-                                        <span class="fecha"><strong>Fecha:</strong> {{ datos_guia.fecha_pesaje }}</span>
+                                        <span class="fecha"><strong>Fecha:</strong> {{ fecha_pesaje }}</span>
                                         <span class="hora"><strong>Hora:</strong> {{ datos_guia.hora_pesaje|default('N/A') }}</span>
                                     </div>
                                 </li>
@@ -441,10 +441,10 @@
                         <div class="card-body">
                             <ul class="list-group">
                                 <li class="list-group-item"><strong>Peso Neto:</strong> {{ datos_guia.peso_neto|default('Pendiente') }}</li>
-                                {% if datos_guia.fecha_pesaje_neto %}
+                                {% if fecha_pesaje_neto and fecha_pesaje_neto != "Pendiente" %}
                                 <li class="list-group-item">
                                     <div class="fecha-hora">
-                                        <span class="fecha"><strong>Fecha:</strong> {{ datos_guia.fecha_pesaje_neto }}</span>
+                                        <span class="fecha"><strong>Fecha:</strong> {{ fecha_pesaje_neto }}</span>
                                         <span class="hora"><strong>Hora:</strong> {{ datos_guia.hora_pesaje_neto|default('N/A') }}</span>
                                     </div>
                                 </li>
@@ -623,10 +623,10 @@
                         <div class="card-body">
                             <ul class="list-group">
                                 <li class="list-group-item"><strong>Peso Neto:</strong> {{ datos_guia.peso_neto|default('Pendiente') }}</li>
-                                {% if datos_guia.fecha_pesaje_neto %}
+                                {% if fecha_pesaje_neto and fecha_pesaje_neto != "Pendiente" %}
                                 <li class="list-group-item">
                                     <div class="fecha-hora">
-                                        <span class="fecha"><strong>Fecha:</strong> {{ datos_guia.fecha_pesaje_neto }}</span>
+                                        <span class="fecha"><strong>Fecha:</strong> {{ fecha_pesaje_neto }}</span>
                                         <span class="hora"><strong>Hora:</strong> {{ datos_guia.hora_pesaje_neto|default('N/A') }}</span>
                                     </div>
                                 </li>

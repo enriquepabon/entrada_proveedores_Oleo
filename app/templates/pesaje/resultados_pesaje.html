@@ -201,11 +201,11 @@
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="info-label">Fecha</div>
-                                <div class="info-value">{{ fecha_pesaje if fecha_pesaje and fecha_pesaje != 'N/A' and fecha_pesaje != 'No disponible' else 'No registrada' }}</div>
+                                <div class="info-value">{{ fecha_pesaje or 'Pendiente' }}</div>
                             </div>
                             <div class="col-md-6">
                                 <div class="info-label">Hora</div>
-                                <div class="info-value">{{ hora_pesaje if hora_pesaje and hora_pesaje != 'N/A' and hora_pesaje != 'No disponible' else 'No registrada' }}</div>
+                                <div class="info-value">{{ hora_pesaje or 'Pendiente' }}</div>
                             </div>
                         </div>
                         <div class="row mt-3">
@@ -269,10 +269,10 @@
                         </div>
                         <div class="row">
                             <div class="col-md-6">
-                                <p><strong>Fecha de Pesaje:</strong> {{ fecha_pesaje if fecha_pesaje and fecha_pesaje != 'N/A' and fecha_pesaje != 'No disponible' else 'No registrada' }}</p>
+                                <p><strong>Fecha de Pesaje:</strong> {{ fecha_pesaje or 'Pendiente' }}</p>
                             </div>
                             <div class="col-md-6">
-                                <p><strong>Hora de Pesaje:</strong> {{ hora_pesaje if hora_pesaje and hora_pesaje != 'N/A' and hora_pesaje != 'No disponible' else 'No registrada' }}</p>
+                                <p><strong>Hora de Pesaje:</strong> {{ hora_pesaje or 'Pendiente' }}</p>
                             </div>
                         </div>
                     </div>

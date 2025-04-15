@@ -16,7 +16,6 @@ import sqlite3
 import base64
 import qrcode
 from app.utils.image_processing import process_plate_image
-from app.utils.common import get_estado_guia
 import pytz
 from app.blueprints.clasificacion.routes import get_clasificacion_by_codigo_guia
 # Importar la nueva función de operaciones de presupuesto
@@ -992,60 +991,29 @@ def ver_guia_centralizada(codigo_guia):
         datos_guia = utils.get_datos_guia(codigo_guia)
         logger.info(f"Datos de guía obtenidos: {datos_guia}")
 
-        # >> ADD CHECK FOR NONE HERE <<
-        if datos_guia is None:
-            logger.error(f"No se encontraron datos para la guía {codigo_guia} al renderizar la vista centralizada.")
-            flash(f"Error: No se encontraron datos para la guía especificada ({codigo_guia}). Puede que haya sido eliminada o nunca existió.", "danger")
-            # Redirect to a safe page, like the main list or index
-            return redirect(url_for('entrada.lista_entradas')) # Or misc.index or another suitable route
+        # --- BLOQUE PARA PREPARAR FECHAS Y HORAS ---
+        from datetime import datetime
+        import pytz
 
-        # --- INICIO: Conversión de Timestamps UTC a Bogotá para Template --- 
-        if datos_guia:
-            from datetime import datetime
-            import pytz
-            BOGOTA_TZ = pytz.timezone('America/Bogota')
-            UTC = pytz.utc
+        def convertir_timestamp_a_fecha_hora(timestamp_utc):
+            if not timestamp_utc or timestamp_utc in [None, '', 'N/A']:
+                return None, None
+            utc_dt = datetime.strptime(timestamp_utc, '%Y-%m-%d %H:%M:%S')
+            utc_dt = pytz.utc.localize(utc_dt)
+            bogota_dt = utc_dt.astimezone(pytz.timezone('America/Bogota'))
+            return bogota_dt.strftime('%d/%m/%Y'), bogota_dt.strftime('%H:%M:%S')
 
-            timestamp_fields = {
-                'timestamp_registro_utc': ('fecha_registro', 'hora_registro'),
-                'timestamp_pesaje_utc': ('fecha_pesaje', 'hora_pesaje'),
-                'timestamp_clasificacion_utc': ('fecha_clasificacion', 'hora_clasificacion'),
-                'timestamp_pesaje_neto_utc': ('fecha_pesaje_neto', 'hora_pesaje_neto'),
-                'timestamp_salida_utc': ('fecha_salida', 'hora_salida')
-            }
+        datos_guia['fecha_registro'], datos_guia['hora_registro'] = convertir_timestamp_a_fecha_hora(datos_guia.get('timestamp_registro_utc'))
+        datos_guia['fecha_pesaje'], datos_guia['hora_pesaje'] = convertir_timestamp_a_fecha_hora(datos_guia.get('timestamp_pesaje_utc'))
+        datos_guia['fecha_clasificacion'], datos_guia['hora_clasificacion'] = convertir_timestamp_a_fecha_hora(datos_guia.get('timestamp_clasificacion_utc'))
+        datos_guia['fecha_pesaje_neto'], datos_guia['hora_pesaje_neto'] = convertir_timestamp_a_fecha_hora(datos_guia.get('timestamp_pesaje_neto_utc'))
+        datos_guia['fecha_salida'], datos_guia['hora_salida'] = convertir_timestamp_a_fecha_hora(datos_guia.get('timestamp_salida_utc'))
+        # --- FIN BLOQUE ---
 
-            for utc_field, (local_date_field, local_time_field) in timestamp_fields.items():
-                utc_timestamp_str = datos_guia.get(utc_field)
-                # --- DEBUG LOGGING START ---
-                logger.info(f"Processing timestamp for {utc_field}: Value='{utc_timestamp_str}' (Type: {type(utc_timestamp_str)})")
-                # --- DEBUG LOGGING END ---
-                fecha_local = None
-                hora_local = None
-                if utc_timestamp_str:
-                    try:
-                        # Parsear el string UTC y localizarlo como UTC
-                        dt_utc = datetime.strptime(utc_timestamp_str, "%Y-%m-%d %H:%M:%S")
-                        dt_utc = UTC.localize(dt_utc)
-                        # Convertir a Bogotá
-                        dt_local = dt_utc.astimezone(BOGOTA_TZ)
-                        # Formatear
-                        fecha_local = dt_local.strftime('%d/%m/%Y')
-                        hora_local = dt_local.strftime('%H:%M:%S')
-                        # --- DEBUG LOGGING START ---
-                        logger.info(f"Successfully converted {utc_field}: Fecha={fecha_local}, Hora={hora_local}")
-                        # --- DEBUG LOGGING END ---
-                    except (ValueError, TypeError) as e:
-                        # --- DEBUG LOGGING START ---
-                        logger.warning(f"FAILED to parse/convert timestamp '{utc_timestamp_str}' for field {utc_field} in ver_guia_centralizada: {e}")
-                        # --- DEBUG LOGGING END ---
-                # else: # Add log if the string is None or empty
-                    # logger.info(f"Skipping conversion for {utc_field} because value is None or empty.")
-                
-                # Añadir los campos formateados directamente a datos_guia
-                datos_guia[local_date_field] = fecha_local
-                datos_guia[local_time_field] = hora_local
-        # --- FIN: Conversión de Timestamps UTC a Bogotá para Template ---
-
+        # Usar la función robusta que recibe el dict directamente
+        from app.utils.common import get_estado_guia_dict
+        estado_info = get_estado_guia_dict(datos_guia)
+        
         # Verificar y corregir la ruta de la imagen si es necesario
         if datos_guia and datos_guia.get('image_filename'):
             logger.info(f"Nombre de archivo de imagen encontrado: {datos_guia['image_filename']}")
@@ -1297,23 +1265,67 @@ def ver_guia_centralizada(codigo_guia):
             logger.error("No se pudo importar generar_qr_guia desde .routes")
         qr_url = generar_qr_guia(codigo_guia)
 
+        # Conexión a la base de datos
+        from app.blueprints.misc.routes import get_db_connection  # Si no está ya importado
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # --- Pesaje Bruto ---
+        cursor.execute("SELECT timestamp_pesaje_utc FROM pesajes_bruto WHERE codigo_guia=?", (codigo_guia,))
+        row = cursor.fetchone()
+        if row and row['timestamp_pesaje_utc']:
+            fecha_pesaje, hora_pesaje = convertir_timestamp_a_fecha_hora(row['timestamp_pesaje_utc'])
+        else:
+            fecha_pesaje, hora_pesaje = "Pendiente", ""
+
+        # --- Clasificación ---
+        cursor.execute("SELECT timestamp_clasificacion_utc FROM clasificaciones WHERE codigo_guia=?", (codigo_guia,))
+        row = cursor.fetchone()
+        if row and row['timestamp_clasificacion_utc']:
+            fecha_clasificacion, hora_clasificacion = convertir_timestamp_a_fecha_hora(row['timestamp_clasificacion_utc'])
+        else:
+            fecha_clasificacion, hora_clasificacion = "Pendiente", ""
+
+        # --- Pesaje Neto ---
+        cursor.execute("SELECT timestamp_pesaje_neto_utc FROM pesajes_neto WHERE codigo_guia=?", (codigo_guia,))
+        row = cursor.fetchone()
+        if row and row['timestamp_pesaje_neto_utc']:
+            fecha_pesaje_neto, hora_pesaje_neto = convertir_timestamp_a_fecha_hora(row['timestamp_pesaje_neto_utc'])
+        else:
+            fecha_pesaje_neto, hora_pesaje_neto = "Pendiente", ""
+
+        # --- Salida ---
+        cursor.execute("SELECT timestamp_salida_utc FROM salidas WHERE codigo_guia=?", (codigo_guia,))
+        row = cursor.fetchone()
+        if row and row['timestamp_salida_utc']:
+            fecha_salida, hora_salida = convertir_timestamp_a_fecha_hora(row['timestamp_salida_utc'])
+        else:
+            fecha_salida, hora_salida = "Pendiente", ""
+
         # Renderizar la plantilla
         return render_template(
             'guia_centralizada.html',
             datos_guia=datos_guia,
+            estado_info=estado_info,
             codigo_guia=codigo_guia,
             qr_url=qr_url,
             es_pepa=es_pepa,
-            estado_info=estado_info,
             clasificacion_registrada=clasificacion_registrada,
             pesaje_neto_completado=pesaje_neto_completado,
             salida_completada=salida_completada,
-            manual_registrada = clasificacion_registrada, # Revisar esta lógica
-            now_timestamp=datetime.now().timestamp()
+            manual_registrada=clasificacion_registrada, # Revisar esta lógica si es necesario
+            now_timestamp=datetime.now().timestamp(),
+            # Fechas y horas de cada paso
+            fecha_pesaje=fecha_pesaje,
+            hora_pesaje=hora_pesaje,
+            fecha_clasificacion=fecha_clasificacion,
+            hora_clasificacion=hora_clasificacion,
+            fecha_pesaje_neto=fecha_pesaje_neto,
+            hora_pesaje_neto=hora_pesaje_neto,
+            fecha_salida=fecha_salida,
+            hora_salida=hora_salida
         )
-        
     except Exception as e:
-        # Contenido correcto del bloque except original
         logger.error(f"Error en ver_guia_centralizada para {codigo_guia}: {str(e)}")
         logger.error(traceback.format_exc())
         flash("Ocurrió un error inesperado al cargar la guía.", "danger")

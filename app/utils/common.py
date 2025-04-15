@@ -823,7 +823,21 @@ def get_estado_guia(codigo_guia):
         }
 
     # Paso 2: Pesaje bruto
-    if datos_guia.get("peso_bruto") and datos_guia["peso_bruto"] not in [None, "", "Pendiente", "N/A"]:
+    peso_bruto = datos_guia.get("peso_bruto")
+    logger.info(f"[ESTADO] peso_bruto: {peso_bruto!r} (type: {type(peso_bruto)})")
+    pesaje_completado = False
+    try:
+        if peso_bruto is not None and str(peso_bruto).strip() not in ["", "Pendiente", "N/A"]:
+            if isinstance(peso_bruto, str):
+                peso_bruto_float = float(peso_bruto.replace(",", "."))
+            else:
+                peso_bruto_float = float(peso_bruto)
+            pesaje_completado = peso_bruto_float > 0
+    except Exception as e:
+        logger.warning(f"[ESTADO] No se pudo convertir peso_bruto a float: {peso_bruto!r} ({e})")
+        pesaje_completado = False
+
+    if pesaje_completado:
         pasos_completados.append("pesaje")
         datos_disponibles.append("pesaje")
         porcentaje_avance = 40
@@ -893,6 +907,98 @@ def get_estado_guia(codigo_guia):
         "descripcion": descripcion,
         "porcentaje_avance": porcentaje_avance,
         "datos_disponibles": datos_disponibles
+    }
+
+def get_estado_guia_dict(datos_guia):
+    pasos_completados = []
+    porcentaje_avance = 0
+    siguiente_paso = 'entrada'
+
+    # Paso 1: Entrada
+    if datos_guia.get('codigo_guia'):
+        pasos_completados.append('entrada')
+        porcentaje_avance = 20
+        siguiente_paso = 'pesaje'
+    else:
+        return {
+            'pasos_completados': pasos_completados,
+            'siguiente_paso': siguiente_paso,
+            'descripcion': 'Pendiente registro de entrada',
+            'porcentaje_avance': porcentaje_avance,
+            'datos_disponibles': pasos_completados.copy()
+        }
+
+    # Paso 2: Pesaje
+    peso_bruto = datos_guia.get('peso_bruto')
+    print(f"[ESTADO] peso_bruto: {peso_bruto} (type: {type(peso_bruto)})")
+    if (
+        peso_bruto is not None
+        and isinstance(peso_bruto, (int, float))
+        and peso_bruto > 0
+    ):
+        pasos_completados.append('pesaje')
+        porcentaje_avance = 40
+        siguiente_paso = 'clasificacion'
+    else:
+        return {
+            'pasos_completados': pasos_completados,
+            'siguiente_paso': 'pesaje',
+            'descripcion': 'Pendiente pesaje bruto',
+            'porcentaje_avance': porcentaje_avance,
+            'datos_disponibles': pasos_completados.copy()
+        }
+
+    # Paso 3: Clasificación
+    if datos_guia.get("timestamp_clasificacion_utc"):
+        pasos_completados.append("clasificacion")
+        porcentaje_avance = 60
+        siguiente_paso = "pesaje_neto"
+    else:
+        siguiente_paso = "clasificacion"
+        return {
+            "pasos_completados": pasos_completados,
+            "siguiente_paso": siguiente_paso,
+            "descripcion": "Pendiente clasificación",
+            "porcentaje_avance": porcentaje_avance,
+            "datos_disponibles": pasos_completados.copy()
+        }
+
+    # Paso 4: Pesaje neto
+    if datos_guia.get("peso_neto") and datos_guia["peso_neto"] not in [None, "", "Pendiente", "N/A"]:
+        pasos_completados.append("pesaje_neto")
+        porcentaje_avance = 80
+        siguiente_paso = "salida"
+    else:
+        siguiente_paso = "pesaje_neto"
+        return {
+            "pasos_completados": pasos_completados,
+            "siguiente_paso": siguiente_paso,
+            "descripcion": "Pendiente pesaje neto",
+            "porcentaje_avance": porcentaje_avance,
+            "datos_disponibles": pasos_completados.copy()
+        }
+
+    # Paso 5: Salida
+    if datos_guia.get("timestamp_salida_utc"):
+        pasos_completados.append("salida")
+        porcentaje_avance = 100
+        siguiente_paso = None
+    else:
+        siguiente_paso = "salida"
+        return {
+            "pasos_completados": pasos_completados,
+            "siguiente_paso": siguiente_paso,
+            "descripcion": "Pendiente salida",
+            "porcentaje_avance": porcentaje_avance,
+            "datos_disponibles": pasos_completados.copy()
+        }
+
+    return {
+        "pasos_completados": pasos_completados,
+        "siguiente_paso": siguiente_paso,
+        "descripcion": "Proceso completado",
+        "porcentaje_avance": porcentaje_avance,
+        "datos_disponibles": pasos_completados.copy()
     }
 
 def get_db_connection():

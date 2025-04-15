@@ -68,8 +68,10 @@
         'class': 'col-transportista',
         'render': lambda item: item.transportador if item.transportador and item.transportador != 'None' and item.transportador != 'No disponible' else '<span class="text-muted">No disponible</span>'
     },
-    {'titulo': 'Fecha Pesaje', 'campo': 'fecha_pesaje', 'class': 'col-fecha'},
-    {'titulo': 'Hora Pesaje', 'campo': 'hora_pesaje', 'class': 'col-hora'},
+    {'titulo': 'Fecha Pesaje', 'campo': 'fecha_pesaje', 'class': 'col-fecha', 
+     'render': lambda item: item.fecha_pesaje if item.fecha_pesaje else 'Pendiente'},
+    {'titulo': 'Hora Pesaje', 'campo': 'hora_pesaje', 'class': 'col-hora', 
+     'render': lambda item: item.hora_pesaje if item.hora_pesaje else 'Pendiente'},
     {'titulo': 'Se Cargó', 'campo': 'cargo'},
     {'titulo': 'Se Acarreó', 'campo': 'acarreo'},
     {

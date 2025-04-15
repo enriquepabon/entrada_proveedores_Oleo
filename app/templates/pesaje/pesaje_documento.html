@@ -50,8 +50,8 @@
             <td style="width: 50%; padding: 5px;"><strong>Tipo de Pesaje:</strong> {{ tipo_pesaje }}</td>
         </tr>
         <tr>
-            <td style="padding: 5px;"><strong>Fecha de Pesaje:</strong> {{ fecha_pesaje }}</td>
-            <td style="padding: 5px;"><strong>Hora de Pesaje:</strong> {{ hora_pesaje }}</td>
+            <td style="padding: 5px;"><strong>Fecha de Pesaje:</strong> {{ fecha_pesaje or 'Pendiente' }}</td>
+            <td style="padding: 5px;"><strong>Hora de Pesaje:</strong> {{ hora_pesaje or 'Pendiente' }}</td>
         </tr>
     </table>
     
