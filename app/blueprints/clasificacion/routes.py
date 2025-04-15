@@ -626,11 +626,11 @@ def registrar_clasificacion():
         'clasificacion_manual_json': json.dumps(clasificacion_manual),
         'verde_manual': clasificacion_manual.get('verdes'),
         'sobremaduro_manual': clasificacion_manual.get('sobremaduros'),
-        'danio_corona_manual': clasificacion_manual.get('danio_corona'),  # <- Aquí ya está bien mapeado
+        'danio_corona_manual': clasificacion_manual.get('danio_corona'),
         'pendunculo_largo_manual': clasificacion_manual.get('pedunculo_largo'),
         'podrido_manual': clasificacion_manual.get('podridos'),
         'timestamp_clasificacion_utc': datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S'),
-        'estado': 'manual_registrada'
+        'estado': 'completado'  # <-- Unificado
     }
 
     # *** LLAMADA EXPLÍCITA PARA GUARDAR CLASIFICACIÓN ***
@@ -718,7 +718,7 @@ def registrar_clasificacion_api():
             'pedunculo_largo': float(pedunculo_largo),
             'podridos': float(podridos),  # Agregar el campo de racimos podridos
             'imagenes': [os.path.basename(img) for img in imagenes],
-            'estado': 'clasificacion_completada'
+            'estado': 'completado'  # <-- Unificado
         }
         
         # Guardar datos en archivo JSON
