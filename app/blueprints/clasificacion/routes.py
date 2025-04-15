@@ -1449,11 +1449,6 @@ def ver_resultados_clasificacion(url_guia):
         json_filename = f"clasificacion_{codigo_guia}.json"
         json_path_abs = os.path.join(current_app.static_folder, base_dir_relativo, json_filename)
         logger.info(f"[DIAG] Buscando archivo JSON de detalles en: {json_path_abs}")
-
-        # --- Espera corta antes de leer (para descartar problemas de timing/caché del SO) ---
-        logger.info("[DIAG READ] Iniciando pausa de 0.5s antes de intentar leer JSON...")
-        time.sleep(0.5) # Esperar medio segundo
-        logger.info("[DIAG READ] Pausa completada.")
         # ----------------------------------------------------------------------------
 
         hay_detalles_por_foto_json = False # Inicializar fuera del bloque try

@@ -459,8 +459,8 @@ async function guardarClasificacionFinal() {
 
         console.log('Guardando clasificación final:', datosGuardar);
 
-        // Hacer la petición al backend
-        const response = await fetch('/finalizar_clasificacion', {  // Nuevo endpoint
+        // Hacer la petición al backend al endpoint correcto
+        const response = await fetch(`/guardar_clasificacion_final/${codigo}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -470,7 +470,7 @@ async function guardarClasificacionFinal() {
 
         const data = await response.json();
         
-        if (response.ok && data.success) {
+        if (response.ok && (data.success || data.status === 'success')) {
             alert('Clasificación guardada exitosamente');
             // Redirigir al guia_template
             window.location.href = `/ver_guia/${codigo}`;
