@@ -605,48 +605,32 @@ def registrar_clasificacion():
 
 
     # Recopilar datos de clasificación manual del formulario
-    clasificacion_manual = {}
-    total_manual = 0
-    campos_manual = ['verdes', 'sobremaduros', 'dano_corona', 'pedunculo_largo', 'podridos']
-    try:
-        for campo in campos_manual:
-            valor_str = request.form.get(campo, '0').strip()
-             # Intentar convertir a float, si está vacío o no es número, usar 0.0
-            try:
-                 valor = float(valor_str) if valor_str else 0.0
-            except ValueError:
-                 logger.warning(f"Valor no numérico '{valor_str}' recibido para '{campo}', usando 0.0.")
-                 valor = 0.0
-            clasificacion_manual[campo] = valor
-            total_manual += valor
+    clasificacion_manual = {
+        'verdes': float(request.form.get('verdes', 0) or 0),
+        'sobremaduros': float(request.form.get('sobremaduros', 0) or 0),
+        # CORRECCIÓN: tomar el valor de 'dano_corona' y asignarlo a 'danio_corona'
+        'danio_corona': float(request.form.get('dano_corona', 0) or 0),
+        'pedunculo_largo': float(request.form.get('pedunculo_largo', 0) or 0),
+        'podridos': float(request.form.get('podridos', 0) or 0)
+    }
 
-        logger.info(f"Clasificación manual recibida para {codigo_guia}: {clasificacion_manual}")
-        # Validar que el total no sea excesivo (opcional)
-        # if total_manual > 100:
-        #    flash('La suma de porcentajes manuales no puede exceder 100.', 'warning')
-        #    # Considerar si redirigir o continuar
-
-    except Exception as e:
-        logger.error(f"Error procesando datos del formulario de clasificación manual: {e}")
-        flash('Error procesando los datos de clasificación manual.', 'danger')
-        return redirect(url_for('.clasificacion', codigo=codigo_guia, respetar_codigo=True))
+    logger.info(f"Clasificación manual recibida para {codigo_guia}: {clasificacion_manual}")
+    # Validar que el total no sea excesivo (opcional)
+    # if total_manual > 100:
+    #    flash('La suma de porcentajes manuales no puede exceder 100.', 'warning')
+    #    # Considerar si redirigir o continuar
 
     # Preparar datos para guardar en la BD
     datos_para_guardar = {
         'codigo_guia': codigo_guia,
-        # Guardar el diccionario completo como JSON
         'clasificacion_manual_json': json.dumps(clasificacion_manual),
-        # Guardar también los valores individuales si el esquema los tiene (ajustar según db_schema.py)
         'verde_manual': clasificacion_manual.get('verdes'),
         'sobremaduro_manual': clasificacion_manual.get('sobremaduros'),
-        'danio_corona_manual': clasificacion_manual.get('danio_corona'),
+        'danio_corona_manual': clasificacion_manual.get('danio_corona'),  # <- Aquí ya está bien mapeado
         'pendunculo_largo_manual': clasificacion_manual.get('pedunculo_largo'),
         'podrido_manual': clasificacion_manual.get('podridos'),
-        # Establecer timestamp de la clasificación manual
         'timestamp_clasificacion_utc': datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S'),
-        # Indicar que la clasificación general aún no está completa (automática pendiente)
-        # Ajusta el nombre del campo de estado según tu lógica/esquema si es necesario
-        'estado': 'manual_registrada' # O un estado similar
+        'estado': 'manual_registrada'
     }
 
     # *** LLAMADA EXPLÍCITA PARA GUARDAR CLASIFICACIÓN ***
@@ -4012,3 +3996,20 @@ def ver_detalles_clasificacion(url_guia):
         flash(f"Error al procesar detalles de clasificación: {str(e)}", "error")
         template_data['error'] = str(e)
         return render_template('detalles_clasificacion.html', **template_data)
+
+def tu_funcion_que_prepara_contexto(datos_guia):
+    # ... otros cálculos previos ...
+
+    # Obtener la fecha de pesaje a partir del timestamp
+    if datos_guia.get('timestamp_pesaje_utc'):
+        fecha_pesaje, _ = convertir_timestamp_a_fecha_hora(datos_guia['timestamp_pesaje_utc'])
+    else:
+        fecha_pesaje = "Pendiente"
+
+    contexto = {
+        # ... otros campos ...
+        'fecha_pesaje': fecha_pesaje,
+        # ... otros campos ...
+    }
+    # ... resto de la función ...
+    return contexto

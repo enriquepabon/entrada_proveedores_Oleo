@@ -725,11 +725,15 @@ document.addEventListener('DOMContentLoaded', function() {
     const btnIniciarProcesamiento = document.getElementById('btn-iniciar-procesamiento');
     if (btnIniciarProcesamiento) {
         btnIniciarProcesamiento.addEventListener('click', function() {
-            const codigoGuia = this.getAttribute('data-codigo-guia');
+            const self = this; // Guardar referencia al botón
+            const codigoGuia = self.getAttribute('data-codigo-guia');
             // Deshabilitar el botón para evitar doble procesamiento
-            this.disabled = true;
-            this.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Iniciando...';
-            
+            self.disabled = true;
+            self.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Iniciando...';
+
+            // Mostrar el modal de procesamiento SIEMPRE
+            mostrarModalProcesamiento(codigoGuia);
+
             // Iniciar procesamiento en el servidor
             fetch(`/clasificacion/iniciar_procesamiento/${codigoGuia}`, {
                 method: 'POST',
@@ -737,24 +741,32 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .then(response => response.json())
             .then(data => {
-                if (data.status === 'started' || data.status === 'processing') {
-                    // Cambiar el mensaje para que sea informativo en lugar de un error
-                    console.log('Procesamiento iniciado:', data.message || 'Iniciando procesamiento');
-                    
-                    // Mostrar modal de procesamiento
-                    mostrarModalProcesamiento(codigoGuia);
-                } else {
-                    // Mantener como alerta pero cambiar el prefijo para que no parezca un error
-                    alert('Procesamiento: ' + (data.message || 'Error desconocido'));
-                    btnIniciarProcesamiento.disabled = false;
-                    btnIniciarProcesamiento.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Iniciar Clasificación Automática';
+                // Si ya está completado, actualiza la UI de inmediato
+                if (data.status === 'completed') {
+                    // Cierra el modal y muestra la alerta de éxito
+                    if (typeof bootstrap !== 'undefined' && bootstrap.Modal && document.getElementById('modal-procesando')) {
+                        const modalProcesando = bootstrap.Modal.getInstance(document.getElementById('modal-procesando'));
+                        if (modalProcesando) modalProcesando.hide();
+                    }
+                    mostrarAlertaExito('¡Clasificación automática completada! Ya puedes ver los detalles por foto.');
+                    // Habilitar el botón de Ver Detalles
+                    const btnVerDetalles = document.getElementById('btn-ver-detalles');
+                    const verDetallesContainer = document.getElementById('ver-detalles-container');
+                    if (btnVerDetalles) {
+                        btnVerDetalles.classList.remove('btn-secondary', 'disabled');
+                        btnVerDetalles.classList.add('btn-info');
+                        btnVerDetalles.removeAttribute('aria-disabled');
+                    }
+                    if (verDetallesContainer) {
+                        verDetallesContainer.classList.remove('d-none');
+                    }
                 }
+                // Si está en proceso, el polling ya está corriendo por mostrarModalProcesamiento
             })
             .catch(error => {
-                console.error('Error:', error);
                 alert('Error de comunicación con el servidor');
-                btnIniciarProcesamiento.disabled = false;
-                btnIniciarProcesamiento.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Iniciar Clasificación Automática';
+                self.disabled = false;
+                self.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Iniciar Clasificación Automática';
             });
         });
     }
@@ -814,47 +826,32 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Si el procesamiento ha terminado, acelerar la recarga
                 if (data.clasificacion_completa === true || data.status === 'completed') {
-                    console.log('Clasificación completada en el servidor');
                     clearInterval(checkInterval);
                     clearInterval(countdownInterval);
                     clearInterval(progressInterval);
-                    
-                    // Actualizar UI a 100% completado
-                    if (modalProgressBar) {
-                        modalProgressBar.style.width = '100%';
+
+                    // Ocultar el modal de procesamiento
+                    if (modalProcesando) {
+                        modalProcesando.hide();
                     }
-                    
-                    // Habilitar el botón de Ver Detalles antes de recargar la página
+
+                    // Habilitar el botón de Ver Detalles
                     const btnVerDetalles = document.getElementById('btn-ver-detalles');
                     const verDetallesContainer = document.getElementById('ver-detalles-container');
-                    
                     if (btnVerDetalles) {
                         btnVerDetalles.classList.remove('btn-secondary', 'disabled');
                         btnVerDetalles.classList.add('btn-info');
                         btnVerDetalles.removeAttribute('aria-disabled');
-                        console.log('Botón Ver Detalles habilitado');
-                    } else {
-                        console.log('Botón Ver Detalles no encontrado en el DOM');
                     }
-                    
                     if (verDetallesContainer) {
                         verDetallesContainer.classList.remove('d-none');
-                        console.log('Contenedor de Ver Detalles hecho visible');
-                    } else {
-                        console.log('Contenedor de Ver Detalles no encontrado en el DOM');
                     }
-                    
-                    // También verificar si hay racimos detectados desde el server
-                    if (data.total_racimos_detectados && data.total_racimos_detectados > 0) {
-                        console.log(`Se detectaron ${data.total_racimos_detectados} racimos`);
-                        // El total_racimos_detectados positivo debe habilitar el botón incluso si clasificacion_automatica_consolidada está vacío
-                        localStorage.setItem('total_racimos_detectados', data.total_racimos_detectados);
-                    }
-                    
-                    // Recargar la página después de un breve retraso
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 1000);
+
+                    // Mostrar un mensaje de éxito (alert flotante)
+                    mostrarAlertaExito('¡Clasificación automática completada! Ya puedes ver los detalles por foto.');
+
+                    // Opcional: recargar solo la sección de resultados, no toda la página
+                    // location.reload(); // Solo si quieres recargar todo
                 }
             })
             .catch(error => {
@@ -932,5 +929,22 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     {% endif %}
 });
+
+// Función para mostrar una alerta flotante de éxito
+function mostrarAlertaExito(mensaje) {
+    // Si ya existe una alerta, no la dupliques
+    if (document.getElementById('alerta-exito-clasificacion')) return;
+    const alerta = document.createElement('div');
+    alerta.id = 'alerta-exito-clasificacion';
+    alerta.className = 'alert alert-success position-fixed top-0 start-50 translate-middle-x mt-4 shadow';
+    alerta.style.zIndex = 2000;
+    alerta.style.minWidth = '320px';
+    alerta.innerHTML = `<i class='fas fa-check-circle me-2'></i>${mensaje}`;
+    document.body.appendChild(alerta);
+    setTimeout(() => {
+        alerta.classList.add('fade');
+        setTimeout(() => alerta.remove(), 1000);
+    }, 4000);
+}
 </script>
 {% endblock %} 
