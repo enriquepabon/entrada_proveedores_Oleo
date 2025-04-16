@@ -1182,71 +1182,22 @@ def ver_guia_centralizada(codigo_guia):
                  datos_guia['datos_disponibles'].append('clasificacion')
         # --- FIN LÓGICA PEPA ---
 
-        # Recalcular estado_info basado en los datos actualizados (importante DESPUÉS de la lógica PEPA)
-        # Re-import locally to try and resolve UnboundLocalError
-        # ELIMINADO: Se construirá estado_info manualmente
-        # from app.utils.common import get_estado_guia
-        # estado_info = get_estado_guia(codigo_guia)
-        # logger.info(f"Estado Info recalculado (post-pepa check): {estado_info}")
-        
-        # --- CONSTRUIR estado_info MANUALMENTE --- (Mover construcción aquí después de lógica PEPA)
-        clasificacion_registrada = datos_guia.get('clasificacion_completada', False) # Usar el valor posiblemente actualizado por PEPA
+        # Calcular estado_info DESPUÉS de lógica PEPA, usando solo datos_guia
+        from app.utils.common import get_estado_guia_dict
+        estado_info = get_estado_guia_dict(datos_guia)
+        logger.info(f"Estado Info calculado usando get_estado_guia_dict: {estado_info}")
+
+        # --- Definir variables booleanas para la plantilla --- 
+        # Base en timestamps o campos específicos en datos_guia
+        clasificacion_completada = bool(datos_guia.get('timestamp_clasificacion_utc') or datos_guia.get('clasificacion_completada'))
         pesaje_neto_completado = bool(datos_guia.get('timestamp_pesaje_neto_utc') or 
                                     (datos_guia.get('peso_neto') is not None and 
-                                     str(datos_guia.get('peso_neto')).lower() not in ['pendiente', 'n/a', '']))
+                                     str(datos_guia.get('peso_neto', '')).strip().lower() not in [
+                                         'pendiente', 'n/a', '', 'none'
+                                     ]))
         salida_completada = bool(datos_guia.get('timestamp_salida_utc'))
+        # ----------------------------------------------------
 
-        pasos_completados = ['entrada', 'pesaje']
-        if clasificacion_registrada: # Usar la variable local actualizada
-            pasos_completados.append('clasificacion')
-        if pesaje_neto_completado:
-            pasos_completados.append('pesaje_neto')
-        if salida_completada:
-            pasos_completados.append('salida')
-
-        siguiente_paso = None
-        descripcion = "Desconocido"
-        porcentaje_avance = 0
-
-        if 'salida' in pasos_completados:
-            descripcion = "Proceso completado"
-            siguiente_paso = None
-            porcentaje_avance = 100
-        elif 'pesaje_neto' in pasos_completados:
-            descripcion = "Pesaje neto completado, pendiente salida"
-            siguiente_paso = 'salida'
-            porcentaje_avance = 80
-        elif 'clasificacion' in pasos_completados: # Ya incluye el caso PEPA
-             # Si es PEPA, ya ajustamos la descripción antes, mantenerla
-             if es_pepa:
-                 descripcion = "PEPA registrada, pendiente pesaje neto"
-             else:
-                 descripcion = "Clasificación completada, pendiente pesaje neto"
-             siguiente_paso = 'pesaje_neto'
-             porcentaje_avance = 60
-        elif 'pesaje' in pasos_completados:
-            descripcion = "Pesaje bruto completado, pendiente clasificación"
-            siguiente_paso = 'clasificacion'
-            porcentaje_avance = 40
-        elif 'entrada' in pasos_completados:
-             descripcion = "Registro de entrada completado, pendiente pesaje bruto"
-             siguiente_paso = 'pesaje'
-             porcentaje_avance = 20
-        else:
-             descripcion = "Guía no encontrada o inválida"
-             siguiente_paso = 'entrada'
-             porcentaje_avance = 0
-             
-        estado_info = {
-            'pasos_completados': pasos_completados,
-            'siguiente_paso': siguiente_paso,
-            'descripcion': descripcion,
-            'porcentaje_avance': porcentaje_avance,
-            'datos_disponibles': pasos_completados # Usar los mismos por ahora
-        }
-        datos_guia['estado_info'] = estado_info # Añadir al diccionario principal
-        # --- FIN CONSTRUCCIÓN estado_info ---
-        
         # Logging detallado para diagnóstico del problema
         logger.info(f"----- DATOS GUÍA CENTRALIZADA PRE-ESTADO ({codigo_guia}) (Post Manual Build) -----")
         logger.info(f"Estado Info Construido: {estado_info}")
@@ -1310,12 +1261,13 @@ def ver_guia_centralizada(codigo_guia):
             codigo_guia=codigo_guia,
             qr_url=qr_url,
             es_pepa=es_pepa,
-            clasificacion_registrada=clasificacion_registrada,
+            clasificacion_registrada=clasificacion_completada, # Usar variable definida arriba
             pesaje_neto_completado=pesaje_neto_completado,
             salida_completada=salida_completada,
-            manual_registrada=clasificacion_registrada, # Revisar esta lógica si es necesario
+            manual_registrada=clasificacion_completada, # Usar variable definida arriba
             now_timestamp=datetime.now().timestamp(),
             # Fechas y horas de cada paso
+            fecha_registro=datos_guia.get('fecha_registro', 'N/A'),
             fecha_pesaje=fecha_pesaje,
             hora_pesaje=hora_pesaje,
             fecha_clasificacion=fecha_clasificacion,
