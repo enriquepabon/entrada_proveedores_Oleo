@@ -7,6 +7,7 @@ import sqlite3
 import logging
 import os
 from flask import current_app
+import traceback
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -166,67 +167,66 @@ def create_tables():
     Utiliza la ruta definida en la configuración de la aplicación.
     """
     conn = None # Initialize conn
+    db_path = None # Initialize db_path
     try:
         # Obtener la ruta de la base de datos desde la configuración de la app
         db_path = current_app.config['TIQUETES_DB_PATH']
-        
+
         # Asegurar que el directorio de la base de datos exista
         db_dir = os.path.dirname(db_path)
         if db_dir and not os.path.exists(db_dir):
             os.makedirs(db_dir)
             logger.info(f"Directorio de base de datos creado: {db_dir}")
-            
+
         # Conectar a la base de datos usando la ruta configurada
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
-        
-        # Crear tablas
+
+        # --- Paso 1: Crear todas las tablas ---
+        logger.info(f"Ejecutando CREATE TABLE IF NOT EXISTS para todas las tablas en {db_path}...")
         cursor.execute(CREATE_ENTRY_RECORDS_TABLE)
         cursor.execute(CREATE_PESAJES_BRUTO_TABLE)
         cursor.execute(CREATE_CLASIFICACIONES_TABLE)
         cursor.execute(CREATE_PESAJES_NETO_TABLE)
         cursor.execute(CREATE_FOTOS_CLASIFICACION_TABLE)
         cursor.execute(CREATE_SALIDAS_TABLE)
-        # --- NUEVO: Crear tabla de presupuesto ---
         cursor.execute(CREATE_PRESUPUESTO_MENSUAL_TABLE)
-        # --- FIN NUEVO ---
-        
+        conn.commit() # Commit after creating tables
+        logger.info("CREATE TABLE statements ejecutados.")
+
+        # --- Paso 2: Verificar y añadir columnas faltantes ---
+        logger.info(f"Verificando/Añadiendo columnas faltantes en {db_path}...")
+
         # --- Helper function to add column if not exists ---
         def add_column_if_not_exists(table_name, column_name, column_definition):
             try:
-                # First, check if the column exists using PRAGMA
+                # Check if the column exists using PRAGMA
                 cursor.execute(f"PRAGMA table_info({table_name})")
                 columns = [column[1] for column in cursor.fetchall()]
                 if column_name not in columns:
-                    logger.info(f"Attempting to add missing '{column_name}' column to {table_name}...")
+                    logger.info(f"Intentando añadir columna faltante '{column_name}' a la tabla {table_name}...")
                     try:
-                        # Try to add the column
                         cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_definition}")
-                        logger.info(f"Column '{column_name}' added successfully to {table_name}.")
+                        logger.info(f"Columna '{column_name}' añadida exitosamente a {table_name}.")
                         conn.commit() # Commit after successful addition
                     except sqlite3.OperationalError as e:
-                        # Check if the error is specifically about a duplicate column
                         if "duplicate column name" in str(e).lower():
-                             # This case might happen if PRAGMA check failed or in a race condition (unlikely here)
-                             logger.warning(f"Column '{column_name}' appears to already exist in {table_name} despite initial check (or ALTER failed with duplicate error). Error: {e}")
+                             logger.warning(f"La columna '{column_name}' parece ya existir en {table_name} (error ALTER: {e})")
                         else:
-                            # Re-raise other operational errors
-                            logger.error(f"Unexpected SQLite OperationalError adding '{column_name}' to {table_name}: {e}")
-                            raise e # Re-raise the original error if it's not a duplicate column issue
+                            logger.error(f"Error operacional SQLite añadiendo '{column_name}' a {table_name}: {e}")
+                            raise e # Re-raise other operational errors
                 # else:
-                     # Column already exists based on PRAGMA check, no action needed.
-                     # logger.info(f"Column '{column_name}' already exists in {table_name}.")
-                     
-            except sqlite3.Error as e:
-                 # Catch other potential SQLite errors during the process
-                 logger.error(f"General SQLite Error checking/adding '{column_name}' to {table_name}: {e}")
-                 # Depending on severity, you might want to raise e here as well
-        # --------------------------------------------------
+                    # logger.debug(f"Columna '{column_name}' ya existe en {table_name}.") # Optional debug log
 
-        # Check and add columns for entry_records
+            except sqlite3.Error as e:
+                 logger.error(f"Error SQLite verificando/añadiendo columna '{column_name}' a {table_name}: {e}")
+                 # Consider re-raising depending on severity: raise e
+
+        # --- Aplicar verificaciones/adiciones para cada tabla ---
+
+        # entry_records
         add_column_if_not_exists('entry_records', 'fecha_creacion', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
-        add_column_if_not_exists('entry_records', 'timestamp_registro_utc', 'TEXT') # Ensure this one is also checked
-        # --- BEGIN ADDED CHECKS for entry_records ---
+        add_column_if_not_exists('entry_records', 'timestamp_registro_utc', 'TEXT')
         add_column_if_not_exists('entry_records', 'placa', 'TEXT')
         add_column_if_not_exists('entry_records', 'transportador', 'TEXT')
         add_column_if_not_exists('entry_records', 'codigo_transportador', 'TEXT')
@@ -239,49 +239,48 @@ def create_tables():
         add_column_if_not_exists('entry_records', 'fecha_tiquete', 'TEXT')
         add_column_if_not_exists('entry_records', 'pdf_filename', 'TEXT')
         add_column_if_not_exists('entry_records', 'qr_filename', 'TEXT')
-        # --- END ADDED CHECKS for entry_records ---
 
-        # Check and add columns for pesajes_bruto
+        # pesajes_bruto
         add_column_if_not_exists('pesajes_bruto', 'timestamp_pesaje_utc', 'TEXT')
         add_column_if_not_exists('pesajes_bruto', 'fecha_creacion', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
         add_column_if_not_exists('pesajes_bruto', 'codigo_guia_transporte_sap', 'TEXT')
 
-        # Check and add columns for clasificaciones
+        # clasificaciones
         add_column_if_not_exists('clasificaciones', 'timestamp_clasificacion_utc', 'TEXT')
         add_column_if_not_exists('clasificaciones', 'fecha_creacion', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
         add_column_if_not_exists('clasificaciones', 'total_racimos_detectados', 'INTEGER')
         add_column_if_not_exists('clasificaciones', 'clasificacion_consolidada', 'TEXT')
 
-        # Check and add columns for pesajes_neto
+        # pesajes_neto
         add_column_if_not_exists('pesajes_neto', 'timestamp_pesaje_neto_utc', 'TEXT')
         add_column_if_not_exists('pesajes_neto', 'fecha_creacion', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
         add_column_if_not_exists('pesajes_neto', 'peso_producto', 'REAL')
         add_column_if_not_exists('pesajes_neto', 'comentarios', 'TEXT')
         add_column_if_not_exists('pesajes_neto', 'tipo_pesaje_neto', 'TEXT')
         add_column_if_not_exists('pesajes_neto', 'respuesta_sap', 'TEXT')
-        add_column_if_not_exists('pesajes_neto', 'peso_bruto', 'REAL') # Ensure peso_bruto is here too
-        
-        # Check and add columns for salidas
+        add_column_if_not_exists('pesajes_neto', 'peso_bruto', 'REAL')
+
+        # salidas
         add_column_if_not_exists('salidas', 'timestamp_salida_utc', 'TEXT')
         add_column_if_not_exists('salidas', 'fecha_creacion', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
         add_column_if_not_exists('salidas', 'comentarios_salida', 'TEXT')
         add_column_if_not_exists('salidas', 'firma_salida', 'TEXT')
 
-        # Check and add columns for fotos_clasificacion
+        # fotos_clasificacion
         add_column_if_not_exists('fotos_clasificacion', 'fecha_creacion', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
-        # Add other checks for fotos_clasificacion if needed
 
-        # --- NUEVO: Verificar/añadir columnas para presupuesto_mensual (si fuera necesario en el futuro) --- 
+        # presupuesto_mensual (ejemplo)
         # add_column_if_not_exists('presupuesto_mensual', 'nueva_columna', 'TEXT')
-        # --- FIN NUEVO ---
 
-        logger.info(f"Table schema verification completed for: {db_path}")
+        logger.info(f"Verificación/Adición de columnas completada para: {db_path}")
         return True
     except KeyError:
         logger.error("Error: 'TIQUETES_DB_PATH' no está configurada en la aplicación Flask.")
         return False
     except sqlite3.Error as e:
-        logger.error(f"Error creando tablas en la base de datos ({db_path}): {e}")
+        # Log específico del error durante la creación o verificación
+        logger.error(f"Error durante la creación/verificación del esquema de la BD ({db_path}): {e}")
+        logger.error(traceback.format_exc()) # Log completo del traceback
         return False
     finally:
         if conn:
