@@ -730,16 +730,27 @@ def registrar_clasificacion_api():
         
         # Actualizar el estado en los datos de la guía
         datos_guia['estado_actual'] = 'clasificacion_completada'
+        datos_guia['clasificacion_completada'] = True
+        datos_guia['estado_clasificacion'] = 'completado'
         datos_guia['clasificacion_manual'] = {
             'verdes': float(verdes),
             'sobremaduros': float(sobremaduros),
             'dano_corona': float(dano_corona),
-            'pedunculo_largo': float(pedunculo_largo),
+            'pendunculo_largo': float(pedunculo_largo),
             'podridos': float(podridos)
         }
-        #datos_guia['fecha_clasificacion'] = datetime.now().strftime('%d/%m/%Y')
-        #datos_guia['hora_clasificacion'] = datetime.now().strftime('%H:%M:%S')
         datos_guia['imagenes_clasificacion'] = [os.path.join('uploads', 'clasificacion', os.path.basename(img)) for img in imagenes]
+        datos_guia['fecha_clasificacion'] = datetime.now().strftime('%d/%m/%Y')
+        datos_guia['hora_clasificacion'] = datetime.now().strftime('%H:%M:%S')
+        # Asegurar pasos_completados y datos_disponibles
+        if 'pasos_completados' not in datos_guia or not isinstance(datos_guia['pasos_completados'], list):
+            datos_guia['pasos_completados'] = []
+        if 'clasificacion' not in datos_guia['pasos_completados']:
+            datos_guia['pasos_completados'].append('clasificacion')
+        if 'datos_disponibles' not in datos_guia or not isinstance(datos_guia['datos_disponibles'], list):
+            datos_guia['datos_disponibles'] = []
+        if 'clasificacion' not in datos_guia['datos_disponibles']:
+            datos_guia['datos_disponibles'].append('clasificacion')
         utils_instance.update_datos_guia(codigo_guia, datos_guia)
         
         # Actualizar el archivo HTML con el nuevo estado
