@@ -1100,29 +1100,56 @@ def ver_guia_centralizada(codigo_guia):
                 logger.info(f"No se encontró clasificación en tabla clasificaciones para {codigo_guia}")
             
             # NUEVO: Verificar si existe un pesaje neto para la guía
-            cursor.execute("SELECT fecha_pesaje, hora_pesaje, peso_neto FROM pesajes_neto WHERE codigo_guia = ?", (codigo_guia,))
+            cursor.execute("SELECT timestamp_pesaje_neto_utc, peso_neto FROM pesajes_neto WHERE codigo_guia = ?", (codigo_guia,))
             result = cursor.fetchone()
             pesaje_neto_completado = False
+            fecha_pesaje_neto = None # Inicializar
+            hora_pesaje_neto = None  # Inicializar
+            peso_neto = None         # Inicializar
+            
             if result:
-                fecha_pesaje_neto = result[0]
-                hora_pesaje_neto = result[1]
-                peso_neto = result[2]
+                timestamp_pesaje_neto_utc = result[0]
+                peso_neto = result[1]
                 
-                if fecha_pesaje_neto and hora_pesaje_neto and peso_neto:
+                # Verificar si tenemos timestamp y peso
+                if timestamp_pesaje_neto_utc and peso_neto is not None:
                     pesaje_neto_completado = True
-                    logger.info(f"Encontrado pesaje neto para {codigo_guia}: fecha={fecha_pesaje_neto}, hora={hora_pesaje_neto}, peso={peso_neto}")
+                    # Convertir timestamp a fecha/hora local
+                    fecha_pesaje_neto, hora_pesaje_neto = convertir_timestamp_a_fecha_hora(timestamp_pesaje_neto_utc)
+                    logger.info(f"Encontrado pesaje neto para {codigo_guia}: timestamp={timestamp_pesaje_neto_utc}, peso={peso_neto}")
                     
                     # Actualizar datos_guia con esta información
                     datos_guia['pesaje_neto_completado'] = True
+                    datos_guia['timestamp_pesaje_neto_utc'] = timestamp_pesaje_neto_utc # Guardar también el UTC original
                     datos_guia['fecha_pesaje_neto'] = fecha_pesaje_neto
                     datos_guia['hora_pesaje_neto'] = hora_pesaje_neto
                     datos_guia['peso_neto'] = peso_neto
+                else:
+                     logger.info(f"Pesaje neto encontrado para {codigo_guia} pero con datos incompletos (timestamp o peso)")
             else:
-                # Si no hay en la DB, pero existe en los datos_guia, considerarlo completado
-                if datos_guia.get('peso_neto') and datos_guia.get('peso_neto') != 'Pendiente' and datos_guia.get('peso_neto') != 'N/A':
+                # Si no hay en la DB, pero existe en los datos_guia (ya cargados), considerarlo completado
+                # Hacer esta verificación más robusta
+                peso_neto_en_datos = datos_guia.get('peso_neto')
+                if (peso_neto_en_datos is not None and 
+                    str(peso_neto_en_datos).strip().lower() not in [
+                        'pendiente', 'n/a', '', 'none'
+                    ]):
                     pesaje_neto_completado = True
                     datos_guia['pesaje_neto_completado'] = True
+                    # Si no hay timestamp en datos_guia, intentar obtenerlo aquí si es posible o dejar N/A
+                    if not datos_guia.get('timestamp_pesaje_neto_utc'):
+                         logger.warning(f"Pesaje neto ({peso_neto_en_datos}) encontrado en datos_guia para {codigo_guia}, pero sin timestamp UTC.")
+                         datos_guia['fecha_pesaje_neto'] = datos_guia.get('fecha_pesaje_neto', 'Fecha Desconocida')
+                         datos_guia['hora_pesaje_neto'] = datos_guia.get('hora_pesaje_neto', 'Hora Desconocida')
+                    else:
+                        # Si hay timestamp en datos_guia, convertirlo
+                        fecha_pn, hora_pn = convertir_timestamp_a_fecha_hora(datos_guia['timestamp_pesaje_neto_utc'])
+                        datos_guia['fecha_pesaje_neto'] = fecha_pn
+                        datos_guia['hora_pesaje_neto'] = hora_pn
+                        
                     logger.info(f"Pesaje neto encontrado en datos_guia para {codigo_guia}")
+                else:
+                    logger.info(f"No se encontró pesaje neto en tabla pesajes_neto ni en datos_guia para {codigo_guia}")
             
             # NUEVO: Verificar si existe registro de salida para la guía
             # Seleccionar timestamp UTC en lugar de fecha/hora local
