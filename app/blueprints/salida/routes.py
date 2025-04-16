@@ -112,6 +112,7 @@ def completar_registro_salida():
     """
     Procesa el formulario de registro de salida y completa el proceso.
     """
+    conn = None  # Inicializar conn fuera del try
     try:
         # Verificar y actualizar el esquema de la tabla salidas
         ensure_salidas_schema()
@@ -157,15 +158,11 @@ def completar_registro_salida():
         
         # Convertir fecha y hora a UTC y formatear
         fecha_hora_actual_utc = datetime.utcnow()
-        # fecha_actual = fecha_hora_actual_utc.strftime('%d/%m/%Y') # REMOVED
-        # hora_actual = fecha_hora_actual_utc.strftime('%H:%M:%S')   # REMOVED
-        timestamp_utc = fecha_hora_actual_utc.strftime('%Y-%m-%d %H:%M:%S') # Nuevo formato UTC
+        timestamp_utc = fecha_hora_actual_utc.strftime('%Y-%m-%d %H:%M:%S')
         
         # Actualizar datos de la guía
         datos_actualizados = {
-            # 'fecha_salida': fecha_actual, # REMOVED
-            # 'hora_salida': hora_actual,   # REMOVED
-            'timestamp_salida_utc': timestamp_utc, # Nuevo campo UTC
+            'timestamp_salida_utc': timestamp_utc,
             'comentarios_salida': comentarios,
             'estado_actual': 'proceso_completado',
             'estado_salida': 'Completado',
@@ -178,7 +175,9 @@ def completar_registro_salida():
             
             # Registrar en la tabla de salidas
             try:
-                conn = sqlite3.connect('tiquetes.db')
+                # --- CORRECCIÓN: Usar la ruta de la configuración ---
+                db_path = current_app.config['TIQUETES_DB_PATH']
+                conn = sqlite3.connect(db_path)
                 cursor = conn.cursor()
                 
                 # Verificar si ya existe un registro para este código de guía
@@ -192,7 +191,7 @@ def completar_registro_salida():
                         SET timestamp_salida_utc = ?, comentarios_salida = ?, estado = ?
                         WHERE codigo_guia = ?
                     """, (
-                        timestamp_utc,  # Valor UTC
+                        timestamp_utc,
                         comentarios,
                         'completado',
                         codigo_guia
@@ -206,37 +205,36 @@ def completar_registro_salida():
                         codigo_guia,
                         datos_guia.get('codigo_proveedor', ''),
                         datos_guia.get('nombre_proveedor', ''),
-                        timestamp_utc,  # Valor UTC
+                        timestamp_utc,
                         comentarios
                     ))
                 
                 conn.commit()
-                conn.close()
                 logger.info(f"Datos de salida guardados en la tabla salidas para guía {codigo_guia}")
                 
-                # Forzar una actualización completa de los datos de guía para asegurar
-                # que los cambios se persistan en todos los lugares de almacenamiento
+                # Forzar una actualización completa de los datos de guía
                 try:
-                    # Obtener datos actualizados para sincronizar
                     datos_actualizados_completos = utils.get_datos_guia(codigo_guia, force_reload=True)
                     if datos_actualizados_completos:
-                        # Asegurarse de que los datos de salida estén incluidos
                         datos_actualizados_completos.update({
-                            # 'fecha_salida': fecha_actual, # REMOVED
-                            # 'hora_salida': hora_actual,   # REMOVED
-                            'timestamp_salida_utc': timestamp_utc, # Nuevo campo UTC
+                            'timestamp_salida_utc': timestamp_utc,
                             'comentarios_salida': comentarios,
                             'estado_actual': 'proceso_completado',
                             'estado_salida': 'Completado',
                             'estado_final': 'completado'
                         })
-                        # Re-guardar para sincronizar
                         utils.update_datos_guia(codigo_guia, datos_actualizados_completos)
                         logger.info(f"Datos de guía sincronizados completamente para {codigo_guia}")
                 except Exception as sync_error:
                     logger.error(f"Error al sincronizar datos de guía: {str(sync_error)}")
+                    logger.error(traceback.format_exc())
             except Exception as db_error:
                 logger.error(f"Error al guardar en la tabla salidas: {str(db_error)}")
+                logger.error(traceback.format_exc())
+                raise  # Re-lanzar el error para manejarlo en el catch exterior
+            finally:
+                if conn:
+                    conn.close()
             
             # Responder según el tipo de solicitud
             if request.is_json:
@@ -270,12 +268,16 @@ def completar_registro_salida():
         else:
             flash(f"Error al completar registro de salida: {str(e)}", "error")
             return redirect(url_for('misc.index'))
+    finally:
+        if conn:
+            conn.close()
 
 @bp.route('/ver_resultados_salida/<codigo_guia>')
 def ver_resultados_salida(codigo_guia):
     """
     Muestra los resultados del registro de salida para una guía específica.
     """
+    conn = None
     try:
         # Inicializar Utils dentro del contexto de la aplicación
         utils = Utils(current_app)
@@ -288,32 +290,31 @@ def ver_resultados_salida(codigo_guia):
             
         # Verificar si la salida ha sido registrada en la tabla salidas
         try:
-            conn = sqlite3.connect('tiquetes.db')
+            # --- CORRECCIÓN: Usar la ruta de la configuración ---
+            db_path = current_app.config['TIQUETES_DB_PATH']
+            conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
-            # Seleccionar el timestamp UTC en lugar de fecha/hora locales
+            
             cursor.execute("SELECT timestamp_salida_utc, comentarios_salida FROM salidas WHERE codigo_guia = ?", (codigo_guia,))
             salida_data = cursor.fetchone()
-            conn.close()
             
             if salida_data:
-                # Asignar el timestamp UTC y comentarios
                 datos_guia['timestamp_salida_utc'] = salida_data[0]
-                # datos_guia['fecha_salida'] = salida_data[0] # Remover asignación antigua
-                # datos_guia['hora_salida'] = salida_data[1] # Remover asignación antigua
-                datos_guia['comentarios_salida'] = salida_data[1] # El índice ahora es 1 para comentarios
+                datos_guia['comentarios_salida'] = salida_data[1]
                 logger.info(f"Datos de salida encontrados en la tabla para {codigo_guia}: {salida_data}")
             else:
-                # Verificar usando el timestamp UTC
                 if not datos_guia.get('timestamp_salida_utc'):
                     flash("El registro de salida no ha sido completado para esta guía.", "warning")
                     return redirect(url_for('salida.registro_salida', codigo_guia=codigo_guia))
         except Exception as db_error:
             logger.error(f"Error al verificar datos de salida en la base de datos: {str(db_error)}")
-            # Si hay un error al verificar la base de datos, continuamos con los datos de guía normales
-            # Verificar usando el timestamp UTC
+            logger.error(traceback.format_exc())
             if not datos_guia.get('timestamp_salida_utc'):
                 flash("El registro de salida no ha sido completado para esta guía.", "warning")
                 return redirect(url_for('salida.registro_salida', codigo_guia=codigo_guia))
+        finally:
+            if conn:
+                conn.close()
         
         # Generar QR para la guía si no existe
         qr_filename = f'qr_guia_{codigo_guia}.png'
