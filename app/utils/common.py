@@ -855,9 +855,26 @@ def get_estado_guia(codigo_guia):
         }
 
     # Paso 3: Clasificación
-    if datos_guia.get("timestamp_clasificacion_utc"):
-        pasos_completados.append("clasificacion")
-        datos_disponibles.append("clasificacion")
+    clasificacion_completada = False
+    # --- NUEVO (Prioritario): Criterio 0: Es tipo 'pepa' ---
+    # Si el tipo de pesaje es 'pepa', consideramos la clasificación completada INMEDIATAMENTE.
+    if datos_guia.get('tipo_pesaje') == 'pepa':
+        clasificacion_completada = True
+        logger.debug(f"EstadoGuia({codigo_guia}): Clasificación marcada como completada automáticamente por ser tipo 'pepa'.")
+    # --- FIN NUEVO ---
+    # Criterio 1: Hay un timestamp de clasificación válido (solo si NO es 'pepa')
+    elif datos_guia.get('timestamp_clasificacion_utc'):
+        clasificacion_completada = True
+        logger.debug(f"EstadoGuia({codigo_guia}): Clasificación marcada como completada por timestamp_clasificacion_utc.")
+    # Criterio 2: Existe clasificación manual significativa (solo si NO es 'pepa')
+    # Añadimos verificación para excluir JSON vacío '{}' o 'null'
+    elif datos_guia.get('clasificacion_manual_json') and datos_guia.get('clasificacion_manual_json') not in ('{}', 'null', None, ''):
+         clasificacion_completada = True
+         logger.debug(f"EstadoGuia({codigo_guia}): Clasificación marcada como completada por clasificacion_manual_json no vacía existente.")
+    
+    if clasificacion_completada:
+        pasos_completados.append('clasificacion')
+        datos_disponibles.append('clasificacion')
         porcentaje_avance = 60
         descripcion = "Clasificación completada, pendiente pesaje neto"
         siguiente_paso = "pesaje_neto"
@@ -900,6 +917,14 @@ def get_estado_guia(codigo_guia):
     else:
         siguiente_paso = "salida"
         descripcion = "Pendiente salida"
+
+    # --- AJUSTE FINAL (Mismo que antes, como salvaguarda) ---
+    # Si la clasificación se completó (por CUALQUIER criterio, incluido Pepa)
+    # pero el 'siguiente_paso' aún quedó como 'clasificacion', lo forzamos.
+    if 'clasificacion' in pasos_completados and siguiente_paso == 'clasificacion':
+        siguiente_paso = 'pesaje_neto'
+        descripcion = 'Pendiente pesaje neto' # Actualizar descripción también
+        logger.debug(f"EstadoGuia({codigo_guia}): Forzando siguiente_paso a 'pesaje_neto' porque clasificación está completa.")
 
     return {
         "pasos_completados": pasos_completados,
