@@ -15,8 +15,13 @@ def ensure_salidas_schema():
     """
     Asegura que la tabla salidas tenga todas las columnas necesarias.
     """
+    conn = None  # Inicializar conn fuera del try para asegurar que exista en el finally
     try:
-        db_path = 'tiquetes.db'
+        # --- CORRECCIÓN: Usar la ruta de la configuración de la app ---
+        db_path = current_app.config['TIQUETES_DB_PATH'] 
+        logger.info(f"[ensure_salidas_schema] Usando DB path: {db_path}") # Añadir log para confirmar ruta
+        # --- FIN CORRECCIÓN ---
+        
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         
@@ -47,13 +52,21 @@ def ensure_salidas_schema():
                     
         conn.commit()
         logger.info("Esquema de la tabla salidas verificado/actualizado")
-        conn.close()
-        return True
+        return True  # Devolver True al final si todo fue bien
+    except KeyError:
+        logger.error("[ensure_salidas_schema] Error: 'TIQUETES_DB_PATH' no está configurada.")
+        return False # Indicar fallo
+    except sqlite3.Error as e: # Capturar errores de SQLite más genéricos también
+        logger.error(f"Error SQLite en ensure_salidas_schema: {str(e)}")
+        logger.error(traceback.format_exc()) # Loguear el traceback completo
+        return False # Indicar fallo
     except Exception as e:
-        logger.error(f"Error verificando/actualizando esquema de salidas: {str(e)}")
-        if 'conn' in locals():
+        logger.error(f"Error general verificando/actualizando esquema de salidas: {str(e)}")
+        logger.error(traceback.format_exc()) # Loguear el traceback completo
+        return False # Indicar fallo
+    finally:
+        if conn: # Asegurar que conn se cierre si se abrió
             conn.close()
-        return False
 
 @bp.route('/registro_salida/<codigo_guia>')
 def registro_salida(codigo_guia):
