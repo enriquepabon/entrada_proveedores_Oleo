@@ -262,7 +262,7 @@
                     <div class="step-time">{{ datos_guia.hora_pesaje|default('--:--') }}</div>
                 </div>
                 <div class="process-step">
-                    <div class="step-circle {% if datos_guia.clasificacion_completada or 'clasificacion' in datos_guia.pasos_completados or es_pepa %}completed{% elif estado_info.siguiente_paso == 'clasificacion' %}active{% endif %}">
+                    <div class="step-circle {% if datos_guia.clasificacion_completada or datos_guia.estado_clasificacion == 'completado' or datos_guia.estado_actual == 'clasificacion_completada' or 'clasificacion' in estado_info.pasos_completados or es_pepa %}completed{% elif estado_info.siguiente_paso == 'clasificacion' %}active{% endif %}">
                         <i class="fas {{ 'fa-forward' if es_pepa else 'fa-tasks' }}"></i>
                     </div>
                     <div class="step-label">Clasificación</div>
