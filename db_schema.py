@@ -189,7 +189,22 @@ def create_tables():
         cursor.execute(CREATE_CLASIFICACIONES_TABLE)
         cursor.execute(CREATE_PESAJES_NETO_TABLE)
         cursor.execute(CREATE_FOTOS_CLASIFICACION_TABLE)
-        cursor.execute(CREATE_SALIDAS_TABLE)
+        # -- Bloque específico para la tabla salidas --
+        try:
+            logger.info("Intentando ejecutar CREATE TABLE IF NOT EXISTS salidas...")
+            cursor.execute(CREATE_SALIDAS_TABLE)
+            logger.info("CREATE TABLE IF NOT EXISTS salidas ejecutado.")
+            # Verificar si la tabla existe inmediatamente después
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='salidas'")
+            if cursor.fetchone():
+                logger.info("Tabla 'salidas' verificada y existe después de CREATE.")
+            else:
+                logger.error("¡ERROR! La tabla 'salidas' NO existe inmediatamente después de ejecutar CREATE TABLE.")
+        except sqlite3.Error as e_create:
+            logger.error(f"¡ERROR SQLite específico al ejecutar CREATE TABLE IF NOT EXISTS salidas: {e_create}")
+            logger.error(traceback.format_exc())
+            # Considerar si relanzar el error: raise e_create
+        # -- Fin bloque específico --
         cursor.execute(CREATE_PRESUPUESTO_MENSUAL_TABLE)
         conn.commit() # Commit after creating tables
         logger.info("CREATE TABLE statements ejecutados.")
