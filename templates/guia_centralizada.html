@@ -299,7 +299,7 @@
                 {% if datos_guia.fecha_salida and datos_guia.hora_salida %}
                     {% set porcentaje_actualizado = 100 %}
                 {% endif %}
-                <div class="progress-bar {% if porcentaje_actualizado < 30 %}bg-primary{% elif porcentaje_actualizado < 60 %}bg-info{% elif porcentaje_actualizado < 80 %}bg-warning{% elif porcentaje_actualizado < 100 %}bg-secondary{% else %}bg-success{% endif %}" 
+                <div class="progress-bar {% if porcentaje_actualizado < 30 %}bg-primary{% elif porcentaje_actualizado < 60 %}bg-primary{% elif porcentaje_actualizado < 80 %}bg-info{% elif porcentaje_actualizado < 100 %}bg-warning{% else %}bg-success{% endif %}" 
                      role="progressbar" 
                      style="width: {{ porcentaje_actualizado }}%;" 
                      aria-valuenow="{{ porcentaje_actualizado }}" 
@@ -652,14 +652,13 @@
                                 {% endif %}
                             </ul>
                             
-                            {% if clasificacion_completada and not peso_neto_completado %}
-                            {% if not (datos_guia.fecha_salida and datos_guia.hora_salida) %} {# Hide if exit is registered #}
+                            {# Botón para registrar pesaje neto si la clasificación está completa, el neto no, y la salida no #}
+                            {% if clasificacion_completada and not peso_neto_completado and not salida_completada %}
                             <div class="mt-3 text-center">
                                 <a href="{{ url_for('pesaje_neto.pesaje_neto', codigo_guia=codigo_guia) }}" class="btn btn-primary">
                                     <i class="fas fa-balance-scale"></i> Registrar Pesaje Neto
                                 </a>
                             </div>
-                            {% endif %}
                             {% endif %}
                         </div>
                     </div>
