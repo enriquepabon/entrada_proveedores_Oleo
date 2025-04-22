@@ -1119,10 +1119,10 @@ def procesar_pesaje_directo():
         
         # Obtener datos del formulario
         codigo_guia = request.form.get('codigo_guia')
-        peso_bruto = request.form.get('peso_bruto')
-        tipo_pesaje = request.form.get('tipo_pesaje', 'directo')
+        # peso_bruto = request.form.get('peso_bruto') # Peso bruto no se usa en la validación inicial
+        # tipo_pesaje = request.form.get('tipo_pesaje', 'directo') # Tipo no relevante aquí
         # image_filename = request.form.get('image_filename') # Ya no se espera como form data
-        codigo_sap = request.form.get('codigo_guia_transporte_sap')
+        # codigo_sap = request.form.get('codigo_guia_transporte_sap') # Se extrae de la respuesta, no se envía
 
         # Verificar archivo de imagen cargado
         if 'imagen' not in request.files:
@@ -1140,6 +1140,33 @@ def procesar_pesaje_directo():
         if not codigo_guia:
             logger.error("Código de guía es requerido para procesar pesaje directo.")
             return jsonify({"success": False, "message": "Código de guía es requerido."}), 400
+
+        # --- Inicio: Obtener código de proveedor real ---
+        codigo_proveedor_real = None
+        try:
+            datos_guia = utils.get_datos_guia(codigo_guia)
+            if datos_guia:
+                # Priorizar 'codigo_proveedor', luego 'codigo'
+                codigo_proveedor_real = datos_guia.get('codigo_proveedor', datos_guia.get('codigo'))
+                if codigo_proveedor_real:
+                     logger.info(f"Código de proveedor recuperado para {codigo_guia}: {codigo_proveedor_real}")
+                else:
+                     logger.warning(f"No se encontró 'codigo_proveedor' o 'codigo' en datos_guia para {codigo_guia}")
+            else:
+                 logger.warning(f"No se pudieron obtener datos_guia para {codigo_guia} al buscar código de proveedor.")
+
+            # Fallback: si no se pudo obtener de datos_guia, intentar extraer del codigo_guia
+            if not codigo_proveedor_real and '_' in codigo_guia:
+                codigo_proveedor_real = codigo_guia.split('_')[0]
+                logger.warning(f"Usando código de proveedor extraído del código_guia: {codigo_proveedor_real}")
+            elif not codigo_proveedor_real:
+                 codigo_proveedor_real = 'desconocido' # O algún valor por defecto si es absolutamente necesario
+                 logger.error(f"No se pudo determinar el código de proveedor para {codigo_guia}. Usando '{codigo_proveedor_real}'")
+
+        except Exception as e:
+            logger.error(f"Error al obtener datos de guía para extraer código proveedor ({codigo_guia}): {str(e)}")
+            codigo_proveedor_real = 'error' # Indicar error en la obtención
+        # --- Fin: Obtener código de proveedor real ---
             
         # Guardar imagen temporalmente
         image_path = os.path.join(current_app.config['UPLOAD_FOLDER'], image_filename)
@@ -1148,8 +1175,9 @@ def procesar_pesaje_directo():
         # Enviar al webhook de Make para procesamiento
         with open(image_path, 'rb') as f:
             files = {'file': (image_filename, f, 'multipart/form-data')}
-            data = {'codigo_proveedor': codigo_sap}
-            logger.info(f"Enviando imagen al webhook: {PESAJE_WEBHOOK_URL}")
+            # --- Cambio: Enviar el código de proveedor real ---
+            data = {'codigo_proveedor': codigo_proveedor_real}
+            logger.info(f"Enviando imagen y código proveedor '{codigo_proveedor_real}' al webhook: {PESAJE_WEBHOOK_URL}")
             response = requests.post(PESAJE_WEBHOOK_URL, files=files, data=data)
         
         logger.info(f"Respuesta del Webhook: {response.status_code} - {response.text}")
@@ -1172,10 +1200,11 @@ def procesar_pesaje_directo():
 
         # Verificar si la respuesta es exitosa
         if "Exitoso" not in response_text:
-            logger.error(f"Respuesta no exitosa: {response_text}")
+            # --- MEJORA: Añadir log con más detalle en caso de NO Exitoso ---
+            logger.error(f"Respuesta NO exitosa del webhook para {codigo_guia} (Proveedor enviado: {codigo_proveedor_real}): {response_text}")
             return jsonify({
                 'success': False,
-                'message': f"Respuesta no exitosa: {response_text}"
+                'message': f"Respuesta no exitosa del webhook: {response_text}" # Mostrar el mensaje de error del webhook al usuario
             })
 
         # Extraer la guía de transporte SAP
@@ -1186,6 +1215,8 @@ def procesar_pesaje_directo():
             # Guardar en la sesión para su uso posterior
             session['codigo_guia_transporte_sap'] = codigo_guia_transporte_sap
             logger.info(f"Guía de transporte SAP extraída: {codigo_guia_transporte_sap}")
+        else:
+             logger.warning(f"No se encontró Guía de transporte SAP en la respuesta exitosa para {codigo_guia}: {response_text}")
 
         # Buscar el peso en la respuesta usando diferentes patrones
         peso = None
@@ -1233,11 +1264,11 @@ def procesar_pesaje_directo():
                 
                 return jsonify(result)
             else:
-                logger.error("No se pudo extraer el peso de la respuesta")
+                logger.error("No se pudo extraer el peso de la respuesta exitosa")
                 logger.error(f"Texto de respuesta: {response_text}")
                 return jsonify({
                     'success': False,
-                    'message': 'No se pudo extraer el peso de la respuesta. Por favor, intente de nuevo o use el modo manual.'
+                    'message': 'Se procesó la imagen pero no se pudo extraer el peso de la respuesta. Verifique la imagen o use el modo manual.'
                 })
             
     except Exception as e:

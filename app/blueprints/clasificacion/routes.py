@@ -799,6 +799,7 @@ def registrar_clasificacion_api():
         return jsonify({'success': False, 'message': f'Error: {str(e)}'}), 500
 
 # Definición de la función completa modificada
+# --- INICIO DE LA FUNCIÓN PARA COPIAR ---
 def process_images_with_roboflow(codigo_guia, fotos_paths, guia_fotos_dir, json_path, roboflow_config):
     """
     Procesa imágenes usando Roboflow, enfocándose en guardar los detalles por imagen
@@ -816,6 +817,7 @@ def process_images_with_roboflow(codigo_guia, fotos_paths, guia_fotos_dir, json_
         tuple: (success (bool), message (str), results (dict))
                results contiene 'imagenes_procesadas' con detalles por foto y 'clasificacion_automatica' con el resumen.
     """
+    # Asumiendo que 'logger' está definido globalmente en el archivo
     logger.info(f"[DIAG Param] Iniciando process_images_with_roboflow para guía {codigo_guia} (Modo Detalle + Agregación)")
     start_time_total = time.time()
     use_roboflow_api = False
@@ -835,6 +837,7 @@ def process_images_with_roboflow(codigo_guia, fotos_paths, guia_fotos_dir, json_
             return False, f"Configuración de Roboflow incompleta: faltan {missing_keys}", {}
         else:
             # Asumiendo que DirectRoboflowClient está definido o importado correctamente
+            # Reemplaza 'DirectRoboflowClient' si tu clase se llama diferente
             roboflow_client = DirectRoboflowClient(api_url=api_url, api_key=api_key)
             logger.info(f"[DIAG Param] Cliente Roboflow inicializado para {project}/{workflow_id}")
             use_roboflow_api = True
@@ -849,7 +852,7 @@ def process_images_with_roboflow(codigo_guia, fotos_paths, guia_fotos_dir, json_
     # --- Estructura de Resultados (incluirá 'clasificacion_automatica' al final) ---
     results_data = {
         'codigo_guia': codigo_guia,
-        'timestamp_procesamiento_utc': get_utc_timestamp_str(),
+        'timestamp_procesamiento_utc': get_utc_timestamp_str(), # Asume que esta función está disponible
         'configuracion_usada': {
             'usando_api': use_roboflow_api,
             'workspace': workspace,
@@ -877,17 +880,17 @@ def process_images_with_roboflow(codigo_guia, fotos_paths, guia_fotos_dir, json_
     # ESTE MAPEADO ES CRÍTICO - debe coincidir con las clases de TU MODELO y la respuesta API
     class_mapping = {
        'verde': 'verde',
-       'racimos verdes': 'verde', # Clave exacta de tu log
+       'racimos verdes': 'verde',
        'sobremaduro': 'sobremaduro',
-       'racimo sobremaduro': 'sobremaduro', # Clave exacta de tu log
-       'danio_en_corona': 'danio_corona', # Nombre común Roboflow
-       'racimo daño en corona': 'danio_corona', # Clave exacta de tu log (con ñ) -> Ojo con encoding si usas 'ñ'
-       'racimo dano en corona': 'danio_corona', # Variante sin 'ñ'
-       'pendunculo_largo': 'pendunculo_largo', # Nombre común Roboflow
-       'racimo pedunculo largo': 'pendunculo_largo', # Clave exacta de tu log
-       'fruta_podrida': 'podrido', # Nombre común Roboflow
-       'racimo podrido': 'podrido', # Clave exacta de tu log
-       'maduro': 'maduro', # Añadir 'maduro' si es una clase posible
+       'racimo sobremaduro': 'sobremaduro',
+       'danio_en_corona': 'danio_corona',
+       'racimo daño en corona': 'danio_corona', # Con ñ
+       'racimo dano en corona': 'danio_corona', # Sin ñ
+       'pendunculo_largo': 'pendunculo_largo',
+       'racimo pedunculo largo': 'pendunculo_largo',
+       'fruta_podrida': 'podrido',
+       'racimo podrido': 'podrido',
+       'maduro': 'maduro',
        # Añade más alias o nombres exactos si es necesario
     }
     logger.info(f"[DIAG RESPONSE PROC] Diccionario class_mapping definido globalmente para la función: {class_mapping}")
@@ -902,18 +905,22 @@ def process_images_with_roboflow(codigo_guia, fotos_paths, guia_fotos_dir, json_
             'indice': idx + 1, 'numero': idx + 1,
             'nombre_original': img_filename, 'ruta_original': img_path,
             'imagen_original': None, # Se calcula abajo
-            'timestamp_inicio': get_utc_timestamp_str(), 'estado': 'pendiente',
+            'timestamp_inicio': get_utc_timestamp_str(), # Asume que esta función está disponible
+            'estado': 'pendiente',
             'mensaje_error': None, 'traceback': None,
             'tiempo_procesamiento_seg': 0,
             'detecciones': [], 'conteo_por_clase': {}, 'conteo_categorias': {},
             'total_racimos_imagen': 0, 'total_racimos': 0, 'num_racimos_detectados': 0, # Inicializar todos
             'ruta_anotada': None, 'imagen_annotated': None,
-            'ruta_clasificada_rf': None # Para la imagen de Roboflow
+            'ruta_clasificada_rf': None, # Para la imagen de Roboflow
+            'roboflow_potholes_count': None, # Inicializar aquí
+            'raw_roboflow_response': None # Inicializar aquí
         }
 
         try:
             # Calcular ruta relativa imagen original
             try:
+                # Asegúrate que 'current_app' está importado desde Flask o disponible
                 static_folder_path = current_app.static_folder
                 rel_original_path = os.path.relpath(img_path, static_folder_path)
                 image_result['imagen_original'] = rel_original_path.replace(os.sep, '/')
@@ -923,8 +930,10 @@ def process_images_with_roboflow(codigo_guia, fotos_paths, guia_fotos_dir, json_
 
             # Validación y apertura de imagen
             if not os.path.exists(img_path): raise FileNotFoundError(f"Archivo no encontrado: {img_path}")
+            # Asume que es_archivo_imagen está disponible
             if not es_archivo_imagen(img_filename): raise ValueError("Archivo no es imagen válida.")
             try:
+                # Asume que Image está importado desde PIL
                 with Image.open(img_path) as img_pil: img_pil.verify()
                 with Image.open(img_path) as img_pil:
                     img_pil.load()
@@ -937,12 +946,14 @@ def process_images_with_roboflow(codigo_guia, fotos_paths, guia_fotos_dir, json_
             logger.info(f"[DIAG Param] Enviando imagen {idx+1} a Roboflow API...")
             image_data_dict = {}
             try:
+                # Asume que base64 está importado
                 with open(img_path, "rb") as image_file:
                     img_str = base64.b64encode(image_file.read()).decode('utf-8')
                     image_data_dict = {"type": "base64", "value": img_str}
             except Exception as read_err: raise IOError(f"Error leyendo/codificando imagen: {read_err}")
 
             start_api_time = time.time()
+            # Asume que roboflow_client tiene el método run_workflow
             api_response = roboflow_client.run_workflow(workspace, workflow_id, img_path, image_data_dict)
             end_api_time = time.time()
             logger.info(f"[DIAG Param] Respuesta Roboflow img {idx+1}. Tiempo API: {end_api_time - start_api_time:.2f}s")
@@ -954,8 +965,53 @@ def process_images_with_roboflow(codigo_guia, fotos_paths, guia_fotos_dir, json_
 
             # --- PROCESAMIENTO RESPUESTA ROBOFLOW ---
             logger.info(f"[DIAG RESPONSE PROC] Procesando respuesta API para img {idx+1}...")
-            try: logger.info(f"[DIAG RESPONSE PROC] Respuesta API Completa: {json.dumps(api_response, indent=2)}")
+            try:
+                # Asume que json está importado
+                logger.info(f"[DIAG RESPONSE PROC] Respuesta API Completa: {json.dumps(api_response, indent=2)}")
             except: logger.info(f"[DIAG RESPONSE PROC] Respuesta API Completa (raw): {api_response}")
+
+            # --- INICIO: Captura Robusta de 'potholes_detected' y Respuesta Cruda ---
+            potholes_count_final = None # Valor por defecto
+            primary_output = None
+
+            # 1. Guardar respuesta cruda siempre (para auditoría)
+            image_result['raw_roboflow_response'] = api_response
+            logger.info(f"[DIAG POTHOLES] Respuesta cruda guardada para foto {idx+1}")
+
+            # 2. Verificar estructura y extraer 'potholes_detected'
+            if isinstance(api_response, dict) and 'outputs' in api_response and isinstance(api_response['outputs'], list) and api_response['outputs']:
+                primary_output = api_response['outputs'][0] # Acceder al primer diccionario de la lista
+                if isinstance(primary_output, dict):
+                    # Intentar obtener el valor raw de 'potholes_detected'
+                    potholes_value_raw = primary_output.get('potholes_detected', None)
+                    if potholes_value_raw is not None:
+                        logger.info(f"[DIAG POTHOLES] Valor 'potholes_detected' RAW encontrado en outputs[0]: '{potholes_value_raw}' (Tipo: {type(potholes_value_raw)})")
+                        # Intentar convertir a entero de forma robusta
+                        try:
+                            potholes_str = str(potholes_value_raw).strip() # Convertir a string y limpiar espacios
+                            potholes_count_final = int(potholes_str)       # Convertir a entero
+                            logger.info(f"[DIAG POTHOLES] Convertido a entero exitosamente: {potholes_count_final}")
+                        except (ValueError, TypeError) as convert_err:
+                            logger.warning(f"[DIAG POTHOLES] FALLO al convertir '{potholes_value_raw}' a entero: {convert_err}. Se guarda None.")
+                            potholes_count_final = None # Asegurar None en caso de error de conversión
+                    else:
+                        # Log si la clave no está en el diccionario anidado
+                        logger.warning(f"[DIAG POTHOLES] Clave 'potholes_detected' NO encontrada dentro de outputs[0]. Claves presentes: {list(primary_output.keys())}")
+                else:
+                    # Log si el primer elemento de 'outputs' no es un diccionario
+                    logger.warning(f"[DIAG POTHOLES] El primer elemento de 'outputs' no es un diccionario (Tipo: {type(primary_output)}). No se puede buscar 'potholes_detected'.")
+            elif isinstance(api_response, dict):
+                 # Log si 'outputs' no existe o está vacío, muestra claves raíz
+                 logger.warning(f"[DIAG POTHOLES] No se encontró la lista 'outputs' válida en api_response. Verificando claves raíz: {list(api_response.keys())}")
+                 # (Opcional: Podrías añadir aquí una búsqueda en api_response directamente si fuera un caso alternativo)
+            else:
+                # Log si la respuesta completa no es un diccionario
+                logger.warning(f"[DIAG POTHOLES] La respuesta de Roboflow no es un diccionario (Tipo: {type(api_response)}). No se puede buscar 'potholes_detected'.")
+
+            # 3. Asignar el valor final (sea el entero convertido o None) al resultado de la imagen
+            image_result['roboflow_potholes_count'] = potholes_count_final
+            logger.info(f"[DIAG POTHOLES] Valor final asignado a image_result['roboflow_potholes_count']: {potholes_count_final}")
+            # --- FIN: Captura Robusta ---
 
             # (class_mapping ya está definido fuera del bucle)
             claves_internas_unicas = set(class_mapping.values())
@@ -964,21 +1020,21 @@ def process_images_with_roboflow(codigo_guia, fotos_paths, guia_fotos_dir, json_
             detections_processed = [] # Para BBOX
 
             # Extraer CONTEOS DIRECTOS
-            primary_output = {}
-            if isinstance(api_response, dict) and 'outputs' in api_response and isinstance(api_response['outputs'], list) and api_response['outputs']:
-                primary_output = api_response['outputs'][0]
-                if not isinstance(primary_output, dict):
-                     logger.warning(f"[DIAG RESPONSE PROC] outputs[0] no es dict. Buscando en raíz.")
+            # Reutilizamos primary_output si se obtuvo en el bloque anterior
+            if primary_output is None: # Si no se obtuvo antes (e.g., no había 'outputs')
+                if isinstance(api_response, dict):
+                     logger.info("[DIAG RESPONSE PROC] No se encontró 'outputs'. Buscando conteos en raíz.")
                      primary_output = api_response
-            elif isinstance(api_response, dict):
-                 logger.info("[DIAG RESPONSE PROC] No se encontró 'outputs'. Buscando en raíz.")
-                 primary_output = api_response
-            else:
-                 logger.warning(f"[DIAG RESPONSE PROC] Formato respuesta API inesperado ({type(api_response)}).")
+                else:
+                     logger.warning(f"[DIAG RESPONSE PROC] Formato respuesta API inesperado ({type(api_response)}), no se buscarán conteos.")
+                     primary_output = {} # Asignar dict vacío para evitar errores abajo
 
             if isinstance(primary_output, dict):
                  logger.info(f"[DIAG RESPONSE PROC] Buscando conteos directos en keys: {list(primary_output.keys())}")
                  for key_rf, value_rf in primary_output.items():
+                     # Saltar la clave 'potholes_detected' que ya procesamos
+                     if key_rf == 'potholes_detected': continue
+
                      key_rf_normalized = key_rf.lower().strip()
                      clase_interna = class_mapping.get(key_rf_normalized)
                      if clase_interna and isinstance(value_rf, (int, float)):
@@ -1025,191 +1081,188 @@ def process_images_with_roboflow(codigo_guia, fotos_paths, guia_fotos_dir, json_
                 logger.warning("No se pudieron obtener dimensiones img, BBOX no procesados.")
 
             # Asignación Final a image_result
-            image_result['detections'] = detections_processed
+            image_result['detecciones'] = detections_processed
             image_result['conteo_por_clase'] = conteo_clases_directo
-            image_result['num_racimos_detectados'] = num_racimos_detectados_en_imagen # Clave principal
-            image_result['total_racimos_imagen'] = num_racimos_detectados_en_imagen # Alias
-            image_result['total_racimos'] = num_racimos_detectados_en_imagen # Alias
+
+            # --- Cálculo de conteo_categorias y num_racimos_detectados ---
+            categorias_final = {clave: {'cantidad': 0, 'porcentaje': 0.0} for clave in claves_internas_unicas}
+            total_general_categorias = 0
+
+            # Usar conteo_clases_directo como base
+            for clase, cantidad in conteo_clases_directo.items():
+                if clase in categorias_final:
+                    categorias_final[clase]['cantidad'] += cantidad
+                    total_general_categorias += cantidad
+
+            # Añadir conteos de BBOX si son diferentes (o si no hubo conteos directos)
+            if detections_processed and num_racimos_detectados_en_imagen == 0:
+                logger.info("Usando conteos de BBOX ya que no hubo conteos directos.")
+                for det in detections_processed:
+                    clase = det['clase']
+                    if clase in categorias_final:
+                        categorias_final[clase]['cantidad'] += 1
+                        total_general_categorias += 1
+            elif detections_processed:
+                 logger.info("Conteos directos encontrados, ignorando BBOX para conteo total.")
+
+            # Calcular porcentajes
+            if total_general_categorias > 0:
+                for clase in categorias_final:
+                    categorias_final[clase]['porcentaje'] = round((categorias_final[clase]['cantidad'] / total_general_categorias) * 100, 2)
+
+            image_result['conteo_categorias'] = categorias_final
+            image_result['num_racimos_detectados'] = total_general_categorias
+            image_result['total_racimos_imagen'] = total_general_categorias # Alias
+            image_result['total_racimos'] = total_general_categorias # Alias
 
             logger.info(f"Asignación final img {idx+1} - num_racimos_detectados: {image_result['num_racimos_detectados']}")
 
-            # Calcular porcentajes POR IMAGEN para template detalles
-            total_img_correcto = num_racimos_detectados_en_imagen
-            conteo_categorias_template = {}
-            for clase_int, cantidad in conteo_clases_directo.items():
-                 porcentaje = round((cantidad / total_img_correcto) * 100, 1) if total_img_correcto > 0 else 0.0
-                 conteo_categorias_template[clase_int] = {'cantidad': cantidad, 'porcentaje': porcentaje}
-            image_result['conteo_categorias'] = conteo_categorias_template
-
-            # Generar imagen anotada localmente (usa BBOX de detections_processed)
-            try:
-                annotated_img_filename = f"{os.path.splitext(img_filename)[0]}_annotated.jpg"
-                annotated_img_path_abs = os.path.join(guia_fotos_dir, annotated_img_filename)
-                generate_annotated_image(img_path, detections_processed, output_path=annotated_img_path_abs)
+            # Guardar imagen clasificada de Roboflow (si existe)
+            annotated_image_data = primary_output.get('annotated_image') if isinstance(primary_output, dict) else None
+            if annotated_image_data and isinstance(annotated_image_data, dict) and annotated_image_data.get('type') == 'base64':
                 try:
-                    static_folder_path = current_app.static_folder
-                    rel_annotated_path = os.path.relpath(annotated_img_path_abs, static_folder_path)
-                    rel_annotated_path_web = rel_annotated_path.replace(os.sep, '/')
-                    image_result['ruta_anotada'] = rel_annotated_path_web
-                    image_result['imagen_annotated'] = rel_annotated_path_web
-                    logger.info(f"Imagen anotada local generada, ruta relativa: {rel_annotated_path_web}")
-                except Exception as rel_path_err:
-                     logger.error(f"Error calculando ruta relativa anotada: {rel_path_err}")
-                     image_result['ruta_anotada'] = annotated_img_path_abs # Fallback
-                     image_result['imagen_annotated'] = annotated_img_path_abs
-            except Exception as annotate_err:
-                logger.error(f"Error generando imagen anotada local {img_filename}: {annotate_err}")
-                image_result['mensaje_error'] = (image_result['mensaje_error'] or "") + f"; Error anotación local: {annotate_err}"
+                    img_bytes = base64.b64decode(annotated_image_data['value'])
+                    labeled_filename_rf = f"{os.path.splitext(img_filename)[0]}_labeled_rf.jpg"
+                    labeled_path_rf = os.path.join(guia_fotos_dir, labeled_filename_rf)
+                    with open(labeled_path_rf, 'wb') as f_out:
+                        f_out.write(img_bytes)
+                    # Calcular ruta relativa para JSON
+                    # Asume que current_app está disponible
+                    rel_labeled_path_rf = os.path.relpath(labeled_path_rf, current_app.static_folder)
+                    image_result['ruta_clasificada_rf'] = rel_labeled_path_rf.replace(os.sep, '/')
+                    logger.info(f"Guardada imagen clasificada de Roboflow: {labeled_filename_rf}")
+                except Exception as save_rf_err:
+                    logger.error(f"Error guardando imagen clasificada de Roboflow: {save_rf_err}")
 
-            # Guardar Imagen Etiquetada de Roboflow (label_visualization_1)
-            imagen_clasificada_rf_rel_path = None
-            try:
-                img_labeled_base64 = None
-                if isinstance(primary_output, dict):
-                    vis_data = primary_output.get('label_visualization_1')
-                    if isinstance(vis_data, dict): img_labeled_base64 = vis_data.get('value')
-                    elif not img_labeled_base64 and 'outputs' in primary_output: # Check outputs again if needed
-                         # ... (logic to check outputs[0]['label_visualization_1'] if needed) ...
-                         pass
+            # Generar y guardar imagen anotada localmente con BBOX (si hay detecciones)
+            if detections_processed:
+                 annotated_filename = f"{os.path.splitext(img_filename)[0]}_annotated.jpg"
+                 annotated_path = os.path.join(guia_fotos_dir, annotated_filename)
+                 try:
+                    # Asume que generate_annotated_image está disponible
+                    generate_annotated_image(img_path, detections_processed, annotated_path)
+                    # Asume que current_app está disponible
+                    rel_annotated_path = os.path.relpath(annotated_path, current_app.static_folder)
+                    image_result['ruta_anotada'] = rel_annotated_path.replace(os.sep, '/')
+                    image_result['imagen_annotated'] = rel_annotated_path.replace(os.sep, '/') # Alias
+                    logger.info(f"Imagen anotada local generada: {annotated_filename}")
+                 except Exception as gen_ann_err:
+                     logger.error(f"Error generando imagen anotada local: {gen_ann_err}")
+                     image_result['mensaje_error'] = (image_result['mensaje_error'] or "") + f"; Error anotación local: {gen_ann_err}"
 
-                if img_labeled_base64:
-                    logger.info(f"[DIAG SAVE RF IMG] Base64 'label_visualization_1' encontrado img {idx+1}.")
-                    img_data = base64.b64decode(img_labeled_base64)
-                    labeled_rf_filename = f"{os.path.splitext(img_filename)[0]}_labeled_rf.jpg"
-                    labeled_rf_path_abs = os.path.join(guia_fotos_dir, labeled_rf_filename)
-                    with open(labeled_rf_path_abs, 'wb') as f_label: f_label.write(img_data)
-                    logger.info(f"Imagen Roboflow etiquetada guardada: {labeled_rf_path_abs}")
-                    try:
-                        static_folder_path = current_app.static_folder
-                        rel_labeled_rf_path = os.path.relpath(labeled_rf_path_abs, static_folder_path)
-                        imagen_clasificada_rf_rel_path = rel_labeled_rf_path.replace(os.sep, '/')
-                        logger.info(f"Ruta relativa imagen Roboflow etiquetada: {imagen_clasificada_rf_rel_path}")
-                    except Exception as rel_rf_err: logger.error(f"Error ruta relativa img RF: {rel_rf_err}")
-                else: logger.warning(f"No se encontró base64 para 'label_visualization_1' img {idx+1}.")
-
-            except Exception as save_rf_err:
-                logger.error(f"Error guardando img etiquetada RF {idx+1}: {save_rf_err}")
-                logger.error(traceback.format_exc())
-
-            image_result['ruta_clasificada_rf'] = imagen_clasificada_rf_rel_path
             image_result['estado'] = 'procesada_ok'
 
-        # --- Manejo de Errores por Imagen ---
-        except Exception as e:
-            logger.error(f"Error procesando imagen {idx+1} ({img_filename}): {str(e)}")
-            tb_str = traceback.format_exc(); logger.error(tb_str)
-            image_result['estado'] = 'error_procesamiento'
+        except FileNotFoundError as e:
+            logger.error(f"Error procesando imagen {img_filename}: {e}")
+            image_result['estado'] = 'error_archivo'
             image_result['mensaje_error'] = str(e)
-            image_result['traceback'] = tb_str
-            results_data['errores'].append({'indice': idx + 1, 'nombre_original': img_filename,
-                                           'mensaje_error': str(e), 'traceback': tb_str})
+            image_result['traceback'] = traceback.format_exc() # Asume traceback importado
+            results_data['errores'].append(image_result)
+        except ValueError as e:
+            logger.error(f"Error procesando imagen {img_filename}: {e}")
+            image_result['estado'] = 'error_formato'
+            image_result['mensaje_error'] = str(e)
+            image_result['traceback'] = traceback.format_exc() # Asume traceback importado
+            results_data['errores'].append(image_result)
+        except ConnectionError as e:
+             logger.error(f"Error de conexión con Roboflow para {img_filename}: {e}")
+             image_result['estado'] = 'error_api'
+             image_result['mensaje_error'] = str(e)
+             image_result['traceback'] = traceback.format_exc() # Asume traceback importado
+             results_data['errores'].append(image_result)
+        except Exception as e:
+            logger.error(f"Error inesperado procesando imagen {img_filename}: {e}")
+            image_result['estado'] = 'error_inesperado'
+            image_result['mensaje_error'] = str(e)
+            image_result['traceback'] = traceback.format_exc() # Asume traceback importado
+            results_data['errores'].append(image_result)
         finally:
             end_time_img = time.time()
             image_result['tiempo_procesamiento_seg'] = round(end_time_img - start_time_img, 2)
-            # --- MODIFICACIÓN: Usar deepcopy ---
-            results_data['imagenes_procesadas'].append(copy.deepcopy(image_result))
-            # ------------------------------------
+            results_data['imagenes_procesadas'].append(image_result)
+            logger.info(f"Imagen {idx+1} finalizada. Estado: {image_result['estado']}. Tiempo: {image_result['tiempo_procesamiento_seg']:.2f}s")
 
-    # --- Fin del Bucle de Imágenes ---
 
-    # --- INICIO: Calcular Resumen Agregado para 'clasificacion_automatica' ---
-    logger.info("[AGREGACIÓN] Calculando resumen agregado de clasificación automática...")
-    summary_clasificacion_automatica = {}
-    claves_internas_unicas = set(class_mapping.values()) # Usa el mapping definido antes
-    total_counts = {key: 0 for key in claves_internas_unicas}
-    grand_total_racimos = 0
+    # --- FIN DEL BUCLE ---
 
-    for img_res in results_data.get('imagenes_procesadas', []):
-        grand_total_racimos += img_res.get('num_racimos_detectados', 0)
-        conteo_imagen = img_res.get('conteo_por_clase', {})
-        for clase_interna, cantidad in conteo_imagen.items():
-            if clase_interna in total_counts:
-                total_counts[clase_interna] += cantidad
-            else:
-                 logger.warning(f"[AGREGACIÓN] Clase interna inesperada: {clase_interna}. Ignorando.")
-
-    logger.info(f"[AGREGACIÓN] Total racimos (todas imgs): {grand_total_racimos}")
-    logger.info(f"[AGREGACIÓN] Conteos totales por clase: {total_counts}")
-
-    # Mapeo inverso clave interna -> clave JSON para el resumen final
-    db_key_to_json_key = {
-        'verde': 'verdes',
-        'sobremaduro': 'sobremaduros',
-        'danio_corona': 'danio_corona', # Clave JSON consistente
-        'pendunculo_largo': 'pendunculo_largo', # Clave JSON consistente
-        'podrido': 'podridos',
-        'maduro': 'maduros' # Si existe
+    # --- CÁLCULO DE RESULTADOS AGREGADOS ---
+    logger.info("[DIAG AGGREGATION] Iniciando cálculo de resultados agregados...")
+    clasificacion_automatica = {
+        'codigo_guia': codigo_guia,
+        'timestamp_finalizacion_utc': get_utc_timestamp_str(), # Asume que esta función está disponible
+        'conteo_total_racimos': 0,
+        'conteo_imagenes_ok': 0,
+        'conteo_imagenes_error': 0,
+        'categorias': {}, # Aquí irán los totales por categoría
+        'detalle_errores': results_data['errores'] # Incluir errores detallados
     }
 
-    for clase_interna, total_cantidad in total_counts.items():
-        porcentaje_final = round((total_cantidad / grand_total_racimos) * 100, 1) if grand_total_racimos > 0 else 0.0
-        json_key = db_key_to_json_key.get(clase_interna)
-        if json_key:
-            # Estructura que espera guardar_clasificacion_final
-            summary_clasificacion_automatica[json_key] = {'porcentaje': porcentaje_final}
-            # summary_clasificacion_automatica[json_key]['cantidad_total'] = total_cantidad # Opcional
+    # Definir categorías base para la agregación
+    categorias_base = list(class_mapping.values()) # Usa los valores únicos del mapeo
+    for cat_base in set(categorias_base):
+        clasificacion_automatica['categorias'][cat_base] = {'cantidad': 0, 'porcentaje': 0.0}
+
+    total_racimos_agregado = 0
+
+    for img_res in results_data['imagenes_procesadas']:
+        if img_res['estado'] == 'procesada_ok':
+            clasificacion_automatica['conteo_imagenes_ok'] += 1
+            num_racimos_img = img_res.get('num_racimos_detectados', 0)
+            total_racimos_agregado += num_racimos_img
+
+            # Sumar cantidades por categoría interna
+            conteo_categorias_img = img_res.get('conteo_categorias', {})
+            for cat_interna, datos_cat in conteo_categorias_img.items():
+                if cat_interna in clasificacion_automatica['categorias']:
+                    clasificacion_automatica['categorias'][cat_interna]['cantidad'] += datos_cat.get('cantidad', 0)
         else:
-            logger.warning(f"[AGREGACIÓN] No se encontró mapeo JSON para clase interna: {clase_interna}.")
+            clasificacion_automatica['conteo_imagenes_error'] += 1
 
-    # Añadir el resumen al diccionario principal
-    if summary_clasificacion_automatica:
-        results_data['clasificacion_automatica'] = summary_clasificacion_automatica
-        logger.info(f"[AGREGACIÓN] Resumen 'clasificacion_automatica' añadido a results_data: {summary_clasificacion_automatica}")
-    else:
-         logger.warning("[AGREGACIÓN] No se generó resumen 'clasificacion_automatica'.")
-    # --- FIN: Calcular Resumen Agregado ---
+    clasificacion_automatica['conteo_total_racimos'] = total_racimos_agregado
 
-    # Calcular tiempo total final
+    # Calcular porcentajes agregados
+    if total_racimos_agregado > 0:
+        for cat_interna in clasificacion_automatica['categorias']:
+            cantidad_cat = clasificacion_automatica['categorias'][cat_interna]['cantidad']
+            clasificacion_automatica['categorias'][cat_interna]['porcentaje'] = round((cantidad_cat / total_racimos_agregado) * 100, 2)
+
+    # Añadir el resumen agregado a los resultados principales
+    results_data['clasificacion_automatica'] = clasificacion_automatica
     end_time_total = time.time()
     results_data['tiempo_total_procesamiento_seg'] = round(end_time_total - start_time_total, 2)
 
-    # Log antes de guardar JSON
-    logger.info(f"[DIAG DUMP PRE-SAVE] Contenido final results_data ANTES de json.dump:")
-    try:
-        # Usar default=str para manejar objetos no serializables si los hubiera
-        logger.info(json.dumps(results_data, indent=2, ensure_ascii=False, default=str))
-    except Exception as log_dump_err:
-        logger.error(f"Error al hacer log dump de results_data: {log_dump_err}")
-        logger.info(f"Intentando log dump parcial: { {k: v for k, v in results_data.items() if k != 'imagenes_procesadas'} }")
+    logger.info(f"[DIAG AGGREGATION] Resultados agregados calculados. Total racimos: {total_racimos_agregado}")
+    logger.info(f"[DIAG AGGREGATION] Detalle agregado: {clasificacion_automatica['categorias']}")
+    logger.info(f"[DIAG Param] Finalizando process_images_with_roboflow. Tiempo total: {results_data['tiempo_total_procesamiento_seg']:.2f}s")
 
 
+    # --- GUARDADO FINAL DEL JSON ---
     try:
-        # Guardar JSON
-        json_dir = os.path.dirname(json_path)
-        os.makedirs(json_dir, exist_ok=True)
-        logger.info(f"Asegurando directorio para JSON: {json_dir}")
-        logger.info(f"Intentando escribir JSON en: {json_path}")
+        # Asume que json está importado
         with open(json_path, 'w', encoding='utf-8') as f:
-            # Usar default=str aquí también por seguridad
-            json.dump(results_data, f, ensure_ascii=False, indent=4, default=str)
-            f.flush()
-            if hasattr(os, 'fsync'):
-                try: os.fsync(f.fileno()); logger.info("[DIAG WRITE] os.fsync() ejecutado.")
-                except OSError as fsync_err: logger.warning(f"Error en os.fsync(): {fsync_err}") # Cambiado a warning
-            else: logger.info("[DIAG WRITE] os.fsync() no disponible.")
-        logger.info("[DIAG WRITE] Escritura JSON completada.")
+            json.dump(results_data, f, ensure_ascii=False, indent=4)
+        logger.info(f"[DIAG WRITE] Resultados guardados exitosamente en: {json_path}")
 
-        # Verificar existencia y tamaño
-        time.sleep(0.5)
-        if os.path.exists(json_path):
+        # Verificación post-escritura (opcional pero útil)
+        try:
+            # Asume que os está importado
             file_size = os.path.getsize(json_path)
             logger.info(f"[DIAG WRITE] Verificación post-escritura: OK (Tamaño: {file_size} bytes)")
-            if file_size == 0: logger.warning("[DIAG WRITE] Advertencia! Archivo JSON con tamaño 0.")
-        else:
-            logger.error(f"[DIAG WRITE] ¡ERROR CRÍTICO! Archivo JSON NO existe después de escribir: {json_path}")
+        except Exception as check_err:
+             logger.warning(f"[DIAG WRITE] No se pudo verificar el archivo después de escribir: {check_err}")
+
+        # Determinar éxito basado en si hubo algún procesamiento OK
+        success = clasificacion_automatica['conteo_imagenes_ok'] > 0
+        message = f"Procesamiento completado. {clasificacion_automatica['conteo_imagenes_ok']} imágenes OK, {clasificacion_automatica['conteo_imagenes_error']} con error."
+        return success, message, results_data
 
     except Exception as e:
-        logger.error(f"Error crítico escribiendo JSON en {json_path}: {str(e)}")
+        logger.error(f"[DIAG WRITE] Error guardando resultados en JSON {json_path}: {e}")
+        # Asume que traceback está importado
         logger.error(traceback.format_exc())
-        # Considerar devolver error aquí si la escritura falla
-
-    # Actualizar la base de datos si es necesario (ej. timestamp, estado)
-    # Esta parte puede necesitar lógica adicional o hacerse en otro lugar
-
-    success = len(results_data['errores']) == 0
-    message = "Procesamiento completado." if success else "Procesamiento completado con errores."
-
-    return success, message, results_data
+        # A pesar del error de guardado, retornar los datos en memoria si se calcularon
+        return False, f"Error guardando resultados JSON: {e}", results_data
+# --- FIN DE LA FUNCIÓN PARA COPIAR ---
 
 
 
@@ -3799,6 +3852,7 @@ def get_clasificacion_by_codigo_guia(codigo_guia):
             conn.close()
             logger.debug(f"Conexión a BD cerrada para {codigo_guia} en get_clasificacion_by_codigo_guia.")
 
+# --- INICIO DE LA FUNCIÓN PARA COPIAR Y REEMPLAZAR ---
 @bp.route('/ver_detalles_clasificacion/<url_guia>')
 def ver_detalles_clasificacion(url_guia):
     """
@@ -3808,6 +3862,7 @@ def ver_detalles_clasificacion(url_guia):
     from flask import current_app, make_response, flash, render_template, url_for # Asegurar imports
     start_time = time.time()
 
+    # Asumiendo que logger está definido globalmente
     logger.info(f"Iniciando ver_detalles_clasificacion para {url_guia}")
 
     template_data = {
@@ -3815,13 +3870,14 @@ def ver_detalles_clasificacion(url_guia):
         'resultados_por_foto': [],
         'fotos_originales': [],
         'fotos_procesadas': [],  # Variable para el template
-        'clasificacion_automatica_consolidada': {},
-        'raw_data': {},
-        'debug_info': {},
-        'json_path': '',
-        'tiempo_procesamiento': '',
+        'clasificacion_automatica_consolidada': {},\
+        'raw_data': {},\
+        'debug_info': {},\
+        'json_path': '',\
+        'tiempo_procesamiento': '',\
         'datos_guia': {}, # Initialize datos_guia
-        'error': None # Añadir para manejar errores en template
+        'error': None, # Añadir para manejar errores en template
+        'total_racimos_acumulados': 0 # Inicializar total acumulado
     }
 
     try:
@@ -3829,20 +3885,21 @@ def ver_detalles_clasificacion(url_guia):
         logger.info(f"Código de guía a buscar: {codigo_guia}")
 
         # --- RUTA CORREGIDA PARA BUSCAR EL JSON ---
-        # Buscar primero en la ubicación estándar donde se guarda
         base_dir_relativo = os.path.join('uploads', codigo_guia)
         json_filename = f"clasificacion_{codigo_guia}.json"
+        # Asumiendo que current_app está disponible
         clasificacion_path = os.path.join(current_app.static_folder, base_dir_relativo, json_filename)
         template_data['json_path'] = clasificacion_path # Guardar la ruta intentada
         logger.info(f"Intentando buscar archivo JSON en la ruta estándar: {clasificacion_path}")
-        # -------------------------------------------
+        # -------------------------------------------\
 
         # Comprobar si existe en la ruta estándar
         if not os.path.exists(clasificacion_path):
             logger.warning(f"Archivo JSON no encontrado en ruta estándar: {clasificacion_path}. Intentando rutas alternativas...")
             # Intentar buscar en rutas alternativas (si aún las necesitas como fallback)
+            # Asumiendo que current_app está disponible
             alt_paths_to_check = [
-                os.path.join(current_app.static_folder, 'clasificaciones', json_filename), # La ruta original incorrecta
+                os.path.join(current_app.static_folder, 'clasificaciones', json_filename),
                 os.path.join(current_app.static_folder, 'fotos_racimos_temp', codigo_guia, json_filename),
                 os.path.join(current_app.static_folder, current_app.config.get('FOTOS_RACIMOS_FOLDER', 'fotos_racimos_temp'), codigo_guia, json_filename)
             ]
@@ -3857,23 +3914,23 @@ def ver_detalles_clasificacion(url_guia):
             if not found_alt:
                 logger.error(f"No se encontró el archivo de clasificación para: {codigo_guia} en NINGUNA ruta verificada.")
                 flash("No se encontró información de clasificación detallada para esta guía", "error")
-                # Asegurarse de renderizar el template correcto incluso en error
                 template_data['error'] = "Archivo JSON de detalles no encontrado."
                 return render_template('detalles_clasificacion.html', **template_data)
 
 
         # Leer el archivo de clasificación (ahora con la ruta correcta)
+        # Asumiendo que json está importado
         with open(clasificacion_path, 'r', encoding='utf-8') as f:
             clasificacion_data = json.load(f)
             logger.info(f"Clasificación detallada leída del archivo: {clasificacion_path}")
             template_data['raw_data'] = clasificacion_data
-            # Asegurar que tiempo_procesamiento exista, usar 'N/A' si no
             template_data['tiempo_procesamiento'] = clasificacion_data.get('tiempo_total_procesamiento_seg', 'N/A')
 
 
         # --- OBTENER DATOS DE GUÍA (Código existente) ---
         try:
-            utils = Utils(current_app) # Asumiendo que Utils está definido o importado
+            # Asumiendo que Utils está definido o importado
+            utils = Utils(current_app)
             datos_guia = utils.get_datos_guia(url_guia)
             template_data['datos_guia'] = datos_guia if datos_guia else {} # Asignar dict vacío si es None
             logger.info(f"Datos de guía obtenidos: {template_data['datos_guia']}")
@@ -3882,6 +3939,7 @@ def ver_detalles_clasificacion(url_guia):
             template_data['datos_guia'] = {}
         except Exception as e:
             logger.error(f"Error al obtener datos de la guía: {str(e)}")
+            # Asumiendo que traceback está importado
             logger.error(traceback.format_exc())
             template_data['datos_guia'] = {}
         # --------------------------------------------------
@@ -3900,26 +3958,24 @@ def ver_detalles_clasificacion(url_guia):
                      logger.warning(f"Elemento no esperado en 'imagenes_procesadas': {img_data}")
                      continue
 
-                 foto_numero = img_data.get('numero', img_data.get('indice', '?')) # Usar numero o indice
+                 foto_numero = img_data.get('numero', img_data.get('indice', '?'))
 
                  # --- URL Imagen Original ---
-                 # Usar la ruta relativa guardada en el JSON directamente si existe
                  imagen_original_rel_path = img_data.get('imagen_original')
                  imagen_original_url = None
                  if imagen_original_rel_path:
                      try:
                           imagen_original_url = url_for('static', filename=imagen_original_rel_path)
-                          fotos_originales_urls.append(imagen_original_url) # Guardar para resumen
+                          fotos_originales_urls.append(imagen_original_url)
                           logger.debug(f"Foto {foto_numero}: URL original generada desde JSON: {imagen_original_url}")
                      except Exception as url_err:
                           logger.error(f"Foto {foto_numero}: Error generando URL para imagen original relativa '{imagen_original_rel_path}': {url_err}")
-                          imagen_original_url = "#error" # Indicar error
+                          imagen_original_url = "#error"
                  else:
                      logger.warning(f"Foto {foto_numero}: No se encontró 'imagen_original' (ruta relativa) en los datos JSON.")
                      imagen_original_url = "#no_encontrada"
 
                  # --- URL Imagen Anotada ---
-                 # Usar la ruta relativa guardada 'ruta_anotada' o 'imagen_annotated'
                  imagen_annotated_rel_path = img_data.get('ruta_anotada', img_data.get('imagen_annotated'))
                  imagen_annotated_url = None
                  if imagen_annotated_rel_path:
@@ -3934,7 +3990,7 @@ def ver_detalles_clasificacion(url_guia):
                      imagen_annotated_url = "#no_annotated"
 
                  # --- URL Imagen Clasificada (Priorizar la de Roboflow) ---
-                 imagen_clasificada_rel_path = img_data.get('ruta_clasificada_rf') # Buscar la clave nueva
+                 imagen_clasificada_rel_path = img_data.get('ruta_clasificada_rf')
                  imagen_clasificada_url = None
                  if imagen_clasificada_rel_path:
                      try:
@@ -3944,78 +4000,85 @@ def ver_detalles_clasificacion(url_guia):
                          logger.error(f"Foto {foto_numero}: Error generando URL para imagen clasificada RF relativa '{imagen_clasificada_rel_path}': {url_err}")
                          imagen_clasificada_url = "#error_clasificada_rf"
                  else:
-                     # Fallback a la imagen anotada local si no se guardó la de Roboflow
-                     logger.warning(f"Foto {foto_numero}: No se encontró 'ruta_clasificada_rf'. Usando imagen anotada local como fallback para clasificada.")
-                     imagen_clasificada_url = imagen_annotated_url # Fallback
+                     logger.warning(f"Foto {foto_numero}: No se encontró ruta relativa para imagen clasificada ('ruta_clasificada_rf') en los datos JSON.")
+                     imagen_clasificada_url = "#no_clasificada_rf"
 
-                 # --- Detecciones y Conteos ---
-                 detecciones = img_data.get('detections', []) # BBOX (puede estar vacía)
-                 conteo_categorias = img_data.get('conteo_categorias', {}) # Categorías calculadas
-                 total_racimos = img_data.get('num_racimos_detectados', img_data.get('total_racimos', 0)) # Usar num_racimos...
+                 # --- Crear el diccionario de contexto para ESTA foto ---
 
-                 # Preparar el diccionario final para esta foto para el template
-                 foto_procesada = {
-                    'numero': foto_numero,
-                    'imagen_original': imagen_original_url,
-                    'imagen_annotated': imagen_annotated_url, # La local con bboxes
-                    'imagen_clasificada': imagen_clasificada_url, # La de Roboflow (o fallback)
-                    'detecciones': detecciones,
-                    'conteo_categorias': conteo_categorias,
-                    'total_racimos': total_racimos
+                 # === INICIO: MODIFICACIÓN CÁLCULO total_racimos_base ===
+                 potholes_count_foto = img_data.get('roboflow_potholes_count')
+                 # Convertir a entero si no es None, de lo contrario usar 0
+                 total_racimos_base = int(potholes_count_foto) if potholes_count_foto is not None else 0
+                 # === FIN: MODIFICACIÓN CÁLCULO total_racimos_base ===
+
+                 foto_context = {
+                     'numero': foto_numero,
+                     # === INICIO: MODIFICACIÓN ASIGNACIÓN total_racimos ===
+                     # 'total_racimos': img_data.get('total_racimos_imagen', img_data.get('num_racimos_detectados', 0)), # <- VALOR ANTIGUO COMENTADO
+                     'total_racimos': total_racimos_base, # <- USAR EL NUEVO VALOR BASE (potholes_count)
+                     # === FIN: MODIFICACIÓN ASIGNACIÓN total_racimos ===
+                     'imagen_original': imagen_original_url,
+                     'imagen_annotated': imagen_annotated_url,
+                     'imagen_clasificada': imagen_clasificada_url,
+                     'conteo_categorias': img_data.get('conteo_categorias', {}),
+                     'detecciones': img_data.get('detecciones', []),
+                     'roboflow_potholes_count': potholes_count_foto # Pasar el valor original también (puede ser None)
                  }
-                 resultados_por_foto_procesados.append(foto_procesada)
-                 logger.info(f"Foto {foto_numero}: Procesada para template. Total Racimos: {total_racimos}")
 
+                 # Añadir el contexto de esta foto a la lista que irá al template
+                 resultados_por_foto_procesados.append(foto_context)
+                 # --------------------------------------------------------
+
+             # Asignar la lista procesada a la variable del template
+             template_data['fotos_procesadas'] = resultados_por_foto_procesados
+             template_data['fotos_originales'] = fotos_originales_urls # Pasar URLs originales
+             logger.info(f"Se procesaron {len(resultados_por_foto_procesados)} fotos para la plantilla.")
         else:
-             logger.error("'imagenes_procesadas' no es una lista o no existe en el JSON leído.")
-             flash("El formato del archivo de detalles es incorrecto.", "error")
-             template_data['error'] = "Formato de archivo de detalles incorrecto."
-             # Continuar para renderizar el template con el error
+             logger.warning(f"'imagenes_procesadas' no es una lista en el JSON. Datos: {type(imagenes_procesadas_json)}")
 
-        # Asignar listas procesadas al diccionario del template
-        template_data['fotos_procesadas'] = resultados_por_foto_procesados
-        template_data['fotos_originales'] = fotos_originales_urls # Para el resumen si lo usa
+        # === INICIO: MODIFICACIÓN CÁLCULO TOTAL ACUMULADO ===
+        total_racimos_potholes_acumulados = 0
+        # Iterar sobre la lista ya procesada que va al template
+        for foto_ctx in resultados_por_foto_procesados:
+            # Sumar el valor 'total_racimos' que ahora proviene de potholes_count (o 0 si era None)
+            total_racimos_potholes_acumulados += foto_ctx.get('total_racimos', 0)
 
-        # --- Calcular total acumulado (código existente) ---
-        total_racimos_acumulados = 0
-        for foto in resultados_por_foto_procesados:
-            racimos_foto = foto.get('total_racimos', 0)
-            if racimos_foto is not None:
-                try:
-                    total_racimos_acumulados += int(racimos_foto)
-                except (ValueError, TypeError):
-                    logger.warning(f"Valor no numérico para total_racimos en foto {foto.get('numero', '?')}: {racimos_foto}")
-        template_data['total_racimos_acumulados'] = total_racimos_acumulados
-        logger.info(f"Total de racimos acumulados calculado para la plantilla: {total_racimos_acumulados}")
+        template_data['total_racimos_acumulados'] = total_racimos_potholes_acumulados
+        logger.info(f"Total racimos acumulados (basado en potholes_count): {total_racimos_potholes_acumulados}")
+        # === FIN: MODIFICACIÓN CÁLCULO TOTAL ACUMULADO ===
 
+
+        # --- RENDERIZADO FINAL ---
         end_time = time.time()
-        # Sobrescribir tiempo si no estaba en el JSON
-        if template_data['tiempo_procesamiento'] == 'N/A':
-            template_data['tiempo_procesamiento'] = round(end_time - start_time, 2)
+        template_data['debug_info']['render_time'] = f"{end_time - start_time:.2f}" # Tiempo total de la ruta
+        logger.info(f"Renderizando plantilla 'detalles_clasificacion.html'. Tiempo de ejecución: {template_data['debug_info']['render_time']}s")
 
-        # --- Guardar totales consolidados (código existente, verificar si es necesario aquí) ---
-        # Considera si esto debe hacerse aquí o en otro lugar. Si el JSON ya existe,
-        # probablemente estos datos ya se guardaron. Quizás solo si se *regenera* el JSON.
-        # try:
-        #     # ... (código para guardar en BD) ...
-        # except Exception as db_err:
-        #     logger.error(f"Error guardando datos consolidados (desde detalles): {db_err}")
-        # --------------------------------------------------------------------------
+        # Asumiendo que make_response está importado
+        response = make_response(render_template('detalles_clasificacion.html', **template_data))
+        # Prevenir caché para asegurar que los datos siempre estén frescos
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        return response
 
-        logger.info(f"Renderizando plantilla detalles_clasificacion.html con {len(template_data['fotos_procesadas'])} fotos.")
+    except FileNotFoundError as e:
+        logger.error(f"Archivo no encontrado en ver_detalles_clasificacion: {e}")
+        flash("No se encontró el archivo de clasificación detallada para esta guía", "error")
+        template_data['error'] = f"Error: Archivo no encontrado ({e})."
         return render_template('detalles_clasificacion.html', **template_data)
-
-    except json.JSONDecodeError as json_err:
-         logger.error(f"Error fatal decodificando JSON en ver_detalles_clasificacion ({clasificacion_path}): {json_err}")
-         flash(f"Error al leer el archivo de detalles: {json_err}", "error")
-         template_data['error'] = f"Error al leer archivo de detalles: {json_err}"
-         return render_template('detalles_clasificacion.html', **template_data)
+    except json.JSONDecodeError as e:
+        logger.error(f"Error decodificando JSON en ver_detalles_clasificacion ({clasificacion_path}): {e}")
+        flash("Error al leer los detalles de clasificación. El archivo JSON podría estar corrupto.", "error")
+        template_data['error'] = f"Error leyendo JSON: {e}. Archivo: {clasificacion_path}"
+        return render_template('detalles_clasificacion.html', **template_data)
     except Exception as e:
-        logger.error(f"Error general en ver_detalles_clasificacion: {str(e)}")
+        logger.error(f"Error inesperado en ver_detalles_clasificacion para {url_guia}: {e}")
+        # Asumiendo que traceback está importado
         logger.error(traceback.format_exc())
-        flash(f"Error al procesar detalles de clasificación: {str(e)}", "error")
-        template_data['error'] = str(e)
+        flash("Ocurrió un error inesperado al mostrar los detalles de la clasificación.", "error")
+        template_data['error'] = f"Error inesperado: {e}"
         return render_template('detalles_clasificacion.html', **template_data)
+# --- FIN DE LA FUNCIÓN PARA COPIAR Y REEMPLAZAR ---
 
 def tu_funcion_que_prepara_contexto(datos_guia):
     # ... otros cálculos previos ...

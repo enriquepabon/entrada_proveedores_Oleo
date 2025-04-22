@@ -19,6 +19,11 @@ import db_utils  # Importar db_utils para operaciones de base de datos
 import db_operations  # Importar db_operations
 from tiquete_parser import parse_markdown_response
 import pytz
+# --- NUEVOS IMPORTS ---
+import ssl
+from requests.adapters import HTTPAdapter
+from urllib3.poolmanager import PoolManager
+# --- FIN NUEVOS IMPORTS ---
 
 # Configurar logging
 logger = logging.getLogger(__name__)
@@ -160,13 +165,34 @@ def process_image():
             "message": f"Error al procesar la imagen: {str(e)}"
         }), 500
 
+# --- NUEVA CLASE ADAPTADOR ---
+class TLSAdapter(HTTPAdapter):
+    def init_poolmanager(self, connections, maxsize, block=False):
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
+        # Opcional: Configurar cifrados si es necesario (generalmente no se requiere)
+        # context.set_ciphers('DEFAULT@SECLEVEL=2')
+        self.poolmanager = PoolManager(
+            num_pools=connections,
+            maxsize=maxsize,
+            block=block,
+            ssl_context=context
+        )
+# --- FIN NUEVA CLASE ---
+
 def process_tiquete_image(image_path, filename):
     try:
         logger.info(f"Enviando imagen {filename} al webhook {PROCESS_WEBHOOK_URL}")
         with open(image_path, 'rb') as f:
             files = {'file': (filename, f, 'multipart/form-data')}
             try:
-                response = requests.post(PROCESS_WEBHOOK_URL, files=files, timeout=30)
+                # --- USAR SESIÓN CON ADAPTADOR ---
+                session_tls = requests.Session()
+                adapter = TLSAdapter()
+                session_tls.mount('https://', adapter)
+                
+                response = session_tls.post(PROCESS_WEBHOOK_URL, files=files, timeout=30)
+                # --- FIN USO SESIÓN ---
                 
                 logger.info(f"Respuesta del webhook: Status {response.status_code}, Content-Type: {response.headers.get('Content-Type')}")
                 
@@ -182,14 +208,15 @@ def process_tiquete_image(image_path, filename):
                 if not response_text:
                     logger.error("Respuesta vacía del webhook de tiquete")
                     return {"result": "error", "message": "Respuesta vacía del webhook de tiquete."}
+            # Asegurarse que la excepción base RequestException sigue siendo capturada
             except requests.exceptions.RequestException as e:
                 error_msg = f"Error de conexión con el webhook: {str(e)}"
                 logger.error(error_msg)
-                logger.error(traceback.format_exc())
+                logger.error(traceback.format_exc()) # Log completo del traceback
                 return {"result": "error", "message": error_msg}
         
-        # Importar la función de parser.py
-        from tiquete_parser import parse_markdown_response
+        # Importar la función de parser.py dinámicamente si es necesario, o mejor al inicio del archivo
+        # from tiquete_parser import parse_markdown_response # Movido a imports globales si es posible
         
         parsed_data = parse_markdown_response(response_text)
         

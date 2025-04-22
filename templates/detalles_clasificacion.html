@@ -145,44 +145,28 @@
                         </thead>
                         <tbody>
                             {# Reiniciar contadores #}
-                            {% set total_detecciones = 0 %}
-                            {% set total_racimos_global = 0 %}
+                            {% set total_detecciones_categorias = 0 %}
                             {% set categorias = {} %}
                             
-                            {# Primera pasada: solo calcular totales #}
+                            {# Primera pasada: acumular conteos de categorías #}
                             {% for foto in fotos_procesadas %}
-                                {# Sumar racimos de cada foto - usar 0 por defecto si no hay valor #}
-                                {% set foto_racimos = foto.total_racimos|default(0)|int %}
-                                {% set total_racimos_global = total_racimos_global + foto_racimos %}
-                                
-                                {# Acumular detecciones por categoría #}
                                 {% for cat, datos in foto.conteo_categorias.items() %}
                                     {% if datos.cantidad > 0 %}
+                                        {% set cat_count = datos.cantidad %}
                                         {% if cat not in categorias %}
-                                            {% set _ = categorias.update({cat: datos.cantidad}) %}
+                                            {% set _ = categorias.update({cat: cat_count}) %}
                                         {% else %}
-                                            {% set _ = categorias.update({cat: categorias[cat] + datos.cantidad}) %}
+                                            {% set _ = categorias.update({cat: categorias[cat] + cat_count}) %}
                                         {% endif %}
-                                        {% set total_detecciones = total_detecciones + datos.cantidad %}
+                                        {% set total_detecciones_categorias = total_detecciones_categorias + cat_count %}
                                     {% endif %}
                                 {% endfor %}
                             {% endfor %}
                             
-                            {# Para debugging (quitar en producción) #}
-                            <tr class="table-secondary small">
-                                <td colspan="3">
-                                    <strong>Debug:</strong> 
-                                    {% for foto in fotos_procesadas %}
-                                        Foto {{ foto.numero }}: {{ foto.total_racimos|default(0) }} racimos
-                                        {% if not loop.last %} | {% endif %}
-                                    {% endfor %}
-                                    | Calculado: {{ total_racimos_global }} | Enviado: {{ total_racimos_acumulados|default(0) }}
-                                </td>
-                            </tr>
+                            {# La variable total_racimos_acumulados ahora viene del backend basada en potholes #}
+                            {% set total_base_para_porcentaje_global = total_racimos_acumulados|default(0)|int %}
                             
-                            {# Usar el valor enviado desde el backend directamente #}
-                            {% set total_racimos_global = total_racimos_acumulados|default(0) %}
-                            
+                            {# Mostrar filas de la tabla de resumen #}
                             {% for cat, count in categorias.items() %}
                                 <tr>
                                     <td>
@@ -191,8 +175,8 @@
                                     </td>
                                     <td>{{ count }}</td>
                                     <td>
-                                        {% if total_racimos_global > 0 %}
-                                            {{ ((count / total_racimos_global) * 100)|round(1) }}%
+                                        {% if total_base_para_porcentaje_global > 0 %}
+                                            {{ ((count / total_base_para_porcentaje_global) * 100)|round(1) }}%
                                         {% else %}
                                             0%
                                         {% endif %}
@@ -201,18 +185,18 @@
                             {% endfor %}
                             <tr class="table-light">
                                 <td><strong>Total</strong></td>
-                                <td colspan="2"><strong>{{ total_racimos_global }} racimos</strong></td>
+                                <td colspan="2"><strong>{{ total_base_para_porcentaje_global }} racimos</strong></td>
                             </tr>
                         </tbody>
                     </table>
                     
-                    {% if total_racimos_acumulados|default(0) > 0 %}
+                    {% if total_base_para_porcentaje_global > 0 %}
                     <div class="alert alert-success mt-3 mb-0">
                         <div class="d-flex align-items-center">
                             <i class="fas fa-check-circle fa-2x me-3"></i>
                             <div>
-                                <span>Total de racimos detectados en todas las fotos:</span>
-                                <h4 class="mb-0 mt-1">{{ total_racimos_acumulados }} racimos</h4>
+                                <span>Total de racimos (basado en 'potholes_detected'):</span>
+                                <h4 class="mb-0 mt-1">{{ total_base_para_porcentaje_global }} racimos</h4>
                             </div>
                         </div>
                     </div>
@@ -237,11 +221,11 @@
                         </span>
                         <span class="stats-badge bg-success text-white">
                             <i class="fas fa-tags me-2"></i>
-                            {{ total_racimos_acumulados|default(0) }} Racimos detectados
+                            {{ total_base_para_porcentaje_global }} Racimos ('potholes')
                         </span>
                         <span class="stats-badge bg-secondary text-white">
                             <i class="fas fa-list me-2"></i>
-                            {{ total_detecciones }} Detecciones totales
+                            {{ total_detecciones_categorias }} Detecciones (categorías)
                         </span>
                     </div>
                     <div>
@@ -260,9 +244,10 @@
 
     {% if fotos_procesadas %}
         {% for foto in fotos_procesadas %}
+        {% set total_racimos_foto_base = foto.total_racimos|default(0)|int %}
         <div class="card mb-4 foto-detalle-card" id="foto-{{ foto.numero }}">
             <div class="card-header bg-light">
-                <strong>Foto {{ foto.numero }} - {{ foto.total_racimos }} Racimos Detectados</strong>
+                <strong>Foto {{ foto.numero }} - {{ total_racimos_foto_base }} Racimos Detectados ('potholes')</strong>
             </div>
             <div class="card-body">
                 <div class="row">
@@ -312,8 +297,8 @@
                 
                 <div class="row mt-4">
                     <div class="col-md-6">
-                        <h6 class="mb-3">Distribución de Categorías ({{ foto.total_racimos }} racimos)</h6>
-                        {% if foto.total_racimos > 0 %}
+                        <h6 class="mb-3">TOTAL Racimos Detectados: {{ total_racimos_foto_base }}</h6>
+                        {% if total_racimos_foto_base > 0 %}
                             <table class="table table-sm">
                                 <thead>
                                     <tr>
@@ -325,54 +310,33 @@
                                 <tbody>
                                     {% for cat, datos in foto.conteo_categorias.items() %}
                                         {% if datos.cantidad > 0 %}
+                                            {% set count_cat_foto = datos.cantidad %}
                                             <tr>
                                                 <td>
                                                     <span class="category-circle bg-{{ cat }}"></span>
                                                     {{ cat|title|replace('_', ' ') }}
                                                 </td>
-                                                <td>{{ datos.cantidad }}</td>
-                                                <td>{{ datos.porcentaje }}%</td>
+                                                <td>{{ count_cat_foto }}</td>
+                                                <td>
+                                                    {{ ((count_cat_foto / total_racimos_foto_base) * 100)|round(1) }}%
+                                                </td>
                                             </tr>
                                         {% endif %}
                                     {% endfor %}
                                     <tr class="table-light">
-                                        <td><strong>Total</strong></td>
-                                        <td colspan="2"><strong>{{ foto.total_racimos }} racimos</strong></td>
+                                        <td><strong>Total Categorías</strong></td>
+                                        {% set suma_categorias_foto = 0 %}
+                                        {% for cat, datos in foto.conteo_categorias.items() %}
+                                            {% set suma_categorias_foto = suma_categorias_foto + datos.cantidad %}
+                                        {% endfor %}
+                                        <td colspan="2"><strong>{{ suma_categorias_foto }}</strong></td>
                                     </tr>
                                 </tbody>
                             </table>
                         {% else %}
                             <div class="alert alert-info">
                                 <i class="fas fa-info-circle me-2"></i>
-                                No hay racimos detectados para esta foto.
-                            </div>
-                        {% endif %}
-                    </div>
-                    <div class="col-md-6">
-                        <h6 class="mb-3">Detalle de Detecciones</h6>
-                        {% if foto.detecciones|length > 0 %}
-                            <div class="detection-list">
-                                {% for det in foto.detecciones %}
-                                    <div class="detection-item {{ det.class }}">
-                                        <h6>{{ det.class|title|replace('_', ' ') }}</h6>
-                                        <div class="row">
-                                            <div class="col-6">
-                                                <strong>Confianza:</strong> {{ det.confidence|round(2) }}
-                                            </div>
-                                            <div class="col-6">
-                                                <strong>Posición:</strong> ({{ det.x|round }}, {{ det.y|round }})
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <strong>Dimensiones:</strong> {{ det.width|round }}x{{ det.height|round }}
-                                        </div>
-                                    </div>
-                                {% endfor %}
-                            </div>
-                        {% else %}
-                            <div class="alert alert-info">
-                                <i class="fas fa-info-circle me-2"></i>
-                                No hay detecciones para esta foto.
+                                No hay base de racimos ('potholes_detected') para calcular porcentajes en esta foto.
                             </div>
                         {% endif %}
                     </div>
