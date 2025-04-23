@@ -214,9 +214,25 @@ def get_entry_records(filters=None):
             if not record.get('timestamp_registro_utc'):
                 record['timestamp_registro_utc'] = '1970-01-01 00:00:00' # Default timestamp
                 
+            # Convertir timestamp UTC a fecha y hora local de Bogotá
+            try:
+                if record.get('timestamp_registro_utc'):
+                    dt_utc = datetime.strptime(record['timestamp_registro_utc'], "%Y-%m-%d %H:%M:%S")
+                    dt_utc = UTC.localize(dt_utc)
+                    dt_bogota = dt_utc.astimezone(BOGOTA_TZ)
+                    record['fecha_registro'] = dt_bogota.strftime('%d/%m/%Y')
+                    record['hora_registro'] = dt_bogota.strftime('%H:%M:%S')
+                else:
+                    record['fecha_registro'] = 'N/A'
+                    record['hora_registro'] = 'N/A'
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Error convirtiendo timestamp '{record.get('timestamp_registro_utc')}' a hora local: {e}")
+                record['fecha_registro'] = 'Error Fmt'
+                record['hora_registro'] = 'Error Fmt'
+                
             # Remove old date/time fields if they still exist somehow (optional cleanup)
-            record.pop('fecha_registro', None)
-            record.pop('hora_registro', None)
+            record.pop('fecha_registro_old', None)
+            record.pop('hora_registro_old', None)
                 
             # Procesar el código del proveedor para asegurar el formato correcto
             if record.get('codigo_proveedor') and record['codigo_proveedor'] != 'No disponible':

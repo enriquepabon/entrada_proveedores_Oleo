@@ -95,6 +95,7 @@ def get_pesajes_bruto(filtros=None):
         list: Lista de registros de pesajes brutos como diccionarios
     """
     conn_tq = None
+    pesajes = []
     try:
         # Get DB paths from config
         db_path_secondary = current_app.config['TIQUETES_DB_PATH']
@@ -112,15 +113,13 @@ def get_pesajes_bruto(filtros=None):
                 if pesajes_exists:
                     # Build and execute query for tiquetes.db
                     # Fetch results
-                    query = "SELECT p.*, p.timestamp_pesaje_utc "
+                    query = "SELECT *, timestamp_pesaje_utc FROM pesajes_bruto ORDER BY timestamp_pesaje_utc DESC"
                     params = []
-                    # Add JOINs and filters as needed (similar to original code)
+                    # TODO: Re-implementar filtros si son necesarios
                     # ... 
                     cursor.execute(query, params)
-                    pesajes = []
                     for row in cursor.fetchall():
                         pesaje = {key: row[key] for key in row.keys()}
-                        # Add default values, check providers, etc.
                         # ... (data cleaning/enrichment logic from original code) ...
                         codigo_guia = pesaje.get('codigo_guia')
                         if codigo_guia:
@@ -134,13 +133,6 @@ def get_pesajes_bruto(filtros=None):
         else:
             logger.warning(f"Base de datos {db_path_secondary} no encontrada.")
             
-        # If no records found, return empty list
-        if not pesajes:
-            return []
-        
-        # Sort results directly by the timestamp string
-        pesajes.sort(key=lambda p: p.get('timestamp_pesaje_utc', '1970-01-01 00:00:00'), reverse=True)
-        
         return pesajes
     except Exception as e:
         logger.error(f"Error general recuperando registros de pesajes brutos: {e}")
@@ -493,7 +485,7 @@ def get_clasificaciones(filtros=None):
                     params.append(utc_timestamp_desde)
                     logger.info(f"[Clasificaciones] Filtro fecha_desde (Bogotá: {fecha_desde_str} 00:00:00) -> UTC: {utc_timestamp_desde}")
                 except (ValueError, TypeError) as e:
-                     logger.warning(f"[Clasificaciones] Error procesando fecha_desde '{filters['fecha_desde']}': {e}. Saltando filtro.")
+                     logger.warning(f"[Clasificaciones] Error procesando fecha_desde '{filtros.get('fecha_desde', 'N/A')}': {e}. Saltando filtro.")
                 
             if filtros.get('fecha_hasta'):
                 try:
@@ -509,7 +501,7 @@ def get_clasificaciones(filtros=None):
                     params.append(utc_timestamp_hasta)
                     logger.info(f"[Clasificaciones] Filtro fecha_hasta (Bogotá: {fecha_hasta_str} 23:59:59) -> UTC: {utc_timestamp_hasta}")
                 except (ValueError, TypeError) as e:
-                     logger.warning(f"[Clasificaciones] Error procesando fecha_hasta '{filters['fecha_hasta']}': {e}. Saltando filtro.")
+                     logger.warning(f"[Clasificaciones] Error procesando fecha_hasta '{filtros.get('fecha_hasta', 'N/A')}': {e}. Saltando filtro.")
             
             # Mantener los otros filtros como estaban
             if filtros.get('codigo_proveedor'):
@@ -732,7 +724,7 @@ def get_pesajes_neto(filtros=None):
                     params.append(utc_timestamp_desde)
                     logger.info(f"[Pesajes Neto] Filtro fecha_desde (Bogotá: {fecha_desde_str} 00:00:00) -> UTC: {utc_timestamp_desde}")
                 except (ValueError, TypeError) as e:
-                    logger.warning(f"[Pesajes Neto] Error procesando fecha_desde '{filters['fecha_desde']}': {e}. Saltando filtro.")
+                    logger.warning(f"[Pesajes Neto] Error procesando fecha_desde '{filtros.get('fecha_desde', 'N/A')}': {e}. Saltando filtro.")
 
             if filtros.get('fecha_hasta'):
                 try:
@@ -747,7 +739,7 @@ def get_pesajes_neto(filtros=None):
                     params.append(utc_timestamp_hasta)
                     logger.info(f"[Pesajes Neto] Filtro fecha_hasta (Bogotá: {fecha_hasta_str} 23:59:59) -> UTC: {utc_timestamp_hasta}")
                 except (ValueError, TypeError) as e:
-                    logger.warning(f"[Pesajes Neto] Error procesando fecha_hasta '{filters['fecha_hasta']}': {e}. Saltando filtro.")
+                    logger.warning(f"[Pesajes Neto] Error procesando fecha_hasta '{filtros.get('fecha_hasta', 'N/A')}': {e}. Saltando filtro.")
 
             # Otros filtros
             if filtros.get('codigo_guia'):
@@ -921,7 +913,30 @@ def get_provider_by_code(codigo_proveedor, codigo_guia_actual=None):
             conn.close()
 
 def get_entry_records_by_provider_code(codigo_proveedor):
-    # ... existing code ...
+    conn = None
+    try:
+        # Get DB path from app config
+        db_path = current_app.config['TIQUETES_DB_PATH']
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        
+        # Verificar si existe la tabla
+        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='entry_records'")
+        if not c.fetchone():
+            logger.warning(f"No existe la tabla entry_records para buscar registros del proveedor {codigo_proveedor}")
+            # Cerrar conexión si se abrió
+            if conn:
+                conn.close()
+            return []
+        
+        # Consultar registros - Sólo buscar por codigo_proveedor (el campo codigo no existe)
+        c.execute("""
+            SELECT * FROM entry_records 
+            WHERE codigo_proveedor = ?
+            ORDER BY fecha_creacion DESC, id DESC
+        """, (codigo_proveedor,))
+        
         records = []
         for row in c.fetchall():
             record = {}
@@ -931,7 +946,389 @@ def get_entry_records_by_provider_code(codigo_proveedor):
             record['timestamp_registro_utc'] = record.get('timestamp_registro_utc', '') 
             records.append(record)
         
-        conn.close()
+        # Cerrar conexión antes de retornar
+        if conn:
+             conn.close()
         logger.info(f"Encontrados {len(records)} registros para el proveedor {codigo_proveedor}")
         return records
-    # ... existing code ... 
+    except KeyError:
+        logger.error("Error: 'TIQUETES_DB_PATH' no está configurada en la aplicación Flask.")
+        if conn: # Asegurar cierre en caso de error
+            conn.close()
+        return []
+    except Exception as e:
+        logger.error(f"Error al obtener registros para el proveedor {codigo_proveedor}: {str(e)}")
+        # logger.error(traceback.format_exc()) # Comentado para reducir verbosidad, descomentar si es necesario
+        if conn:
+             conn.close()
+        return []
+    finally:
+        # Asegurar cierre final si aún está abierta (por si acaso)
+        if conn:
+            conn.close()
+
+#-----------------------
+# Operaciones para Salidas
+#-----------------------
+
+def store_salida(salida_data):
+    """
+    Almacena un registro de salida en la base de datos.
+    Uses TIQUETES_DB_PATH.
+    
+    Args:
+        salida_data (dict): Diccionario con los datos de la salida
+        
+    Returns:
+        bool: True si se almacenó correctamente, False en caso contrario
+    """
+    conn = None
+    try:
+        db_path = current_app.config['TIQUETES_DB_PATH']
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        # Verificar si ya existe un registro con este código_guia
+        cursor.execute("SELECT id FROM salidas WHERE codigo_guia = ?", 
+                      (salida_data.get('codigo_guia'),))
+        existing = cursor.fetchone()
+        
+        # Preparar datos excluyendo claves None y la clave primaria para INSERT/UPDATE
+        datos_filtrados = {k: v for k, v in salida_data.items() if v is not None and k != 'id'}
+        datos_finales = datos_filtrados # En este caso no hay timestamps complejos que manejar
+
+        if existing:
+            # Actualizar el registro existente
+            update_cols = []
+            params = []
+            
+            for key, value in datos_finales.items():
+                if key != 'codigo_guia':  # Excluir la clave primaria
+                    update_cols.append(f"{key} = ?")
+                    params.append(value)
+            
+            # Agregar el parámetro para WHERE
+            params.append(datos_finales.get('codigo_guia'))
+            
+            update_query = f"UPDATE salidas SET {', '.join(update_cols)} WHERE codigo_guia = ?"
+            cursor.execute(update_query, params)
+            logger.info(f"Actualizado registro de salida para guía: {datos_finales.get('codigo_guia')}")
+        else:
+            # Insertar nuevo registro
+            columns = ', '.join(datos_finales.keys())
+            placeholders = ', '.join(['?' for _ in datos_finales])
+            values = list(datos_finales.values())
+            
+            insert_query = f"INSERT INTO salidas ({columns}) VALUES ({placeholders})"
+            cursor.execute(insert_query, values)
+            logger.info(f"Insertado nuevo registro de salida para guía: {datos_finales.get('codigo_guia')}")
+        
+        conn.commit()
+        return True
+    except KeyError:
+        logger.error("Error: 'TIQUETES_DB_PATH' no está configurada en la aplicación Flask.")
+        return False
+    except sqlite3.Error as e:
+        logger.error(f"Error almacenando registro de salida: {e}")
+        return False
+    finally:
+        if conn:
+            conn.close()
+
+def get_salidas(filtros=None):
+    """
+    Recupera los registros de salidas, opcionalmente filtrados.
+    Uses TIQUETES_DB_PATH.
+    
+    Args:
+        filtros (dict, optional): Diccionario con condiciones de filtro
+        
+    Returns:
+        list: Lista de registros de salidas como diccionarios
+    """
+    conn = None
+    try:
+        db_path = current_app.config['TIQUETES_DB_PATH']
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        # Verificar que la tabla existe
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='salidas'")
+        if not cursor.fetchone():
+            logger.warning("La tabla 'salidas' no existe en la base de datos.")
+            return []
+        
+        query = "SELECT * FROM salidas"
+        params = []
+        
+        # Aplicar filtros si se proporcionan
+        if filtros:
+            conditions = []
+            
+            # Filtro por fecha (usando timestamp_salida_utc)
+            if filtros.get('fecha_desde'):
+                try:
+                    fecha_desde_str = filtros['fecha_desde'] # YYYY-MM-DD
+                    naive_dt_desde = datetime.strptime(fecha_desde_str, '%Y-%m-%d')
+                    naive_dt_desde = datetime.combine(naive_dt_desde.date(), time.min)
+                    bogota_dt_desde = BOGOTA_TZ.localize(naive_dt_desde)
+                    utc_dt_desde = bogota_dt_desde.astimezone(UTC)
+                    utc_timestamp_desde = utc_dt_desde.strftime('%Y-%m-%d %H:%M:%S')
+                    conditions.append("timestamp_salida_utc >= ?")
+                    params.append(utc_timestamp_desde)
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"[Salidas] Error procesando fecha_desde '{filtros.get('fecha_desde', 'N/A')}': {e}.")
+
+            if filtros.get('fecha_hasta'):
+                try:
+                    fecha_hasta_str = filtros['fecha_hasta'] # YYYY-MM-DD
+                    naive_dt_hasta = datetime.strptime(fecha_hasta_str, '%Y-%m-%d')
+                    naive_dt_hasta = datetime.combine(naive_dt_hasta.date(), time.max.replace(microsecond=0))
+                    bogota_dt_hasta = BOGOTA_TZ.localize(naive_dt_hasta)
+                    utc_dt_hasta = bogota_dt_hasta.astimezone(UTC)
+                    utc_timestamp_hasta = utc_dt_hasta.strftime('%Y-%m-%d %H:%M:%S')
+                    conditions.append("timestamp_salida_utc <= ?")
+                    params.append(utc_timestamp_hasta)
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"[Salidas] Error procesando fecha_hasta '{filtros.get('fecha_hasta', 'N/A')}': {e}.")
+
+            # Otros filtros
+            if filtros.get('codigo_guia'):
+                conditions.append("codigo_guia LIKE ?")
+                params.append(f"%{filtros['codigo_guia']}%")
+            if filtros.get('codigo_proveedor'):
+                conditions.append("codigo_proveedor LIKE ?")
+                params.append(f"%{filtros['codigo_proveedor']}%")
+            if filtros.get('nombre_proveedor'):
+                conditions.append("nombre_proveedor LIKE ?")
+                params.append(f"%{filtros['nombre_proveedor']}%")
+            if filtros.get('estado'):
+                 conditions.append("estado LIKE ?")
+                 params.append(f"%{filtros['estado']}%")
+            
+            if conditions:
+                query += " WHERE " + " AND ".join(conditions)
+                
+        # Ordenar por timestamp UTC más reciente
+        query += " ORDER BY timestamp_salida_utc DESC"
+                
+        cursor.execute(query, params)
+        
+        salidas = []
+        for row in cursor.fetchall():
+            salida = {key: row[key] for key in row.keys()}
+            salidas.append(salida)
+        
+        return salidas
+    except KeyError:
+        logger.error("Error: 'TIQUETES_DB_PATH' no está configurada en la aplicación Flask.")
+        return []
+    except sqlite3.Error as e:
+        logger.error(f"Recuperando registros de salidas: {e}")
+        return []
+    finally:
+        if conn:
+            conn.close()
+
+
+def get_salida_by_codigo_guia(codigo_guia):
+    """
+    Recupera un registro de salida específico por su código de guía.
+    Uses TIQUETES_DB_PATH.
+    
+    Args:
+        codigo_guia (str): El código de guía a buscar
+        
+    Returns:
+        dict: El registro de salida como diccionario, o None si no se encuentra
+    """
+    conn = None
+    try:
+        db_path = current_app.config['TIQUETES_DB_PATH']
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        # Verificar que la tabla existe
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='salidas'")
+        if not cursor.fetchone():
+            logger.warning("La tabla 'salidas' no existe al buscar por código de guía.")
+            return None
+        
+        cursor.execute("SELECT * FROM salidas WHERE codigo_guia = ?", (codigo_guia,))
+        row = cursor.fetchone()
+        
+        if row:
+            salida = {key: row[key] for key in row.keys()}
+            return salida
+        return None
+    except KeyError:
+        logger.error("Error: 'TIQUETES_DB_PATH' no está configurada en la aplicación Flask.")
+        return None
+    except sqlite3.Error as e:
+        logger.error(f"Error recuperando registro de salida por código de guía: {e}")
+        return None
+    finally:
+        if conn:
+            conn.close()
+
+#-----------------------
+# Operaciones Genéricas / Proveedor
+#-----------------------
+
+def get_provider_by_code(codigo_proveedor, codigo_guia_actual=None):
+    """
+    Busca información de un proveedor por su código en las tablas disponibles.
+    Uses TIQUETES_DB_PATH.
+    
+    Args:
+        codigo_proveedor (str): Código del proveedor a buscar
+        codigo_guia_actual (str, optional): Código de guía actual para evitar mezclar datos de diferentes entregas
+        
+    Returns:
+        dict: Datos del proveedor o None si no se encuentra
+    """
+    conn = None
+    try:
+        db_path = current_app.config['TIQUETES_DB_PATH']
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        # Verificar si existe tabla de proveedores
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='proveedores'")
+        if cursor.fetchone():
+            cursor.execute("SELECT * FROM proveedores WHERE codigo = ?", (codigo_proveedor,))
+            row = cursor.fetchone()
+            if row: 
+                proveedor = {key: row[key] for key in row.keys()}
+                proveedor['es_dato_otra_entrega'] = False
+                logger.info(f"Proveedor encontrado en tabla proveedores: {codigo_proveedor}")
+                return proveedor
+        
+        if codigo_guia_actual:
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='entry_records'")
+            if cursor.fetchone():
+                cursor.execute("SELECT * FROM entry_records WHERE codigo_guia = ? LIMIT 1", (codigo_guia_actual,))
+                row = cursor.fetchone()
+                if row:
+                    proveedor = {key: row[key] for key in row.keys()}
+                    proveedor['codigo'] = proveedor.get('codigo_proveedor')
+                    proveedor['nombre'] = proveedor.get('nombre_proveedor')
+                    proveedor['es_dato_otra_entrega'] = False
+                    logger.info(f"Proveedor encontrado en entry_records para el mismo código de guía: {codigo_guia_actual}")
+                    return proveedor
+        
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='entry_records'")
+        if cursor.fetchone():
+            cursor.execute("SELECT * FROM entry_records WHERE codigo_proveedor = ? ORDER BY fecha_creacion DESC LIMIT 1", (codigo_proveedor,))
+            row = cursor.fetchone()
+            if row:
+                proveedor = {key: row[key] for key in row.keys()}
+                proveedor['codigo'] = proveedor.get('codigo_proveedor')
+                proveedor['nombre'] = proveedor.get('nombre_proveedor')
+                proveedor['timestamp_registro_utc'] = proveedor.get('timestamp_registro_utc', '')
+                proveedor['es_dato_otra_entrega'] = bool(codigo_guia_actual and proveedor.get('codigo_guia') != codigo_guia_actual)
+                if proveedor['es_dato_otra_entrega']:
+                    logger.warning(f"Proveedor encontrado en otra entrada (código guía: {proveedor.get('codigo_guia')})")
+                logger.info(f"Proveedor encontrado en entry_records: {codigo_proveedor}")
+                return proveedor
+            
+        tables_to_check = ['pesajes_bruto', 'clasificaciones', 'pesajes_neto']
+        for table in tables_to_check:
+            cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table}'")
+            if cursor.fetchone():
+                cursor.execute(f"PRAGMA table_info({table})")
+                columns = [row[1] for row in cursor.fetchall()]
+                if 'codigo_proveedor' in columns:
+                    if codigo_guia_actual and 'codigo_guia' in columns:
+                        query = f"SELECT * FROM {table} WHERE codigo_guia = ? LIMIT 1"
+                        cursor.execute(query, (codigo_guia_actual,))
+                        row = cursor.fetchone()
+                        if row and row['codigo_proveedor'] == codigo_proveedor:
+                            proveedor = {key: row[key] for key in row.keys()}
+                            proveedor['codigo'] = proveedor.get('codigo_proveedor')
+                            proveedor['nombre'] = proveedor.get('nombre_proveedor')
+                            proveedor['es_dato_otra_entrega'] = False
+                            logger.info(f"Proveedor encontrado en {table} para el mismo código de guía: {codigo_guia_actual}")
+                            return proveedor
+                    query = f"SELECT * FROM {table} WHERE codigo_proveedor = ? LIMIT 1"
+                    cursor.execute(query, (codigo_proveedor,))
+                    row = cursor.fetchone()
+                    if row:
+                        proveedor = {key: row[key] for key in row.keys()}
+                        proveedor['codigo'] = proveedor.get('codigo_proveedor')
+                        proveedor['nombre'] = proveedor.get('nombre_proveedor')
+                        proveedor['es_dato_otra_entrega'] = bool(codigo_guia_actual and 'codigo_guia' in columns and proveedor.get('codigo_guia') != codigo_guia_actual)
+                        if proveedor['es_dato_otra_entrega']:
+                            logger.warning(f"Datos encontrados en {table} de otra entrada (código guía: {proveedor.get('codigo_guia')})")
+                        logger.info(f"Proveedor encontrado en {table}: {codigo_proveedor}")
+                        return proveedor
+        
+        logger.warning(f"No se encontró información del proveedor: {codigo_proveedor}")
+        return None
+    except KeyError:
+        logger.error("Error: 'TIQUETES_DB_PATH' no está configurada en la aplicación Flask.")
+        return None
+    except sqlite3.Error as e:
+        logger.error(f"Error buscando proveedor por código: {e}")
+        return None
+    finally:
+        if conn:
+            conn.close()
+
+def get_entry_records_by_provider_code(codigo_proveedor):
+    conn = None
+    try:
+        # Get DB path from app config
+        db_path = current_app.config['TIQUETES_DB_PATH']
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        
+        # Verificar si existe la tabla
+        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='entry_records'")
+        if not c.fetchone():
+            logger.warning(f"No existe la tabla entry_records para buscar registros del proveedor {codigo_proveedor}")
+            # Cerrar conexión si se abrió
+            if conn:
+                conn.close()
+            return []
+        
+        # Consultar registros - Sólo buscar por codigo_proveedor (el campo codigo no existe)
+        c.execute("""
+            SELECT * FROM entry_records 
+            WHERE codigo_proveedor = ?
+            ORDER BY fecha_creacion DESC, id DESC
+        """, (codigo_proveedor,))
+        
+        records = []
+        for row in c.fetchall():
+            record = {}
+            for key in row.keys():
+                record[key] = row[key]
+            # Ensure the timestamp field is included
+            record['timestamp_registro_utc'] = record.get('timestamp_registro_utc', '') 
+            records.append(record)
+        
+        # Cerrar conexión antes de retornar
+        if conn:
+             conn.close()
+        logger.info(f"Encontrados {len(records)} registros para el proveedor {codigo_proveedor}")
+        return records
+    except KeyError:
+        logger.error("Error: 'TIQUETES_DB_PATH' no está configurada en la aplicación Flask.")
+        if conn: # Asegurar cierre en caso de error
+            conn.close()
+        return []
+    except Exception as e:
+        logger.error(f"Error al obtener registros para el proveedor {codigo_proveedor}: {str(e)}")
+        # logger.error(traceback.format_exc()) # Comentado para reducir verbosidad, descomentar si es necesario
+        if conn:
+             conn.close()
+        return []
+    finally:
+        # Asegurar cierre final si aún está abierta (por si acaso)
+        if conn:
+            conn.close()

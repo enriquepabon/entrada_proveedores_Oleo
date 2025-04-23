@@ -5,7 +5,7 @@ from flask import (
 import os
 import logging
 import traceback
-from datetime import datetime, timedelta, time
+from datetime import datetime, timedelta, time, date
 import json
 import glob
 from werkzeug.utils import secure_filename
@@ -25,6 +25,49 @@ from db_operations import get_clasificaciones, get_pesajes_neto, get_pesaje_brut
 from db_utils import get_entry_records # Corregido para buscar en la raíz
 # Al principio de app/blueprints/misc/routes.py
 from app.utils.common import get_db_connection, get_utc_timestamp_str # ¡Ambas deben estar aquí!
+# Importar operaciones específicas que necesitamos
+from db_operations import (
+    get_pesajes_bruto, 
+    get_clasificaciones, 
+    get_pesajes_neto, 
+    get_salidas, 
+    get_pesaje_bruto_by_codigo_guia, # Podría ser útil
+    get_clasificacion_by_codigo_guia, # Podría ser útil
+    get_pesaje_neto_by_codigo_guia, # Podría ser útil
+    get_salida_by_codigo_guia # Podría ser útil
+)
+
+# --- Funciones Auxiliares Definidas Globalmente --- 
+# (Re-insertando definición para asegurar reconocimiento por linter)
+def convertir_timestamp_a_fecha_hora(timestamp_utc_str):
+    """Convierte un string timestamp UTC a fecha y hora local (Bogotá)."""
+    if not timestamp_utc_str or timestamp_utc_str in [None, '', 'N/A']:
+        return "N/A", "N/A"
+    try:
+        # Usar datetime.fromisoformat si el formato es ISO 8601, sino strptime
+        if 'T' in timestamp_utc_str and 'Z' in timestamp_utc_str:
+             utc_dt = datetime.fromisoformat(timestamp_utc_str.replace('Z', '+00:00'))
+        elif ' ' in timestamp_utc_str:
+             # Asumir formato 'YYYY-MM-DD HH:MM:SS'
+             utc_dt = datetime.strptime(timestamp_utc_str, '%Y-%m-%d %H:%M:%S')
+             # Asegurar que sea timezone-aware (UTC)
+             if utc_dt.tzinfo is None:
+                 utc_dt = UTC.localize(utc_dt) # Asume UTC es un timezone object definido
+        else:
+             # Intentar formato 'YYYY-MM-DD' como último recurso (solo fecha)
+             naive_date = datetime.strptime(timestamp_utc_str, '%Y-%m-%d').date()
+             # Devolver solo fecha formateada, hora N/A
+             return naive_date.strftime('%d/%m/%Y'), "N/A"
+
+        # Convertir a Bogotá
+        bogota_dt = utc_dt.astimezone(BOGOTA_TZ) # Asume BOGOTA_TZ es un timezone object definido
+        return bogota_dt.strftime('%d/%m/%Y'), bogota_dt.strftime('%H:%M:%S')
+
+    except (ValueError, TypeError) as e:
+        # Loguear usando el logger del módulo
+        logger.warning(f"Error convirtiendo timestamp '{timestamp_utc_str}': {e}")
+        return "Error Fmt", "Error Fmt"
+
 
 # Database path (assuming it's at the workspace root)
 DB_PATH = 'tiquetes.db'
@@ -2436,3 +2479,254 @@ def buscar_guias():
             conn.close()
         return jsonify({"error": "Error inesperado al buscar guías"}), 500
         
+
+# Nueva ruta para el registro consolidado de fruta
+@bp.route('/registros-fruta-mlb')
+def registro_fruta_mlb():
+    """
+    Muestra el listado consolidado de todos los registros de fruta.
+    Obtiene datos de todas las tablas relevantes y los combina.
+    Aplica filtros por fecha, proveedor y estado.
+    """
+    logger.info("Accediendo a /registros-fruta-mlb para obtener datos consolidados")
+    
+    # --- PASO 9: Obtener parámetros de filtro --- 
+    try:
+        # Fechas (default: últimos 30 días)
+        today = date.today()
+        default_start_date = today - timedelta(days=30)
+        fecha_desde_str = request.args.get('fecha_desde', default_start_date.strftime('%Y-%m-%d'))
+        fecha_hasta_str = request.args.get('fecha_hasta', today.strftime('%Y-%m-%d'))
+        
+        # Otros filtros
+        codigo_proveedor_filtro = request.args.get('codigo_proveedor', '')
+        estado_filtro = request.args.get('estado', '') # El estado se filtra después de calcularlo
+
+        # Guardar filtros para pasarlos a la plantilla
+        filtros_activos = {
+            'fecha_desde': fecha_desde_str,
+            'fecha_hasta': fecha_hasta_str,
+            'codigo_proveedor': codigo_proveedor_filtro,
+            'estado': estado_filtro
+        }
+        logger.info(f"Filtros recibidos: {filtros_activos}")
+
+    except Exception as e:
+         logger.error(f"Error procesando parámetros de filtro: {e}", exc_info=True)
+         # Manejar error, quizás redirigir o mostrar mensaje
+         # Por ahora, continuaremos con valores por defecto si falla
+         today = date.today()
+         fecha_desde_str = (today - timedelta(days=30)).strftime('%Y-%m-%d')
+         fecha_hasta_str = today.strftime('%Y-%m-%d')
+         codigo_proveedor_filtro = ''
+         estado_filtro = ''
+         filtros_activos = {
+            'fecha_desde': fecha_desde_str,
+            'fecha_hasta': fecha_hasta_str,
+            'codigo_proveedor': codigo_proveedor_filtro,
+            'estado': estado_filtro
+        }
+
+    datos_combinados = {}
+    lista_consolidada = []
+
+    try:
+        # --- PASO 9: Preparar filtros para la consulta de entrada --- 
+        filtros_db = {
+            'fecha_desde': fecha_desde_str,
+            'fecha_hasta': fecha_hasta_str,
+        }
+        if codigo_proveedor_filtro:
+            filtros_db['codigo_proveedor'] = codigo_proveedor_filtro
+        
+        # 1. Obtener registros de entrada FILTRADOS
+        registros_entrada = get_entry_records(filters=filtros_db)
+        logger.info(f"Obtenidos {len(registros_entrada)} registros de entrada (filtrados por DB).")
+
+        # Obtener la lista de códigos de guía de los registros filtrados
+        codigos_guia_filtrados = {e.get('codigo_guia') for e in registros_entrada if e.get('codigo_guia')}
+
+        # Crear la estructura base usando los registros de entrada FILTRADOS
+        for entrada in registros_entrada:
+            codigo_guia = entrada.get('codigo_guia')
+            if codigo_guia:
+                datos_combinados[codigo_guia] = {
+                    'entrada': entrada,
+                    'bruto': None, 
+                    'clasificacion': None,
+                    'neto': None,
+                    'salida': None,
+                    'estado': 'Entrada Registrada' # Estado inicial
+                }
+
+        # 2. Obtener y combinar Pesajes Bruto (Idealmente filtrar por codigos_guia_filtrados)
+        # Por simplicidad, por ahora obtenemos todos y combinamos
+        pesajes_bruto = get_pesajes_bruto() 
+        logger.info(f"Obtenidos {len(pesajes_bruto)} registros de pesaje bruto (sin filtrar por guía).")
+        for bruto in pesajes_bruto:
+            codigo_guia = bruto.get('codigo_guia')
+            if codigo_guia in datos_combinados: # Solo combinar si la entrada estaba en el set filtrado
+                datos_combinados[codigo_guia]['bruto'] = bruto
+
+        # 3. Obtener y combinar Clasificaciones (Idealmente filtrar)
+        clasificaciones = get_clasificaciones()
+        logger.info(f"Obtenidos {len(clasificaciones)} registros de clasificación (sin filtrar por guía).")
+        for clasif in clasificaciones:
+            codigo_guia = clasif.get('codigo_guia')
+            if codigo_guia in datos_combinados:
+                datos_combinados[codigo_guia]['clasificacion'] = clasif
+
+        # 4. Obtener y combinar Pesajes Neto (Idealmente filtrar)
+        pesajes_neto = get_pesajes_neto()
+        logger.info(f"Obtenidos {len(pesajes_neto)} registros de pesaje neto (sin filtrar por guía).")
+        for neto in pesajes_neto:
+            codigo_guia = neto.get('codigo_guia')
+            if codigo_guia in datos_combinados:
+                datos_combinados[codigo_guia]['neto'] = neto
+
+        # 5. Obtener y combinar Salidas (Idealmente filtrar)
+        salidas = get_salidas()
+        logger.info(f"Obtenidos {len(salidas)} registros de salida (sin filtrar por guía).")
+        for salida in salidas:
+            codigo_guia = salida.get('codigo_guia')
+            if codigo_guia in datos_combinados:
+                datos_combinados[codigo_guia]['salida'] = salida
+
+        # 6. Convertir, preparar datos y calcular estado
+        lista_consolidada_preparada = [] 
+        for codigo_guia, datos in datos_combinados.items():
+            # Calcular estado final (igual que antes)
+            if datos['salida']:
+                estado_actual = 'Cerrada'
+            elif datos['neto']:
+                 estado_actual = 'Pesaje Neto Completo'
+            elif datos['clasificacion']:
+                 estado_actual = 'Clasificación Completa'
+            elif datos['bruto']:
+                 estado_actual = 'Pesaje Bruto Completo'
+            else:
+                 estado_actual = 'Entrada Registrada'
+            
+            # Preparar diccionario (igual que antes)
+            entrada_data = datos.get('entrada') or {}
+            bruto_data = datos.get('bruto') or {}
+            clasif_data = datos.get('clasificacion') or {}
+            neto_data = datos.get('neto') or {}
+            fecha_entrada, hora_entrada = convertir_timestamp_a_fecha_hora(entrada_data.get('timestamp_registro_utc'))
+
+            registro_preparado = {
+                'codigo_guia': codigo_guia,
+                'fecha_entrada': fecha_entrada,
+                'hora_entrada': hora_entrada,
+                'codigo_proveedor': entrada_data.get('codigo_proveedor', 'N/A'),
+                'nombre_proveedor': entrada_data.get('nombre_proveedor', 'N/A'), # Añadir nombre proveedor
+                'cantidad_racimos': entrada_data.get('cantidad_racimos', 0),
+                'peso_bruto': bruto_data.get('peso_bruto'), 
+                'tipo_pesaje': bruto_data.get('tipo_pesaje', 'N/A'), # <- Añadir tipo_pesaje
+                'peso_neto': neto_data.get('peso_neto'),
+                'tiene_clasificacion': bool(clasif_data), 
+                'estado': estado_actual,
+            }
+            lista_consolidada_preparada.append(registro_preparado)
+            
+        # --- PASO 9: Aplicar filtro de estado (si existe) --- 
+        if estado_filtro:
+            logger.info(f"Aplicando filtro de estado: '{estado_filtro}'")
+            lista_filtrada_final = [r for r in lista_consolidada_preparada if r['estado'] == estado_filtro]
+            logger.info(f"Registros después del filtro de estado: {len(lista_filtrada_final)}")
+        else:
+            lista_filtrada_final = lista_consolidada_preparada # Sin filtro de estado
+            logger.info("No se aplicó filtro de estado.")
+
+        # Ordenar la lista FINAL filtrada
+        lista_filtrada_final.sort(
+            key=lambda x: (x['fecha_entrada'].split('/')[::-1], x['hora_entrada']) if x['fecha_entrada'] not in ['N/A', 'Error Fmt'] else ('9999','99','99', '99:99:99'),
+            reverse=True
+        )
+        logger.info(f"Datos preparados y filtrados para plantilla. Total de guías a mostrar: {len(lista_filtrada_final)}")
+
+        # 8. Calcular totales sobre la lista FINAL filtrada
+        total_racimos = 0
+        total_peso_bruto = 0.0
+        total_peso_neto = 0.0
+
+        for registro in lista_filtrada_final: # USAR LISTA FILTRADA FINAL
+            try:
+                # ... (lógica de suma de racimos igual que antes)
+                cantidad = registro.get('cantidad_racimos', 0)
+                if isinstance(cantidad, (int, float)):
+                    total_racimos += cantidad
+                elif isinstance(cantidad, str) and cantidad.isdigit():
+                    total_racimos += int(cantidad)
+            except (ValueError, TypeError):
+                pass 
+            try:
+                # ... (lógica de suma de peso bruto igual que antes)
+                bruto = registro.get('peso_bruto', 0.0)
+                if isinstance(bruto, (int, float)):
+                    total_peso_bruto += bruto
+                elif isinstance(bruto, str):
+                    try:
+                        total_peso_bruto += float(bruto.replace(',', '.')) 
+                    except ValueError:
+                        pass
+            except (ValueError, TypeError):
+                 pass 
+            try:
+                 # ... (lógica de suma de peso neto igual que antes)
+                neto = registro.get('peso_neto', 0.0)
+                if isinstance(neto, (int, float)):
+                    total_peso_neto += neto
+                elif isinstance(neto, str):
+                     try:
+                         total_peso_neto += float(neto.replace(',', '.')) 
+                     except ValueError:
+                        pass
+            except (ValueError, TypeError):
+                 pass 
+
+        totales = {
+            'racimos': total_racimos,
+            'bruto': round(total_peso_bruto, 2),
+            'neto': round(total_peso_neto, 2)
+        }
+        logger.info(f"Totales calculados (sobre datos filtrados): {totales}")
+        
+        # --- PASO 9: Obtener lista de proveedores únicos para el filtro ---
+        # Optenemos TODOS los proveedores para el dropdown, sin aplicar filtros aquí
+        try:
+            # Utilizar una consulta DISTINCT para eficiencia si es posible
+            # O procesar todos los registros de entrada (puede ser menos eficiente)
+            todos_registros_entrada = get_entry_records() # Obtener todos sin filtro
+            proveedores_set = set()
+            for record in todos_registros_entrada:
+                codigo = record.get('codigo_proveedor')
+                nombre = record.get('nombre_proveedor')
+                if codigo and nombre and codigo != 'No disponible' and nombre != 'No disponible':
+                    proveedores_set.add((codigo.strip(), nombre.strip()))
+            
+            lista_proveedores = sorted(
+                [{ 'codigo': c, 'nombre': n } for c, n in proveedores_set],
+                key=lambda x: x['nombre']
+            )
+            logger.info(f"Obtenidos {len(lista_proveedores)} proveedores únicos para el filtro.")
+        except Exception as prov_err:
+            logger.error(f"Error obteniendo lista de proveedores: {prov_err}", exc_info=True)
+            lista_proveedores = [] # Devolver lista vacía en caso de error
+
+
+    except ImportError as ie:
+        logger.error(f"Error de importación en registro_fruta_mlb: {str(ie)}", exc_info=True)
+        return render_template('error.html', mensaje=f"Error interno del servidor (importación): {str(ie)}"), 500
+    except Exception as e:
+        logger.error(f"Error general en registro_fruta_mlb: {str(e)}", exc_info=True)
+        return render_template('error.html', mensaje=f"Ocurrió un error inesperado al cargar el registro de fruta: {str(e)}"), 500
+
+    # Pasar la lista FILTRADA FINAL, los TOTALES, los FILTROS ACTIVOS y la LISTA DE PROVEEDORES a la plantilla
+    return render_template('misc/registro_fruta_mlb.html', 
+                           titulo="Registro Consolidado de Fruta MLB", 
+                           registros=lista_filtrada_final, # Pasar la lista filtrada
+                           totales=totales,
+                           filtros=filtros_activos, # Pasar los filtros usados
+                           lista_proveedores=lista_proveedores) # Pasar proveedores para el select
+

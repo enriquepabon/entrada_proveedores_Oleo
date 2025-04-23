@@ -1,0 +1,154 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ titulo | default('Registro Consolidado de Fruta MLB') }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4"> {# Use container-fluid for wider content #}
+
+    <!-- sections/content_header.html -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="mb-0 h3">{{ titulo | default('Registro Consolidado de Fruta MLB') }}</h1>
+        <button id="btnPrint" class="btn btn-sm btn-outline-secondary"><i class="fas fa-print me-1"></i> Imprimir</button>
+    </div>
+
+    <!-- sections/info_alert.html -->
+    {# <div class="alert alert-info alert-dismissible fade show small" role="alert">
+        <i class="fas fa-info-circle me-2"></i>Esta sección muestra el registro consolidado. Aplica filtros según necesites.
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div> #}
+
+    <!-- sections/filters_form.html -->
+    <form method="GET" action="{{ url_for('misc.registro_fruta_mlb') }}" class="mb-4 p-3 border rounded bg-light">
+        <div class="row gx-2 gy-2 align-items-end">
+            <div class="col-md-2">
+                <label for="fecha_desde" class="form-label small mb-1">Desde</label>
+                <input type="date" class="form-control form-control-sm" id="fecha_desde" name="fecha_desde" value="{{ filtros.fecha_desde }}">
+            </div>
+            <div class="col-md-2">
+                <label for="fecha_hasta" class="form-label small mb-1">Hasta</label>
+                <input type="date" class="form-control form-control-sm" id="fecha_hasta" name="fecha_hasta" value="{{ filtros.fecha_hasta }}">
+            </div>
+            <div class="col-md-3">
+                <label for="codigo_proveedor" class="form-label small mb-1">Proveedor</label>
+                <select class="form-select form-select-sm" id="codigo_proveedor" name="codigo_proveedor">
+                    <option value="">-- Todos --</option>
+                    {% for prov in lista_proveedores %}
+                        <option value="{{ prov.codigo }}" {% if filtros.codigo_proveedor == prov.codigo %}selected{% endif %}>{{ prov.nombre }} ({{ prov.codigo }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="estado" class="form-label small mb-1">Estado Proceso</label>
+                <select class="form-select form-select-sm" id="estado" name="estado">
+                    <option value="">-- Todos --</option>
+                    <option value="Entrada Registrada" {% if filtros.estado == 'Entrada Registrada' %}selected{% endif %}>Entrada Registrada</option>
+                    <option value="Pesaje Bruto Completo" {% if filtros.estado == 'Pesaje Bruto Completo' %}selected{% endif %}>Pesaje Bruto</option>
+                    <option value="Clasificación Completa" {% if filtros.estado == 'Clasificación Completa' %}selected{% endif %}>Clasificación</option>
+                    <option value="Pesaje Neto Completo" {% if filtros.estado == 'Pesaje Neto Completo' %}selected{% endif %}>Pesaje Neto</option>
+                    <option value="Cerrada" {% if filtros.estado == 'Cerrada' %}selected{% endif %}>Cerrada</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-sm btn-primary w-100"><i class="fas fa-filter me-1"></i> Aplicar Filtros</button>
+            </div>
+        </div>
+    </form>
+
+    <!-- sections/results_table.html -->
+    <div class="table-responsive">
+        <table class="table table-striped table-hover table-sm small">
+            <thead class="table-light sticky-top" style="z-index: 1;"> {# Sticky header #}
+                <tr>
+                    <th>Fecha</th>
+                    <th>Hora</th>
+                    <th>Código Guía</th>
+                    <th>Cod. Prov.</th>
+                    <th>Nombre Proveedor</th>
+                    <th class="text-end">Racimos</th>
+                    <th class="text-end">P. Bruto (kg)</th>
+                    <th class="text-end">P. Neto (kg)</th>
+                    <th>Tipo Pesaje</th>
+                    <th>Estado</th>
+                    <th class="text-center">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if registros %}
+                    {% for registro in registros %}
+                    <tr>
+                        <td>{{ registro.fecha_entrada | default('N/A') }}</td>
+                        <td>{{ registro.hora_entrada | default('N/A') }}</td>
+                        <td>
+                            <a href="{{ url_for('misc.ver_guia_centralizada', codigo_guia=registro.codigo_guia) }}" target="_blank" title="Ver Guía Centralizada">{{ registro.codigo_guia | default('N/A') }}</a>
+                        </td>
+                        <td>{{ registro.codigo_proveedor | default('N/A') }}</td>
+                        <td>{{ registro.nombre_proveedor | default('N/A') }}</td>
+                        <td class="text-end">{{ registro.cantidad_racimos | default(0) }}</td>
+                        <td class="text-end">
+                            {% if registro.peso_bruto %}
+                                <a href="{{ url_for('misc.ver_resultados_pesaje', codigo_guia=registro.codigo_guia) }}" target="_blank" title="Ver Detalle Pesaje Bruto">{{ registro.peso_bruto }}</a>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            {% if registro.peso_neto %}
+                                {{ registro.peso_neto }}
+                                {# TODO: Añadir link a ver_resultados_pesaje_neto si la ruta existe #}
+                                {# <a href="{{ url_for('pesaje.ver_resultados_pesaje_neto', codigo_guia=registro.codigo_guia) }}" target="_blank" title="Ver Detalle Pesaje Neto">{{ registro.peso_neto }}</a> #}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>{{ registro.tipo_pesaje | default('N/A') }}</td>
+                        <td><span class="badge {% if registro.estado == 'Cerrada' %}bg-success{% elif registro.estado == 'Pesaje Neto Completo' %}bg-info{% elif registro.estado == 'Clasificación Completa' %}bg-primary{% elif registro.estado == 'Pesaje Bruto Completo' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">{{ registro.estado | default('N/A') }}</span></td>
+                        <td class="text-center">
+                            <div class="btn-group btn-group-sm" role="group">
+                                {% if registro.tiene_clasificacion %}
+                                    <a href="{{ url_for('clasificacion.ver_detalles_clasificacion', url_guia=registro.codigo_guia) }}" target="_blank" class="btn btn-outline-primary" title="Ver Clasificación"><i class="fas fa-clipboard-list"></i></a>
+                                {% else %}
+                                     <button type="button" class="btn btn-outline-secondary" disabled title="Clasificación Pendiente"><i class="fas fa-clipboard-list"></i></button>
+                                {% endif %}
+                                 <a href="{{ url_for('misc.ver_guia_centralizada', codigo_guia=registro.codigo_guia) }}" target="_blank" class="btn btn-outline-success" title="Ver Guía Centralizada"><i class="fas fa-eye"></i></a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                    <tr>
+                        <td colspan="11" class="text-center fst-italic text-muted py-3">No hay registros que coincidan con los filtros seleccionados.</td>
+                    </tr>
+                {% endif %}
+            </tbody>
+             <tfoot>
+                <tr class="table-light">
+                    <th colspan="5" class="text-end">Totales:</th>
+                    <th class="text-end">{{ totales.racimos | default(0) }}</th>
+                    <th class="text-end">{{ "%.2f"|format(totales.bruto | default(0.0)) }}</th>
+                    <th class="text-end">{{ "%.2f"|format(totales.neto | default(0.0)) }}</th>
+                    <th colspan="3"></th> {# Columnas Tipo Pesaje, Estado, Acciones #}
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+
+</div> {# End container #}
+{% endblock %}
+
+{% block extra_js %}
+<!-- sections/footer_scripts.html -->
+<script>
+    document.getElementById('btnPrint').addEventListener('click', function() {
+        window.print();
+    });
+
+    // Opcional: Si quieres usar Select2 para el dropdown de proveedores
+    // $(document).ready(function() {
+    //     $('#codigo_proveedor').select2({
+    //         placeholder: "-- Todos --",
+    //         allowClear: true,
+    //         theme: "bootstrap-5" // Asegúrate de tener el tema CSS de select2 para Bootstrap 5
+    //     });
+    // });
+</script>
+{% endblock %} 

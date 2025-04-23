@@ -3853,10 +3853,11 @@ def get_clasificacion_by_codigo_guia(codigo_guia):
             logger.debug(f"Conexión a BD cerrada para {codigo_guia} en get_clasificacion_by_codigo_guia.")
 
 # --- INICIO DE LA FUNCIÓN PARA COPIAR Y REEMPLAZAR ---
-@bp.route('/ver_detalles_clasificacion/<url_guia>')
+@bp.route('/ver_detalles_clasificacion/<path:url_guia>')
 def ver_detalles_clasificacion(url_guia):
     """
     Muestra los detalles de clasificación por foto para una guía específica
+    **Ajuste enfocado en la generación de URLs de imágenes**
     """
     import time
     from flask import current_app, make_response, flash, render_template, url_for # Asegurar imports
@@ -3865,43 +3866,44 @@ def ver_detalles_clasificacion(url_guia):
     # Asumiendo que logger está definido globalmente
     logger.info(f"Iniciando ver_detalles_clasificacion para {url_guia}")
 
+    # Usar url_guia directamente como codigo_guia según tu código actual
+    codigo_guia = url_guia
+    logger.info(f"Código de guía a buscar: {codigo_guia}")
+
+    # Inicializar template_data como en tu código actual
     template_data = {
         'url_guia': url_guia,
-        'resultados_por_foto': [],
-        'fotos_originales': [],
-        'fotos_procesadas': [],  # Variable para el template
-        'clasificacion_automatica_consolidada': {},\
-        'raw_data': {},\
-        'debug_info': {},\
-        'json_path': '',\
-        'tiempo_procesamiento': '',\
+        'resultados_por_foto': [], # Esta clave no se usa en la versión actual, pero se mantiene por consistencia
+        'fotos_originales': [], # Esta clave no se usa en la versión actual, pero se mantiene
+        'fotos_procesadas': [],  # Variable principal para el template
+        'clasificacion_automatica_consolidada': {},
+        'raw_data': {},
+        'debug_info': {},
+        'json_path': '',
+        'tiempo_procesamiento': '',
         'datos_guia': {}, # Initialize datos_guia
         'error': None, # Añadir para manejar errores en template
         'total_racimos_acumulados': 0 # Inicializar total acumulado
     }
 
     try:
-        codigo_guia = url_guia # Usar url_guia directamente aquí
-        logger.info(f"Código de guía a buscar: {codigo_guia}")
-
-        # --- RUTA CORREGIDA PARA BUSCAR EL JSON ---
-        base_dir_relativo = os.path.join('uploads', codigo_guia)
+        # --- RUTA PARA BUSCAR EL JSON (Lógica actual mantenida) ---
+        # Ruta relativa base DENTRO de static
+        guia_fotos_rel_dir = os.path.join('uploads', codigo_guia).replace("\\", "/") # Asegurar /
         json_filename = f"clasificacion_{codigo_guia}.json"
-        # Asumiendo que current_app está disponible
-        clasificacion_path = os.path.join(current_app.static_folder, base_dir_relativo, json_filename)
+        # Ruta física estándar
+        clasificacion_path = os.path.join(current_app.static_folder, guia_fotos_rel_dir, json_filename)
         template_data['json_path'] = clasificacion_path # Guardar la ruta intentada
         logger.info(f"Intentando buscar archivo JSON en la ruta estándar: {clasificacion_path}")
-        # -------------------------------------------\
+        # -------------------------------------------
 
-        # Comprobar si existe en la ruta estándar
+        # Comprobar si existe en la ruta estándar y buscar alternativas (Lógica actual mantenida)
         if not os.path.exists(clasificacion_path):
             logger.warning(f"Archivo JSON no encontrado en ruta estándar: {clasificacion_path}. Intentando rutas alternativas...")
-            # Intentar buscar en rutas alternativas (si aún las necesitas como fallback)
-            # Asumiendo que current_app está disponible
             alt_paths_to_check = [
                 os.path.join(current_app.static_folder, 'clasificaciones', json_filename),
-                os.path.join(current_app.static_folder, 'fotos_racimos_temp', codigo_guia, json_filename),
-                os.path.join(current_app.static_folder, current_app.config.get('FOTOS_RACIMOS_FOLDER', 'fotos_racimos_temp'), codigo_guia, json_filename)
+                # Añadir otras rutas alternativas si son necesarias, basadas en tu código original
+                # os.path.join(current_app.static_folder, 'fotos_racimos_temp', codigo_guia, json_filename),
             ]
             found_alt = False
             for alt_path in alt_paths_to_check:
@@ -3915,11 +3917,15 @@ def ver_detalles_clasificacion(url_guia):
                 logger.error(f"No se encontró el archivo de clasificación para: {codigo_guia} en NINGUNA ruta verificada.")
                 flash("No se encontró información de clasificación detallada para esta guía", "error")
                 template_data['error'] = "Archivo JSON de detalles no encontrado."
-                return render_template('detalles_clasificacion.html', **template_data)
+                # Usar make_response aquí también por consistencia con el final
+                response = make_response(render_template('detalles_clasificacion.html', **template_data))
+                response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+                response.headers['Pragma'] = 'no-cache'
+                response.headers['Expires'] = '0'
+                return response
 
 
-        # Leer el archivo de clasificación (ahora con la ruta correcta)
-        # Asumiendo que json está importado
+        # Leer el archivo de clasificación (Lógica actual mantenida)
         with open(clasificacion_path, 'r', encoding='utf-8') as f:
             clasificacion_data = json.load(f)
             logger.info(f"Clasificación detallada leída del archivo: {clasificacion_path}")
@@ -3927,26 +3933,20 @@ def ver_detalles_clasificacion(url_guia):
             template_data['tiempo_procesamiento'] = clasificacion_data.get('tiempo_total_procesamiento_seg', 'N/A')
 
 
-        # --- OBTENER DATOS DE GUÍA (Código existente) ---
+        # Obtener datos de guía (Lógica actual mantenida)
         try:
-            # Asumiendo que Utils está definido o importado
-            utils = Utils(current_app)
-            datos_guia = utils.get_datos_guia(url_guia)
-            template_data['datos_guia'] = datos_guia if datos_guia else {} # Asignar dict vacío si es None
+            utils = Utils(current_app) # Asumiendo Utils importado
+            datos_guia = utils.get_datos_guia(url_guia) # o db_get_datos_guia si esa es la función correcta
+            template_data['datos_guia'] = datos_guia if datos_guia else {}
             logger.info(f"Datos de guía obtenidos: {template_data['datos_guia']}")
-        except NameError: # Capturar si Utils no está definido
-            logger.error("La clase Utils no está definida o importada.")
-            template_data['datos_guia'] = {}
         except Exception as e:
             logger.error(f"Error al obtener datos de la guía: {str(e)}")
-            # Asumiendo que traceback está importado
-            logger.error(traceback.format_exc())
+            logger.error(traceback.format_exc()) # Asumiendo traceback importado
             template_data['datos_guia'] = {}
         # --------------------------------------------------
 
-        # --- PROCESAR fotos_procesadas DEL JSON (Lógica principal) ---
+        # --- PROCESAR fotos_procesadas DEL JSON ---
         resultados_por_foto_procesados = []
-        fotos_originales_urls = [] # Lista para guardar URLs originales
 
         # Extraer la lista 'imagenes_procesadas' del JSON leído
         imagenes_procesadas_json = clasificacion_data.get('imagenes_procesadas', [])
@@ -3959,125 +3959,168 @@ def ver_detalles_clasificacion(url_guia):
                      continue
 
                  foto_numero = img_data.get('numero', img_data.get('indice', '?'))
+                 imagen_original_url = None
+                 imagen_annotated_url = None
+                 imagen_clasificada_url = None
+
+                 # === AJUSTE GENERACIÓN URLs ===
+                 # Intenta generar la URL usando url_for con la ruta relativa correcta.
+                 # Si la ruta del JSON es absoluta o incorrecta, url_for podría fallar o generar un enlace roto.
 
                  # --- URL Imagen Original ---
-                 imagen_original_rel_path = img_data.get('imagen_original')
-                 imagen_original_url = None
-                 if imagen_original_rel_path:
-                     try:
-                          imagen_original_url = url_for('static', filename=imagen_original_rel_path)
-                          fotos_originales_urls.append(imagen_original_url)
-                          logger.debug(f"Foto {foto_numero}: URL original generada desde JSON: {imagen_original_url}")
-                     except Exception as url_err:
-                          logger.error(f"Foto {foto_numero}: Error generando URL para imagen original relativa '{imagen_original_rel_path}': {url_err}")
-                          imagen_original_url = "#error"
+                 # Clave JSON: 'imagen_original' (ruta relativa esperada desde la carpeta static)
+                 original_rel_path_from_json = img_data.get('imagen_original')
+                 if original_rel_path_from_json:
+                     # Limpiar la ruta (quitar prefijos si los tuviera) y asegurar formato correcto
+                     clean_rel_path = original_rel_path_from_json.replace('\\', '/')
+                     # Validar que la ruta no empiece con / si es relativa a static
+                     if clean_rel_path.startswith('/'):
+                         clean_rel_path = clean_rel_path[1:]
+                     # Verificar si el archivo físico existe antes de generar la URL
+                     physical_path = os.path.join(current_app.static_folder, clean_rel_path)
+                     if os.path.exists(physical_path):
+                         try:
+                             imagen_original_url = url_for('static', filename=clean_rel_path)
+                             logger.debug(f"Foto {foto_numero}: URL original OK: {imagen_original_url}")
+                         except Exception as url_err:
+                             logger.error(f"Foto {foto_numero}: Error generando URL para original '{clean_rel_path}': {url_err}")
+                     else:
+                         logger.warning(f"Foto {foto_numero}: Archivo original no encontrado en disco: '{physical_path}' (ruta JSON: '{original_rel_path_from_json}')")
                  else:
-                     logger.warning(f"Foto {foto_numero}: No se encontró 'imagen_original' (ruta relativa) en los datos JSON.")
-                     imagen_original_url = "#no_encontrada"
+                     logger.warning(f"Foto {foto_numero}: No se encontró clave 'imagen_original' en JSON.")
 
                  # --- URL Imagen Anotada ---
-                 imagen_annotated_rel_path = img_data.get('ruta_anotada', img_data.get('imagen_annotated'))
-                 imagen_annotated_url = None
-                 if imagen_annotated_rel_path:
-                     try:
-                         imagen_annotated_url = url_for('static', filename=imagen_annotated_rel_path)
-                         logger.debug(f"Foto {foto_numero}: URL anotada generada desde JSON: {imagen_annotated_url}")
-                     except Exception as url_err:
-                         logger.error(f"Foto {foto_numero}: Error generando URL para imagen anotada relativa '{imagen_annotated_rel_path}': {url_err}")
-                         imagen_annotated_url = "#error_annotated"
+                 # Claves JSON: 'ruta_anotada' o 'imagen_annotated'
+                 annotated_rel_path_from_json = img_data.get('ruta_anotada', img_data.get('imagen_annotated'))
+                 if annotated_rel_path_from_json:
+                     clean_rel_path = annotated_rel_path_from_json.replace('\\', '/')
+                     if clean_rel_path.startswith('/'):
+                         clean_rel_path = clean_rel_path[1:]
+                     physical_path = os.path.join(current_app.static_folder, clean_rel_path)
+                     if os.path.exists(physical_path):
+                         try:
+                             imagen_annotated_url = url_for('static', filename=clean_rel_path)
+                             logger.debug(f"Foto {foto_numero}: URL anotada OK: {imagen_annotated_url}")
+                         except Exception as url_err:
+                             logger.error(f"Foto {foto_numero}: Error generando URL para anotada '{clean_rel_path}': {url_err}")
+                     else:
+                         logger.warning(f"Foto {foto_numero}: Archivo anotado no encontrado en disco: '{physical_path}' (ruta JSON: '{annotated_rel_path_from_json}')")
                  else:
-                     logger.warning(f"Foto {foto_numero}: No se encontró ruta relativa ('ruta_anotada' o 'imagen_annotated') en los datos JSON.")
-                     imagen_annotated_url = "#no_annotated"
+                     logger.warning(f"Foto {foto_numero}: No se encontró clave 'ruta_anotada' o 'imagen_annotated' en JSON.")
 
-                 # --- URL Imagen Clasificada (Priorizar la de Roboflow) ---
-                 imagen_clasificada_rel_path = img_data.get('ruta_clasificada_rf')
-                 imagen_clasificada_url = None
-                 if imagen_clasificada_rel_path:
-                     try:
-                         imagen_clasificada_url = url_for('static', filename=imagen_clasificada_rel_path)
-                         logger.debug(f"Foto {foto_numero}: URL clasificada (RF) generada desde JSON: {imagen_clasificada_url}")
-                     except Exception as url_err:
-                         logger.error(f"Foto {foto_numero}: Error generando URL para imagen clasificada RF relativa '{imagen_clasificada_rel_path}': {url_err}")
-                         imagen_clasificada_url = "#error_clasificada_rf"
+
+                 # --- URL Imagen Clasificada (Roboflow) ---
+                 # Clave JSON: 'ruta_clasificada_rf' o buscar por patrón si no existe
+                 classified_rel_path_from_json = img_data.get('ruta_clasificada_rf', img_data.get('imagen_clasificada')) # Añadir fallback a imagen_clasificada por si acaso
+                 if classified_rel_path_from_json:
+                     clean_rel_path = classified_rel_path_from_json.replace('\\', '/')
+                     if clean_rel_path.startswith('/'):
+                         clean_rel_path = clean_rel_path[1:]
+                     physical_path = os.path.join(current_app.static_folder, clean_rel_path)
+                     if os.path.exists(physical_path):
+                         try:
+                             imagen_clasificada_url = url_for('static', filename=clean_rel_path)
+                             logger.debug(f"Foto {foto_numero}: URL clasificada OK: {imagen_clasificada_url}")
+                         except Exception as url_err:
+                             logger.error(f"Foto {foto_numero}: Error generando URL para clasificada '{clean_rel_path}': {url_err}")
+                     else:
+                         logger.warning(f"Foto {foto_numero}: Archivo clasificado no encontrado en disco: '{physical_path}' (ruta JSON: '{classified_rel_path_from_json}')")
                  else:
-                     logger.warning(f"Foto {foto_numero}: No se encontró ruta relativa para imagen clasificada ('ruta_clasificada_rf') en los datos JSON.")
-                     imagen_clasificada_url = "#no_clasificada_rf"
+                     logger.warning(f"Foto {foto_numero}: No se encontró clave 'ruta_clasificada_rf' o 'imagen_clasificada' en JSON.")
+                     # **Fallback Simple (Opcional):** Si no hay ruta en JSON, podrías intentar buscar UN archivo conocido, ej: *_labeled_rf.jpg
+                     # Esto es menos robusto que el código anterior, pero cumple "solo cambiar rutas"
+                     # original_filename_base = os.path.splitext(os.path.basename(img_data.get('imagen_original','')))[0] if img_data.get('imagen_original') else None
+                     # if original_filename_base:
+                     #    potential_rf_filename = f"{original_filename_base}_labeled_rf.jpg" # Asumiendo extensión
+                     #    potential_rf_rel_path = os.path.join(guia_fotos_rel_dir, potential_rf_filename).replace("\\","/")
+                     #    physical_rf_path = os.path.join(current_app.static_folder, potential_rf_rel_path)
+                     #    if os.path.exists(physical_rf_path):
+                     #        try:
+                     #            imagen_clasificada_url = url_for('static', filename=potential_rf_rel_path)
+                     #            logger.info(f"Foto {foto_numero}: Usando fallback para URL clasificada: {imagen_clasificada_url}")
+                     #        except Exception as url_err:
+                     #             logger.error(f"Foto {foto_numero}: Error generando URL fallback para clasificada '{potential_rf_rel_path}': {url_err}")
 
-                 # --- Crear el diccionario de contexto para ESTA foto ---
 
-                 # === INICIO: MODIFICACIÓN CÁLCULO total_racimos_base ===
+                 # === FIN AJUSTE GENERACIÓN URLs ===
+
+                 # Mantener la lógica actual para calcular racimos y categorías
                  potholes_count_foto = img_data.get('roboflow_potholes_count')
-                 # Convertir a entero si no es None, de lo contrario usar 0
                  total_racimos_base = int(potholes_count_foto) if potholes_count_foto is not None else 0
-                 # === FIN: MODIFICACIÓN CÁLCULO total_racimos_base ===
 
                  foto_context = {
                      'numero': foto_numero,
-                     # === INICIO: MODIFICACIÓN ASIGNACIÓN total_racimos ===
-                     # 'total_racimos': img_data.get('total_racimos_imagen', img_data.get('num_racimos_detectados', 0)), # <- VALOR ANTIGUO COMENTADO
-                     'total_racimos': total_racimos_base, # <- USAR EL NUEVO VALOR BASE (potholes_count)
-                     # === FIN: MODIFICACIÓN ASIGNACIÓN total_racimos ===
-                     'imagen_original': imagen_original_url,
-                     'imagen_annotated': imagen_annotated_url,
-                     'imagen_clasificada': imagen_clasificada_url,
+                     'total_racimos': total_racimos_base, # Usa la variable calculada
+                     'imagen_original': imagen_original_url, # Usa la variable generada
+                     'imagen_annotated': imagen_annotated_url, # Usa la variable generada
+                     'imagen_clasificada': imagen_clasificada_url, # Usa la variable generada
                      'conteo_categorias': img_data.get('conteo_categorias', {}),
                      'detecciones': img_data.get('detecciones', []),
-                     'roboflow_potholes_count': potholes_count_foto # Pasar el valor original también (puede ser None)
+                     'roboflow_potholes_count': potholes_count_foto
                  }
-
-                 # Añadir el contexto de esta foto a la lista que irá al template
                  resultados_por_foto_procesados.append(foto_context)
                  # --------------------------------------------------------
 
-             # Asignar la lista procesada a la variable del template
              template_data['fotos_procesadas'] = resultados_por_foto_procesados
-             template_data['fotos_originales'] = fotos_originales_urls # Pasar URLs originales
+             # template_data['fotos_originales'] = fotos_originales_urls # Ya no se usa esta clave separada
              logger.info(f"Se procesaron {len(resultados_por_foto_procesados)} fotos para la plantilla.")
         else:
-             logger.warning(f"'imagenes_procesadas' no es una lista en el JSON. Datos: {type(imagenes_procesadas_json)}")
+             logger.warning(f"\'imagenes_procesadas\' no es una lista en el JSON. Datos: {type(imagenes_procesadas_json)}")
 
-        # === INICIO: MODIFICACIÓN CÁLCULO TOTAL ACUMULADO ===
+        # Calcular total acumulado (Lógica actual mantenida)
         total_racimos_potholes_acumulados = 0
-        # Iterar sobre la lista ya procesada que va al template
         for foto_ctx in resultados_por_foto_procesados:
-            # Sumar el valor 'total_racimos' que ahora proviene de potholes_count (o 0 si era None)
             total_racimos_potholes_acumulados += foto_ctx.get('total_racimos', 0)
-
         template_data['total_racimos_acumulados'] = total_racimos_potholes_acumulados
         logger.info(f"Total racimos acumulados (basado en potholes_count): {total_racimos_potholes_acumulados}")
-        # === FIN: MODIFICACIÓN CÁLCULO TOTAL ACUMULADO ===
+        # === FIN ===
 
 
-        # --- RENDERIZADO FINAL ---
+        # --- RENDERIZADO FINAL (Lógica actual mantenida) ---
         end_time = time.time()
-        template_data['debug_info']['render_time'] = f"{end_time - start_time:.2f}" # Tiempo total de la ruta
-        logger.info(f"Renderizando plantilla 'detalles_clasificacion.html'. Tiempo de ejecución: {template_data['debug_info']['render_time']}s")
+        render_duration = round(end_time - start_time, 2)
+        template_data['debug_info']['render_time'] = f"{render_duration}" # Guardar duración
+        logger.info(f"Renderizando plantilla 'detalles_clasificacion.html'. Tiempo de ejecución: {render_duration}s")
 
-        # Asumiendo que make_response está importado
         response = make_response(render_template('detalles_clasificacion.html', **template_data))
-        # Prevenir caché para asegurar que los datos siempre estén frescos
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         response.headers['Pragma'] = 'no-cache'
         response.headers['Expires'] = '0'
         return response
 
+    # Manejo de errores (Lógica actual mantenida)
     except FileNotFoundError as e:
         logger.error(f"Archivo no encontrado en ver_detalles_clasificacion: {e}")
         flash("No se encontró el archivo de clasificación detallada para esta guía", "error")
         template_data['error'] = f"Error: Archivo no encontrado ({e})."
-        return render_template('detalles_clasificacion.html', **template_data)
+        # Renderizar con error
+        response = make_response(render_template('detalles_clasificacion.html', **template_data))
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        return response
     except json.JSONDecodeError as e:
-        logger.error(f"Error decodificando JSON en ver_detalles_clasificacion ({clasificacion_path}): {e}")
+        json_path_error = template_data.get('json_path', 'Desconocido') # Obtener ruta si existe
+        logger.error(f"Error decodificando JSON en ver_detalles_clasificacion ({json_path_error}): {e}")
         flash("Error al leer los detalles de clasificación. El archivo JSON podría estar corrupto.", "error")
-        template_data['error'] = f"Error leyendo JSON: {e}. Archivo: {clasificacion_path}"
-        return render_template('detalles_clasificacion.html', **template_data)
+        template_data['error'] = f"Error leyendo JSON: {e}. Archivo: {json_path_error}"
+        # Renderizar con error
+        response = make_response(render_template('detalles_clasificacion.html', **template_data))
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        return response
     except Exception as e:
         logger.error(f"Error inesperado en ver_detalles_clasificacion para {url_guia}: {e}")
-        # Asumiendo que traceback está importado
-        logger.error(traceback.format_exc())
+        logger.error(traceback.format_exc()) # Asumiendo traceback importado
         flash("Ocurrió un error inesperado al mostrar los detalles de la clasificación.", "error")
         template_data['error'] = f"Error inesperado: {e}"
-        return render_template('detalles_clasificacion.html', **template_data)
+         # Renderizar con error
+        response = make_response(render_template('detalles_clasificacion.html', **template_data))
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        return response
 # --- FIN DE LA FUNCIÓN PARA COPIAR Y REEMPLAZAR ---
 
 def tu_funcion_que_prepara_contexto(datos_guia):
