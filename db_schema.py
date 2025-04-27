@@ -91,10 +91,13 @@ CREATE TABLE IF NOT EXISTS clasificaciones (
     observaciones TEXT,
     estado TEXT DEFAULT 'activo',
     -- Nuevas columnas para datos consolidados
-    total_racimos_detectados INTEGER, 
+    total_racimos_detectados INTEGER,
     clasificacion_consolidada TEXT, -- JSON con {categoria: {cantidad: X, porcentaje: Y}}
     fecha_actualizacion TEXT,
     hora_actualizacion TEXT,
+    -- Columnas que faltaban para el proceso automático
+    timestamp_fin_auto TEXT,
+    tiempo_procesamiento_auto REAL,
     fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 """
@@ -265,6 +268,9 @@ def create_tables():
         add_column_if_not_exists('clasificaciones', 'fecha_creacion', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
         add_column_if_not_exists('clasificaciones', 'total_racimos_detectados', 'INTEGER')
         add_column_if_not_exists('clasificaciones', 'clasificacion_consolidada', 'TEXT')
+        # Añadir las columnas faltantes para el proceso automático
+        add_column_if_not_exists('clasificaciones', 'timestamp_fin_auto', 'TEXT')
+        add_column_if_not_exists('clasificaciones', 'tiempo_procesamiento_auto', 'REAL')
 
         # pesajes_neto
         add_column_if_not_exists('pesajes_neto', 'timestamp_pesaje_neto_utc', 'TEXT')

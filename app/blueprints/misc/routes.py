@@ -17,7 +17,7 @@ import base64
 import qrcode
 from app.utils.image_processing import process_plate_image
 import pytz
-from app.blueprints.clasificacion.routes import get_clasificacion_by_codigo_guia
+from app.blueprints.clasificacion.processing import get_clasificacion_by_codigo_guia
 # Importar la nueva función de operaciones de presupuesto
 from app.utils.db_budget_operations import obtener_datos_presupuesto
 # Importar funciones de db_operations y db_utils desde la raíz

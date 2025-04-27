@@ -244,6 +244,11 @@
 
     {% if fotos_procesadas %}
         {% for foto in fotos_procesadas %}
+        {# --- DEBUG: Inspeccionar la variable foto --- #}
+        <div class="alert alert-secondary small my-2">
+            DEBUG FOTO {{ loop.index }}: Tipo={{ foto.__class__.__name__ }} | Claves={{ foto.keys()|list }}
+        </div>
+        {# --- FIN DEBUG --- #}
         {% set total_racimos_foto_base = foto.total_racimos|default(0)|int %}
         <div class="card mb-4 foto-detalle-card" id="foto-{{ foto.numero }}">
             <div class="card-header bg-light">
@@ -266,15 +271,18 @@
                         </div>
                     </div>
                     <div class="col-md-4">
-                        <h6 class="mb-3">Imagen Anotada (Local - BBoxes)</h6>
+                        <h6 class="mb-3">Imagen Procesada (Conteos - label_viz)</h6> 
                         <div class="img-container">
+                            <!-- DEBUG: Valor de foto.imagen_annotated: [{{ foto.imagen_annotated }}] -->
+                            <p>DEBUG ANTES IF: Valor de foto.imagen_annotated = [{{ foto.imagen_annotated }}]</p> {# <-- DEBUG PRINT #}
                             {% if foto.imagen_annotated %}
+                                <p>DEBUG: IF es TRUE</p> {# <-- DEBUG PRINT #}
                                 {# Ya es una URL completa, no necesita url_for ni replace #}
-                                <img src="{{ foto.imagen_annotated }}" alt="Imagen Anotada Local {{ foto.numero }}" class="img-fluid">
+                                <img src="{{ foto.imagen_annotated }}" alt="Imagen Procesada Conteos {{ foto.numero }}" class="img-fluid">
                             {% else %}
                                 <div class="alert alert-warning">
                                     <i class="fas fa-exclamation-triangle me-2"></i>
-                                    No hay imagen anotada (local) disponible.
+                                    No hay imagen procesada (conteos) disponible.
                                 </div>
                             {% endif %}
                         </div>

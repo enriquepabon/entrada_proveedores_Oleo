@@ -111,18 +111,14 @@
     {% endif %}
     
     <div class="actions-bar">
-        <a href="{{ url_for('clasificacion.mostrar_resultados_automaticos', url_guia=url_guia) }}" 
-           class="btn btn-primary">
-            <i class="fas fa-arrow-left me-2"></i>Volver a Resultados
+        <a href="{{ url_for('clasificacion.ver_resultados_clasificacion', url_guia=url_guia) }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Volver a Resultados Generales
         </a>
-        <a href="{{ url_for('clasificacion.regenerar_imagenes', url_guia=url_guia) }}" 
-           class="btn btn-success">
-            <i class="fas fa-sync-alt me-2"></i>Regenerar Imágenes
-        </a>
-        <a href="{{ url_for('clasificacion.test_annotated_image', url_guia=url_guia) }}" 
+        {# Comentando el enlace problemático #}
+        {# <a href="{{ url_for('clasificacion.mostrar_resultados_automaticos', url_guia=url_guia) }}"
            class="btn btn-info">
-            <i class="fas fa-vial me-2"></i>Generar Imagen de Prueba
-        </a>
+            <i class="fas fa-sync-alt"></i> Recargar / Ver Resultados Automáticos
+        </a> #}
     </div>
     
     <div class="card mb-4">
@@ -144,22 +140,24 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% set total_detecciones = 0 %}
+                            {% set total_base_para_porcentaje_global = total_racimos_acumulados|default(0)|int %}
                             {% set categorias = {} %}
-                            
+
                             {% for foto in fotos_procesadas %}
                                 {% for cat, datos in foto.conteo_categorias.items() %}
-                                    {% if datos.cantidad > 0 %}
+                                    {% if datos is mapping and 'cantidad' in datos and datos.cantidad is number and datos.cantidad > 0 %}
+                                        {% set current_cantidad = datos.cantidad | int %}
                                         {% if cat not in categorias %}
-                                            {% set _ = categorias.update({cat: datos.cantidad}) %}
+                                            {% set _ = categorias.update({cat: current_cantidad}) %}
                                         {% else %}
-                                            {% set _ = categorias.update({cat: categorias[cat] + datos.cantidad}) %}
+                                            {% set _ = categorias.update({cat: categorias[cat] + current_cantidad}) %}
                                         {% endif %}
-                                        {% set total_detecciones = total_detecciones + datos.cantidad %}
                                     {% endif %}
                                 {% endfor %}
                             {% endfor %}
-                            
+
+                            {% set total_categorias_sumadas = categorias.values() | sum %}
+
                             {% for cat, count in categorias.items() %}
                                 <tr>
                                     <td>
@@ -168,8 +166,8 @@
                                     </td>
                                     <td>{{ count }}</td>
                                     <td>
-                                        {% if total_detecciones > 0 %}
-                                            {{ ((count / total_detecciones) * 100)|round(1) }}%
+                                        {% if total_base_para_porcentaje_global > 0 %}
+                                            {{ ((count / total_base_para_porcentaje_global) * 100)|round(1) }}%
                                         {% else %}
                                             0%
                                         {% endif %}
@@ -178,7 +176,7 @@
                             {% endfor %}
                             <tr class="table-light">
                                 <td><strong>Total</strong></td>
-                                <td colspan="2"><strong>{{ total_detecciones }}</strong></td>
+                                <td colspan="2"><strong>{{ total_base_para_porcentaje_global }} racimos</strong></td>
                             </tr>
                         </tbody>
                     </table>
@@ -192,7 +190,11 @@
                         </span>
                         <span class="stats-badge bg-success text-white">
                             <i class="fas fa-tags me-2"></i>
-                            {{ total_detecciones }} Detecciones totales
+                            {{ total_base_para_porcentaje_global }} Racimos ('potholes')
+                        </span>
+                        <span class="stats-badge bg-secondary text-white">
+                            <i class="fas fa-list me-2"></i>
+                            {{ total_categorias_sumadas }} Detecciones (categorías)
                         </span>
                     </div>
                     <div>
@@ -211,6 +213,7 @@
 
     {% if fotos_procesadas %}
         {% for foto in fotos_procesadas %}
+        {% set total_racimos_foto_base = foto.total_racimos|default(0)|int %}
         <div class="card mb-4 foto-detalle-card" id="foto-{{ foto.numero }}">
             <div class="card-header bg-light">
                 <strong>Foto {{ foto.numero }}</strong>
@@ -232,11 +235,10 @@
                         </div>
                     </div>
                     <div class="col-md-4">
-                        <h6 class="mb-3">Imagen Procesada (Conteos)</h6>
+                        <h6 class="mb-3">Imagen Procesada (Conteos - label_viz)</h6> 
                         <div class="img-container">
-                            {% if foto.imagen_procesada %}
-                                {% set proc_img_path = foto.imagen_procesada.replace('/static/', '', 1) %}
-                                <img src="{{ url_for('static', filename=proc_img_path) }}" alt="Imagen Procesada {{ foto.numero }}" class="img-fluid">
+                            {% if foto.imagen_annotated is defined and foto.imagen_annotated is not none and foto.imagen_annotated|length > 0 %}
+                                <img src="{{ foto.imagen_annotated }}" alt="Imagen Procesada Conteos {{ foto.numero }}" class="img-fluid">
                             {% else %}
                                 <div class="alert alert-warning">
                                     <i class="fas fa-exclamation-triangle me-2"></i>
@@ -248,9 +250,8 @@
                     <div class="col-md-4">
                         <h6 class="mb-3">Imagen Clasificada (Etiquetas)</h6>
                         <div class="img-container">
-                            {% if foto.imagen_clasificada %}
-                                {% set classified_img_path = foto.imagen_clasificada.replace('/static/', '', 1) %}
-                                <img src="{{ url_for('static', filename=classified_img_path) }}" alt="Imagen Clasificada {{ foto.numero }}" class="img-fluid">
+                            {% if foto.imagen_clasificada is defined and foto.imagen_clasificada is not none and foto.imagen_clasificada|length > 0 %}
+                                <img src="{{ foto.imagen_clasificada }}" alt="Imagen Clasificada {{ foto.numero }}" class="img-fluid">
                             {% else %}
                                 <div class="alert alert-warning">
                                     <i class="fas fa-exclamation-triangle me-2"></i>
@@ -263,9 +264,8 @@
                 
                 <div class="row mt-4">
                     <div class="col-md-6">
-                        <h6 class="mb-3">Distribución de Categorías</h6>
-                        {% set total_det = foto.total_detecciones %}
-                        {% if total_det > 0 %}
+                        <h6 class="mb-3">Total Racimos Detectados en la Foto: {{ total_racimos_foto_base }}</h6>
+                        {% if total_racimos_foto_base > 0 %}
                             <table class="table table-sm">
                                 <thead>
                                     <tr>
@@ -276,47 +276,22 @@
                                 </thead>
                                 <tbody>
                                     {% for cat, datos in foto.conteo_categorias.items() %}
-                                        {% if datos.cantidad > 0 %}
+                                        {% if datos is mapping and 'cantidad' in datos and datos.cantidad is number and datos.cantidad > 0 %}
+                                            {% set count_cat_foto = datos.cantidad | int %}
                                             <tr>
                                                 <td>
                                                     <span class="category-circle bg-{{ cat }}"></span>
                                                     {{ cat|title|replace('_', ' ') }}
                                                 </td>
-                                                <td>{{ datos.cantidad }}</td>
-                                                <td>{{ datos.porcentaje }}%</td>
+                                                <td>{{ count_cat_foto }}</td>
+                                                <td>
+                                                    {{ ((count_cat_foto / total_racimos_foto_base) * 100)|round(1) }}%
+                                                </td>
                                             </tr>
                                         {% endif %}
                                     {% endfor %}
                                 </tbody>
                             </table>
-                        {% else %}
-                            <div class="alert alert-info">
-                                <i class="fas fa-info-circle me-2"></i>
-                                No hay detecciones para esta foto.
-                            </div>
-                        {% endif %}
-                    </div>
-                    <div class="col-md-6">
-                        <h6 class="mb-3">Detalle de Detecciones</h6>
-                        {% if foto.detecciones|length > 0 %}
-                            <div class="detection-list">
-                                {% for det in foto.detecciones %}
-                                    <div class="detection-item {{ det.class }}">
-                                        <h6>{{ det.class|title|replace('_', ' ') }}</h6>
-                                        <div class="row">
-                                            <div class="col-6">
-                                                <strong>Confianza:</strong> {{ det.confidence|round(2) }}
-                                            </div>
-                                            <div class="col-6">
-                                                <strong>Posición:</strong> ({{ det.x|round }}, {{ det.y|round }})
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <strong>Dimensiones:</strong> {{ det.width|round }}x{{ det.height|round }}
-                                        </div>
-                                    </div>
-                                {% endfor %}
-                            </div>
                         {% else %}
                             <div class="alert alert-info">
                                 <i class="fas fa-info-circle me-2"></i>

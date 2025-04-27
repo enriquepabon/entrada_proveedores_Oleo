@@ -871,6 +871,10 @@ def get_estado_guia(codigo_guia):
     elif datos_guia.get('clasificacion_manual_json') and datos_guia.get('clasificacion_manual_json') not in ('{}', 'null', None, ''):
          clasificacion_completada = True
          logger.debug(f"EstadoGuia({codigo_guia}): Clasificación marcada como completada por clasificacion_manual_json no vacía existente.")
+    # Criterio 3: Existe clasificación automática significativa (solo si NO es 'pepa' y los otros criterios fallaron)
+    elif datos_guia.get('clasificacion_automatica_json') and datos_guia.get('clasificacion_automatica_json') not in ('{}', 'null', None, ''):
+         clasificacion_completada = True
+         logger.debug(f"EstadoGuia({codigo_guia}): Clasificación marcada como completada por clasificacion_automatica_json no vacía existente.")
     
     if clasificacion_completada:
         pasos_completados.append('clasificacion')

@@ -1,0 +1,293 @@
+@bp.route('/api/dashboard/stats', methods=['GET'])
+def dashboard_stats():
+    """
+    Calcula y muestra estadísticas agregadas para el dashboard principal.
+    Incluye conteos de guías, estados, calidad manual y automática.
+    Lee datos automáticos desde clasificacion_consolidada (JSON) y total_racimos_detectados.
+    """
+    # --- Forzar nivel DEBUG para este logger específico --- 
+    logger.setLevel(logging.DEBUG)
+    # ----------------------------------------------------
+    logger.info("--- Iniciando /api/dashboard/stats --- Nivel DEBUG Forzado --- ") # Añadir marca a log
+    start_time_func = time.time() # Para medir tiempo total
+
+    try:
+        # --- Obtención y Validación de Fechas ---
+        start_date_str = request.args.get('start_date')
+        end_date_str = request.args.get('end_date')
+        today = datetime.now(BOGOTA_TZ).date() # Usar zona horaria de Bogotá
+        logger.info(f"[Dashboard Stats] Fechas solicitadas - Inicio: {start_date_str}, Fin: {end_date_str}")
+
+        # Parsear fecha de inicio o usar primer día del mes actual
+        if start_date_str:
+            try:
+                start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                logger.warning(f"Formato de fecha de inicio inválido '{start_date_str}'. Usando primer día del mes.")
+                start_date = today.replace(day=1)
+        else:
+            start_date = today.replace(day=1)
+            logger.info("Fecha de inicio no proporcionada. Usando primer día del mes actual.")
+
+        # Parsear fecha de fin o usar hoy
+        if end_date_str:
+            try:
+                end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                logger.warning(f"Formato de fecha de fin inválido '{end_date_str}'. Usando fecha actual.")
+                end_date = today
+        else:
+            end_date = today
+            logger.info("Fecha de fin no proporcionada. Usando fecha actual.")
+
+        # Asegurar que start_date no sea posterior a end_date
+        if start_date > end_date:
+            logger.warning(f"Fecha de inicio ({start_date}) posterior a fecha de fin ({end_date}). Intercambiando.")
+            start_date, end_date = end_date, start_date
+
+        logger.info(f"[Dashboard Stats] Rango de fechas final: {start_date} a {end_date}")
+
+        # Convertir fechas de inicio y fin a objetos datetime conscientes de la zona horaria (Bogotá)
+        # para comparar con timestamps UTC almacenados en la BD.
+        start_datetime_bogota = BOGOTA_TZ.localize(datetime.combine(start_date, dt_time.min)) # Usar dt_time
+        end_datetime_bogota = BOGOTA_TZ.localize(datetime.combine(end_date, dt_time.max)) # Usar dt_time
+
+        # Convertir a UTC para la consulta SQL, ya que los timestamps están en UTC
+        start_datetime_utc = start_datetime_bogota.astimezone(UTC)
+        end_datetime_utc = end_datetime_bogota.astimezone(UTC)
+        start_timestamp_utc_str = start_datetime_utc.strftime('%Y-%m-%d %H:%M:%S')
+        end_timestamp_utc_str = end_datetime_utc.strftime('%Y-%m-%d %H:%M:%S')
+
+        logger.info(f"[Dashboard Stats] Rango UTC para consulta DB: {start_timestamp_utc_str} a {end_timestamp_utc_str}")
+
+        # --- Consulta a la Base de Datos ---
+        # Usar db_operations.get_clasificaciones con filtros de fecha UTC
+        filtros_db = {
+            'timestamp_desde_utc': start_timestamp_utc_str,
+            'timestamp_hasta_utc': end_timestamp_utc_str
+            # Podrías añadir más filtros aquí si es necesario (ej. proveedor)
+            # 'codigo_proveedor': request.args.get('codigo_proveedor')
+        }
+        # Filtrar Nones del diccionario de filtros
+        filtros_db = {k: v for k, v in filtros_db.items() if v is not None}
+
+        clasificaciones_db = db_operations.get_clasificaciones(filtros=filtros_db)
+        total_guias_clasificadas = len(clasificaciones_db)
+        logger.info(f"[Dashboard Stats] {total_guias_clasificadas} registros de clasificación encontrados en DB para el rango.")
+
+        # Podríamos necesitar consultar `entry_records` o `pesajes_bruto` si `clasificaciones` no tiene toda la info
+        # Por ahora, asumimos que la tabla `clasificaciones` tiene lo necesario o se complementa.
+
+        # --- Inicialización de Contadores y Sumas ---
+        # Contadores de estado (Ejemplo, ajustar según necesidad real)
+        # Estos podrían venir de otra tabla o calcularse diferente
+        guias_recibidas = 0 # Ejemplo
+        guias_procesadas = 0 # Ejemplo
+        guias_pendientes = 0 # Ejemplo
+        guias_con_error = 0 # Ejemplo
+
+        num_guias_con_clasif_manual = 0
+        num_guias_con_clasif_automatica = 0
+
+        # Sumas para calidad manual y automática
+        # Asegúrate que estas claves son exactamente las que usas consistentemente
+        categorias_calidad = ['Verde', 'Pinton', 'Maduro', 'Sobremaduro', 'Enfermo', 'Vacio', 'Pedunculo Largo', 'Danio Corona', 'Podrido']
+        calidad_sumas_manual = {cat: 0 for cat in categorias_calidad}
+        calidad_sumas_automatica = {cat: 0 for cat in categorias_calidad}
+
+        # Mapeo de claves internas (usadas en el JSON de helpers.py) a claves de visualización
+        category_mapping_display = {
+            'verde': 'Verde',
+            'pinton': 'Pinton',
+            'maduro': 'Maduro',
+            'sobremaduro': 'Sobremaduro',
+            'enfermo': 'Enfermo',
+            'vacio': 'Vacio',
+            'pedunculo_largo': 'Pedunculo Largo',
+            'danio_corona': 'Danio Corona',
+            'podrido': 'Podrido'
+        }
+        # Invertir mapeo para buscar en JSON usando clave de display si fuera necesario (opcional)
+        # display_to_internal_mapping = {v: k for k, v in category_mapping_display.items()}
+
+        total_racimos_manuales_sumados = 0
+        total_racimos_automaticos_sumados = 0 # Totalizador específico para racimos automáticos
+
+        # --- Procesamiento de cada Guía/Clasificación ---
+        for i, clasificacion_record in enumerate(clasificaciones_db): # Add enumerate
+            codigo_guia_actual = clasificacion_record.get('codigo_guia')
+            logger.debug(f"[Dashboard Loop Record {i+1}/{total_guias_clasificadas}] Guía: {codigo_guia_actual}") # Log guía
+
+            # Aquí podrías incrementar contadores de estado si la info está en este record
+            # Ejemplo: estado_actual = clasificacion_record.get('estado_actual_guia') # Suponiendo que se añade a la consulta
+            # if estado_actual == 'RECIBIDA': guias_recibidas += 1 ... etc.
+
+            # --- Procesamiento Calidad Manual ---
+            manual_json_str = clasificacion_record.get('clasificacion_manual_json')
+            logger.debug(f"  Manual JSON Raw: {manual_json_str}") # Log raw manual
+            if manual_json_str:
+                try:
+                    manual_data = json.loads(manual_json_str)
+                    logger.debug(f"  Manual JSON Parsed: {manual_data}") # Log parsed manual
+                    # Verificar si hay datos manuales válidos
+                    tiene_datos_manuales = isinstance(manual_data, dict) and any(
+                        isinstance(v, (int, float)) and v > 0 for v in manual_data.values()
+                    )
+                    logger.debug(f"  Tiene Datos Manuales > 0: {tiene_datos_manuales}") # Log check
+
+                    if tiene_datos_manuales:
+                        num_guias_con_clasif_manual += 1
+                        
+                        # --- INICIO CORRECCIÓN MANUAL --- 
+                        # Mapeo para claves manuales (ajustar si hay más variaciones en tus JSON)
+                        manual_key_mapping = {
+                            'verdes': 'Verde',
+                            'sobremaduros': 'Sobremaduro',
+                            'danio_corona': 'Danio Corona', 
+                            'dano_corona': 'Danio Corona', # Mapear ambas posibles escrituras
+                            'pedunculo_largo': 'Pedunculo Largo',
+                            'podridos': 'Podrido',
+                            'maduros': 'Maduro',
+                            'pintones': 'Pinton',
+                            'enfermos': 'Enfermo',
+                            'vacios': 'Vacio'
+                            # Añadir más si es necesario
+                        }
+                        # --- FIN CORRECCIÓN MANUAL ---
+                        
+                        for key_manual, cantidad_manual in manual_data.items():
+                            # --- INICIO CORRECCIÓN MANUAL --- 
+                            # Normalizar y mapear la clave leída del JSON manual
+                            display_key_manual = manual_key_mapping.get(key_manual.lower().strip()) 
+                            # --- FIN CORRECCIÓN MANUAL ---
+                            
+                            # Usar la clave mapeada para verificar y sumar
+                            if display_key_manual and display_key_manual in calidad_sumas_manual and isinstance(cantidad_manual, (int, float)):
+                                cantidad_validada = cantidad_manual if cantidad_manual >= 0 else 0 # Asegurar no negativos
+                                calidad_sumas_manual[display_key_manual] += cantidad_validada # Usar clave mapeada
+                                total_racimos_manuales_sumados += cantidad_validada # Sumar al total manual
+                                logger.debug(f"    Manual Suma: +{cantidad_validada} a {display_key_manual}. Total Manual: {total_racimos_manuales_sumados}") # Log suma manual
+                            # else: # Log opcional si clave/tipo no coincide
+                                # logger.debug(f"    Manual Skip: Clave JSON '{key_manual}' (mapeada a '{display_key_manual}') no en sumas o tipo '{type(cantidad_manual)}' inválido.")
+
+                except (json.JSONDecodeError, TypeError) as e:
+                    logger.warning(f"Guía {codigo_guia_actual}: Error procesando clasificacion_manual_json: {e}. JSON: {manual_json_str}")
+
+            # --- Procesamiento Calidad Automática (NUEVA LÓGICA) ---
+            consolidado_str = clasificacion_record.get('clasificacion_consolidada') # Campo JSON nuevo
+            total_detectados = clasificacion_record.get('total_racimos_detectados') # Campo numérico nuevo
+            logger.debug(f"  Auto Consolidado Raw: {consolidado_str}") # Log raw auto
+            logger.debug(f"  Auto Total Detectados Raw: {total_detectados}") # Log raw total
+
+            if consolidado_str and total_detectados is not None:
+                try:
+                    total_detectados_num = int(total_detectados) # Convertir a número
+                    logger.debug(f"  Auto Total Detectados Numérico: {total_detectados_num}") # Log numérico total
+                    if total_detectados_num >= 0: # Permitir 0 racimos detectados
+                        consolidado_json = json.loads(consolidado_str)
+                        logger.debug(f"  Auto Consolidado Parsed: {consolidado_json}") # Log parsed auto
+                        if isinstance(consolidado_json, dict):
+                            # Incrementar contador solo si hubo detección real (>0) ? O siempre que hubo proceso?
+                            # Decidimos: contar si el proceso se corrió (hay JSON) y hubo >0 racimos detectados
+                            if total_detectados_num > 0:
+                                num_guias_con_clasif_automatica += 1
+                            total_racimos_automaticos_sumados += total_detectados_num # Sumar el total detectado (puede ser 0)
+                            logger.debug(f"  Auto Suma Total Racimos: +{total_detectados_num}. Acumulado Auto: {total_racimos_automaticos_sumados}") # Log suma total auto
+
+                            # Iterar sobre el mapeo para buscar claves internas en el JSON
+                            for internal_key, display_key in category_mapping_display.items():
+                                # Buscar la clave interna (e.g., 'verde') en el JSON
+                                categoria_data = consolidado_json.get(internal_key)
+                                logger.debug(f"    Auto Buscando Cat: '{internal_key}' -> Data: {categoria_data}") # Log búsqueda cat
+
+                                if isinstance(categoria_data, dict):
+                                    cantidad_auto = categoria_data.get('cantidad', 0)
+                                    logger.debug(f"      Auto Cantidad encontrada: {cantidad_auto} (Tipo: {type(cantidad_auto)})") # Log cantidad encontrada
+                                    # Asegurar que la clave de display existe y la cantidad es numérica
+                                    if display_key in calidad_sumas_automatica and isinstance(cantidad_auto, (int, float)):
+                                        cantidad_validada = cantidad_auto if cantidad_auto >= 0 else 0 # No negativos
+                                        calidad_sumas_automatica[display_key] += cantidad_validada
+                                        logger.debug(f"      Auto Suma Cat: +{cantidad_validada} a {display_key}") # Log suma cat
+                                    else:
+                                         # Log menos verboso, solo si hay un problema real
+                                         if display_key not in calidad_sumas_automatica:
+                                             logger.warning(f"Guía {codigo_guia_actual}: Clave display '{display_key}' del mapeo no encontrada en diccionario de sumas.")
+                                         elif not isinstance(cantidad_auto, (int, float)):
+                                             logger.warning(f"Guía {codigo_guia_actual}: Cantidad para '{internal_key}' ('{display_key}') no numérica: {cantidad_auto}")
+                                # else: # Log opcional si la clave interna no está o no es dict
+                                    # logger.debug(f"    Auto Skip Cat: Clave interna '{internal_key}' no encontrada o no es dict en consolidado.")
+
+                        else:
+                             logger.warning(f"Guía {codigo_guia_actual}: clasificacion_consolidada no es un diccionario JSON válido: {consolidado_str}")
+                    # else: # Log opcional si total_detectados es negativo (error de dato)
+                        # logger.warning(f"Guía {codigo_guia_actual}: total_racimos_detectados es negativo ({total_detectados_num}).")
+
+                except (json.JSONDecodeError, ValueError, TypeError) as e:
+                    logger.error(f"Guía {codigo_guia_actual}: Error procesando datos automáticos. JSON: '{consolidado_str}', Total Detectados: '{total_detectados}'. Error: {e}")
+            # else: # Log opcional si faltan datos automáticos
+                 # logger.debug(f"  Auto Skip Record: Falta clasificacion_consolidada ('{bool(consolidado_str)}') o total_racimos_detectados ('{total_detectados is not None}').")
+
+            # Log al final de cada iteración para ver sumas acumuladas parciales
+            if (i + 1) % 10 == 0 or i == total_guias_clasificadas - 1: # Log cada 10 o al final
+                logger.debug(f"  [Fin Iteración {i+1}] Sumas Manual Parcial: {calidad_sumas_manual}")
+                logger.debug(f"  [Fin Iteración {i+1}] Sumas Auto Parcial: {calidad_sumas_automatica}")
+                logger.debug(f"  [Fin Iteración {i+1}] Total Racimos Manual Parcial: {total_racimos_manuales_sumados}")
+                logger.debug(f"  [Fin Iteración {i+1}] Total Racimos Auto Parcial: {total_racimos_automaticos_sumados}")
+
+        # --- Cálculos Finales (Promedios/Porcentajes) ---
+        logger.info("[Dashboard Stats] Cálculos finales de promedios...") # Log antes de promedios
+
+        # Calidad Manual
+        calidad_promedios_manual = {
+            cat: round((cantidad / total_racimos_manuales_sumados * 100), 1) if total_racimos_manuales_sumados > 0 else 0
+            for cat, cantidad in calidad_sumas_manual.items()
+        }
+
+        # Calidad Automática (usando el nuevo totalizador)
+        calidad_promedios_automatica = {
+            cat: round((cantidad / total_racimos_automaticos_sumados * 100), 1) if total_racimos_automaticos_sumados > 0 else 0
+            for cat, cantidad in calidad_sumas_automatica.items()
+        }
+
+        # --- Preparación de Datos para la Respuesta JSON ---
+        response_data = {
+            "filtros_aplicados": {
+                "fecha_desde": start_date.strftime('%Y-%m-%d'),
+                "fecha_hasta": end_date.strftime('%Y-%m-%d')
+                # Añadir otros filtros si se implementan
+                # "codigo_proveedor": request.args.get('codigo_proveedor')
+            },
+            "resumen_general": {
+                "total_guias_periodo": total_guias_clasificadas, # O total de guías de entrada si se consulta esa tabla
+                # Contadores de ejemplo, reemplazar con lógica real si se necesita
+                "guias_recibidas": guias_recibidas,
+                "guias_procesadas": guias_procesadas,
+                "guias_pendientes": guias_pendientes,
+                "guias_con_error": guias_con_error,
+                # Contadores reales basados en el procesamiento
+                "guias_con_clasif_manual": num_guias_con_clasif_manual,
+                "guias_con_clasif_automatica": num_guias_con_clasif_automatica # Basado en >0 racimos
+            },
+            "calidad_manual": {
+                "sumas": calidad_sumas_manual,
+                "total_racimos": round(total_racimos_manuales_sumados, 2), # Redondear total
+                "promedios": calidad_promedios_manual
+            },
+            "calidad_automatica": {
+                "sumas": calidad_sumas_automatica,
+                "total_racimos": round(total_racimos_automaticos_sumados, 2), # Usar el total automático sumado y redondear
+                "promedios": calidad_promedios_automatica
+            },
+            # Puedes añadir más secciones si es necesario (ej. top proveedores, etc.)
+            # Ejemplo (requeriría lógica adicional):
+            # "top_proveedores_volumen": [
+            #      {"codigo": "123A", "nombre": "Proveedor A", "racimos": 500}, ...
+            # ],
+            # "top_5_peso_neto_tabla": [
+            #      # ...
+            # ],
+            #  "alertas_calidad_tabla": [
+            #      # ...
+            #  ]
+
+        }
