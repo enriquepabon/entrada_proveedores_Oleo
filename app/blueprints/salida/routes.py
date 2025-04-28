@@ -7,6 +7,7 @@ import json
 import sqlite3
 from app.blueprints.salida import bp
 from app.utils.common import CommonUtils as Utils
+from flask_login import login_required
 
 # Configurar logging
 logger = logging.getLogger(__name__)
@@ -69,6 +70,7 @@ def ensure_salidas_schema():
             conn.close()
 
 @bp.route('/registro_salida/<codigo_guia>')
+@login_required
 def registro_salida(codigo_guia):
     """
     Muestra la vista de registro de salida para una guía específica.
@@ -108,6 +110,7 @@ def registro_salida(codigo_guia):
         return render_template('error.html', message=f"Error al mostrar registro de salida: {str(e)}")
 
 @bp.route('/completar_registro_salida', methods=['POST'])
+@login_required
 def completar_registro_salida():
     """
     Procesa el formulario de registro de salida y completa el proceso.
@@ -273,6 +276,7 @@ def completar_registro_salida():
             conn.close()
 
 @bp.route('/ver_resultados_salida/<codigo_guia>')
+@login_required
 def ver_resultados_salida(codigo_guia):
     """
     Muestra los resultados del registro de salida para una guía específica.
@@ -343,6 +347,7 @@ def ver_resultados_salida(codigo_guia):
 # 
 
 @bp.route('/debug_logs')
+@login_required
 def debug_logs():
     """
     Ruta de debug para verificar logs recientes.

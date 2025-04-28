@@ -9,6 +9,7 @@ import sqlite3
 import pytz
 from app.blueprints.pesaje_neto import bp
 from app.utils.common import CommonUtils as Utils
+from flask_login import login_required
 
 # Configurar logging
 logger = logging.getLogger(__name__)
@@ -118,6 +119,7 @@ def ensure_pesajes_neto_schema():
         return False
 
 @bp.route('/ver_resultados_pesaje_neto/<codigo_guia>')
+@login_required
 def ver_resultados_pesaje_neto(codigo_guia):
     """
     Muestra los resultados del pesaje neto para una guía específica.
@@ -176,6 +178,7 @@ def ver_resultados_pesaje_neto(codigo_guia):
         return render_template('error.html', message=f"Error al mostrar resultados: {str(e)}")
 
 @bp.route('/registrar_peso_neto_directo', methods=['POST'])
+@login_required
 def registrar_peso_neto_directo():
     """Registra el peso neto para una guía específica usando el método directo."""
     
@@ -367,6 +370,7 @@ def registrar_peso_neto_directo():
         }), 500 # Internal Server Error
 
 @bp.route('/registrar_peso_neto', methods=['POST'])
+@login_required
 def registrar_peso_neto():
     """Registra el peso neto para una guía específica."""
     
@@ -526,6 +530,7 @@ def registrar_peso_neto():
             conn.close()
 
 @bp.route('/pesaje/<codigo_guia>')
+@login_required
 def pesaje_neto(codigo_guia):
     """Muestra el formulario de pesaje neto."""
     try:

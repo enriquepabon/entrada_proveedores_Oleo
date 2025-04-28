@@ -11,6 +11,7 @@ from werkzeug.utils import secure_filename
 from flask import current_app
 from app.utils.image_processing import process_plate_image
 from app.blueprints.misc.routes import allowed_file # Assuming allowed_file is in misc/routes.py
+from flask_login import login_required
 
 # Configurar logging
 logger = logging.getLogger(__name__)
@@ -23,6 +24,7 @@ PROCESS_WEBHOOK_URL = os.environ.get("PROCESS_WEBHOOK_URL", "default_process_url
 REVALIDATION_WEBHOOK_URL = os.environ.get("REVALIDATION_WEBHOOK_URL", "default_revalidation_url")
 
 @bp.route('/test_webhook', methods=['GET'])
+@login_required
 def test_webhook():
     """
     Ruta de prueba para verificar la conectividad con el webhook.
@@ -43,6 +45,7 @@ def test_webhook():
 
 
 @bp.route('/test_revalidation', methods=['GET'])
+@login_required
 def test_revalidation():
     test_payload = {
         "modificaciones": [
@@ -72,6 +75,7 @@ def test_revalidation():
 
 
 @bp.route('/verificar_placa', methods=['POST'])
+@login_required
 def verificar_placa():
     """
     Procesa una imagen para verificar si la placa detectada coincide con la placa registrada.
@@ -164,6 +168,7 @@ def verificar_placa():
 
 
 @bp.route('/api/dashboard/proveedores', methods=['GET'])
+@login_required
 def get_dashboard_proveedores():
     """
     API para obtener la lista única de pares (código, nombre) de proveedores

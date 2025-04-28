@@ -24,6 +24,8 @@ import ssl
 from requests.adapters import HTTPAdapter
 from urllib3.poolmanager import PoolManager
 # --- FIN NUEVOS IMPORTS ---
+# Importar login_required
+from flask_login import login_required
 
 # Configurar logging
 logger = logging.getLogger(__name__)
@@ -42,6 +44,7 @@ def get_bogota_datetime():
     return now_bogota.strftime('%d/%m/%Y'), now_bogota.strftime('%H:%M:%S')
 
 @bp.route('/index')
+@login_required # Añadir protección
 def index():
     """
     Renders the index page
@@ -51,6 +54,7 @@ def index():
 
 
 @bp.route('/home')
+@login_required # Añadir protección
 def home():
     """
     Renders the home page - dashboard for all app sections
@@ -60,6 +64,7 @@ def home():
 
 
 @bp.route('/processing')
+@login_required # Añadir protección
 def processing():
     image_filename = session.get('image_filename')
     if not image_filename:
@@ -69,6 +74,7 @@ def processing():
 
 
 @bp.route('/process_image', methods=['POST'])
+@login_required # Añadir protección
 def process_image():
     try:
         # Verificar si hay datos en la sesión
@@ -277,6 +283,7 @@ def process_plate_image(image_path, filename):
 
 
 @bp.route('/review', methods=['GET'])
+@login_required # Añadir protección
 def review():
     parsed_data = session.get('parsed_data', {})
     image_filename = session.get('image_filename', '')
@@ -306,6 +313,7 @@ def review():
 
 
 @bp.route('/update_data', methods=['POST'])
+@login_required # Añadir protección
 def update_data():
     """
     Envía todos los datos al webhook de revalidación y procesa la respuesta.
@@ -487,6 +495,7 @@ def update_data():
 
 
 @bp.route('/processing', methods=['GET'])
+@login_required # Añadir protección
 def processing_screen():
     """
     Pantalla de carga mientras se procesa la revalidación.
@@ -586,6 +595,7 @@ def generate_pdf(parsed_data, image_filename, fecha_procesamiento, hora_procesam
 
 
 @bp.route('/register', methods=['POST'])
+@login_required # Añadir protección
 def register():
     try:
         logger.info("Iniciando proceso de registro")
@@ -737,6 +747,7 @@ def register():
 
 
 @bp.route('/review_pdf')
+@login_required # Añadir protección
 def review_pdf():
     """
     Vista para mostrar el PDF antes de registrarlo
@@ -1042,6 +1053,7 @@ def review_pdf():
 
 
 @bp.route('/registros-entrada', methods=['GET'])
+@login_required # Añadir protección
 def lista_registros_entrada():
     """
     Muestra la lista de registros de entrada.
@@ -1223,6 +1235,7 @@ def obtener_registros_desde_archivos(filtros):
 
 
 @bp.route('/registro-entrada/<codigo_guia>', methods=['GET', 'POST'])
+@login_required # Añadir protección
 def ver_registro_entrada(codigo_guia):
     """
     Muestra los detalles de un registro de entrada específico.
@@ -1299,6 +1312,7 @@ def ver_registro_entrada(codigo_guia):
 
 # Nuevas rutas experimentales con feature flags
 @bp.route('/nueva-entrada')
+@login_required # Añadir protección
 def nueva_entrada():
     """
     Ruta experimental para el nuevo formulario de entrada
@@ -1310,6 +1324,7 @@ def nueva_entrada():
         return redirect(url_for('misc.upload_file'))
 
 @bp.route('/entradas')
+@login_required # Añadir protección
 def lista_entradas():
     """
     Ruta para la lista de entradas
@@ -1400,6 +1415,7 @@ def lista_entradas():
         return redirect(url_for('misc.upload_file'))
 
 @bp.route('/entrada/<codigo_guia>')
+@login_required # Añadir protección
 def ver_entrada(codigo_guia):
     """
     Redirige a la vista centralizada de guía
@@ -1408,6 +1424,7 @@ def ver_entrada(codigo_guia):
     return redirect(url_for('misc.ver_guia_alternativa', codigo_guia=codigo_guia))
 
 @bp.route('/guia/<codigo_guia>')
+@login_required # Añadir protección
 def ver_guia_estado(codigo_guia):
     """
     Redirige a la vista centralizada de guía
@@ -1416,6 +1433,7 @@ def ver_guia_estado(codigo_guia):
     return redirect(url_for('misc.ver_guia_alternativa', codigo_guia=codigo_guia))
 
 @bp.route('/registrar-entrada', methods=['POST'])
+@login_required # Añadir protección
 def registrar_entrada():
     """
     Ruta experimental para procesar el formulario de nueva entrada
@@ -1531,6 +1549,7 @@ def registrar_entrada():
         return redirect(url_for('entrada.nueva_entrada'))
 
 @bp.route('/editar-entrada/<codigo_guia>', methods=['GET', 'POST'])
+@login_required # Añadir protección
 def editar_entrada(codigo_guia):
     """
     Ruta para editar un registro de entrada existente
@@ -1603,6 +1622,7 @@ def editar_entrada(codigo_guia):
         return redirect(url_for('entrada.lista_entradas'))
 
 @bp.route('/diagnostico-entradas')
+@login_required # Añadir protección
 def diagnostico_entradas():
     """
     Herramienta de diagnóstico para revisar los registros de entrada
@@ -1630,6 +1650,7 @@ def diagnostico_entradas():
         return redirect(url_for('misc.upload_file'))
 
 @bp.route('/detalles-registro/<codigo_guia>')
+@login_required # Añadir protección
 def detalles_registro(codigo_guia):
     """
     Muestra los detalles completos de un registro de entrada específico,

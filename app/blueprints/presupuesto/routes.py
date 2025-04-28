@@ -4,6 +4,8 @@ import logging
 from werkzeug.utils import secure_filename
 import pandas as pd # Importar pandas
 import traceback # Para logging de errores detallado
+# Importar login_required
+from flask_login import login_required
 
 # Importar el blueprint desde __init__.py
 from . import bp 
@@ -20,6 +22,7 @@ def allowed_file(filename):
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 @bp.route('/upload', methods=['POST'])
+@login_required # Añadir protección
 def upload_budget():
     """Ruta para manejar la carga y procesamiento inicial del archivo de presupuesto."""
     logger.info("Recibida solicitud POST en /presupuesto/upload")

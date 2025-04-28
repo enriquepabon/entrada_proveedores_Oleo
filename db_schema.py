@@ -164,6 +164,19 @@ CREATE TABLE IF NOT EXISTS presupuesto_mensual (
 """
 # --- FIN NUEVO --- 
 
+# --- NUEVO: Esquema para la tabla de Usuarios --- 
+CREATE_USERS_TABLE = """
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    is_active INTEGER DEFAULT 0,  -- 0 para False, 1 para True
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+"""
+# --- FIN NUEVO --- 
+
 def create_tables():
     """
     Crea las tablas necesarias en la base de datos si no existen.
@@ -209,6 +222,7 @@ def create_tables():
             # Considerar si relanzar el error: raise e_create
         # -- Fin bloque específico --
         cursor.execute(CREATE_PRESUPUESTO_MENSUAL_TABLE)
+        cursor.execute(CREATE_USERS_TABLE)
         conn.commit() # Commit after creating tables
         logger.info("CREATE TABLE statements ejecutados.")
 
@@ -292,6 +306,10 @@ def create_tables():
 
         # presupuesto_mensual (ejemplo)
         # add_column_if_not_exists('presupuesto_mensual', 'nueva_columna', 'TEXT')
+
+        # --- NUEVO: Añadir columna is_active a users si no existe ---
+        add_column_if_not_exists('users', 'is_active', 'INTEGER DEFAULT 0')
+        # --- FIN NUEVO ---
 
         logger.info(f"Verificación/Adición de columnas completada para: {db_path}")
         return True

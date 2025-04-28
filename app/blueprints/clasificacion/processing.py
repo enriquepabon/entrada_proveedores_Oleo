@@ -34,6 +34,9 @@ from db_operations import store_clasificacion
 import db_utils
 # from db_utils import update_pesaje_bruto # Importa solo si realmente se usa aquí
 
+# Importar login_required
+from flask_login import login_required
+
 # Configurar logger
 logger = logging.getLogger(__name__)
 
@@ -41,6 +44,7 @@ logger = logging.getLogger(__name__)
 processing_status = {}
 
 @bp.route('/registrar_clasificacion', methods=['POST'])
+@login_required
 def registrar_clasificacion():
     """
     Registra la clasificación manual y las fotos subidas.
@@ -143,6 +147,7 @@ def registrar_clasificacion():
 
 
 @bp.route('/registrar_clasificacion_api', methods=['POST'])
+@login_required
 def registrar_clasificacion_api():
     """
     Registra los resultados de la clasificación
@@ -285,6 +290,7 @@ def registrar_clasificacion_api():
         return jsonify({'success': False, 'message': f'Error: {str(e)}'}), 500
 
 @bp.route('/procesar_clasificacion', methods=['POST'])
+@login_required
 def procesar_clasificacion():
     try:
         # Obtener datos del formulario - soportar tanto JSON como form data
@@ -446,6 +452,7 @@ def procesar_clasificacion():
             flash(f"Error al procesar la clasificación: {str(e)}", "danger")
             return redirect(url_for('pesaje.lista_pesajes'))
 @bp.route('/iniciar_procesamiento/<path:url_guia>', methods=['POST'])
+@login_required
 def iniciar_procesamiento(url_guia):
     """
     Inicia el procesamiento de clasificación automática para una guía específica.
@@ -569,6 +576,7 @@ def iniciar_procesamiento(url_guia):
 
 
 @bp.route('/check_procesamiento_status/<path:url_guia>', methods=['GET'])
+@login_required
 def check_procesamiento_status(url_guia):
     """
     Endpoint para verificar el estado del procesamiento de imágenes
@@ -615,6 +623,7 @@ def check_procesamiento_status(url_guia):
         })
 
 @bp.route('/procesar_automatico', methods=['POST'])
+@login_required
 def procesar_clasificacion_automatica():
     """
     Procesa las imágenes subidas para realizar una clasificación automática
@@ -679,6 +688,7 @@ def procesar_clasificacion_automatica():
         return jsonify({'success': False, 'message': f'Error: {str(e)}', 'clasificacion_completa': False}), 500
 
 @bp.route('/guardar_clasificacion_final/<path:codigo_guia>', methods=['POST'])
+@login_required
 def guardar_clasificacion_final(codigo_guia):
     """
     Guarda la clasificación final en la base de datos y actualiza el estado de la guía.
@@ -1013,6 +1023,7 @@ def guardar_clasificacion_final(codigo_guia):
         return redirect(url_for('clasificacion.ver_resultados_clasificacion', url_guia=codigo_guia))
 
 @bp.route('/regenerar_imagenes/<path:url_guia>')
+@login_required
 def regenerar_imagenes(url_guia):
     utils = get_utils_instance()
     try:
@@ -1074,6 +1085,7 @@ def regenerar_imagenes(url_guia):
         return redirect(url_for('clasificacion.ver_resultados_clasificacion', url_guia=url_guia))
 
 @bp.route('/sync_clasificacion/<codigo_guia>')
+@login_required
 def sync_clasificacion(codigo_guia):
     """
     Sincroniza los datos de clasificación desde el archivo JSON a la base de datos.

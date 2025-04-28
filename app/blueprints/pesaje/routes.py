@@ -18,6 +18,8 @@ from app.blueprints.misc.routes import allowed_file, ALLOWED_EXTENSIONS, PLACA_W
 import sqlite3
 import pytz
 from app.utils.image_processing import process_plate_image
+# Importar login_required
+from flask_login import login_required
 
 # Configurar logging
 logger = logging.getLogger(__name__)
@@ -76,6 +78,7 @@ def process_plate_image(image_path, filename):
         return {"result": "error", "message": str(e)}
 
 @bp.route('/pesaje/<codigo>', methods=['GET'])
+@login_required # Añadir protección
 def pesaje(codigo):
     """
     Maneja la vista de pesaje y el procesamiento del mismo
@@ -205,6 +208,7 @@ def pesaje(codigo):
 
 
 @bp.route('/pesaje-inicial/<codigo>', methods=['GET', 'POST'])
+@login_required # Añadir protección
 def pesaje_inicial(codigo):
     """Manejo de pesaje inicial (directo o virtual)"""
     pass
@@ -212,6 +216,7 @@ def pesaje_inicial(codigo):
 
 
 @bp.route('/pesaje-tara/<codigo>', methods=['GET', 'POST'])
+@login_required # Añadir protección
 def pesaje_tara(codigo):
     """
     Maneja la vista de pesaje de tara y el procesamiento del mismo
@@ -261,6 +266,7 @@ def pesaje_tara(codigo):
 
 
 @bp.route('/procesar_pesaje_tara_directo', methods=['POST'])
+@login_required # Añadir protección
 def procesar_pesaje_tara_directo():
     """
     Procesa el pesaje de tara directo
@@ -379,6 +385,7 @@ def procesar_pesaje_tara_directo():
 
 
 @bp.route('/registrar_peso_directo', methods=['POST'])
+@login_required # Añadir protección
 def registrar_peso_directo():
     """
     Endpoint para registrar el peso directo
@@ -499,6 +506,7 @@ def registrar_peso_directo():
 
 
 @bp.route('/registrar_peso_virtual', methods=['POST'])
+@login_required # Añadir protección
 def registrar_peso_virtual():
     """
     Registra el peso bruto manual o virtual usando la capa de acceso a datos.
@@ -658,6 +666,7 @@ def registrar_peso_virtual():
 
 
 @bp.route('/pesajes', methods=['GET'])
+@login_required # Añadir protección
 def lista_pesajes():
     """
     Muestra la lista de registros de pesaje desde la base de datos SQLite.
@@ -724,6 +733,7 @@ def lista_pesajes():
 
 
 @bp.route('/verificar_placa_pesaje', methods=['POST'])
+@login_required # Añadir protección
 def verificar_placa_pesaje():
     """
     Procesa una imagen de placa durante el pesaje para verificar si coincide con la placa registrada.
@@ -845,6 +855,7 @@ def verificar_placa_pesaje():
 
 
 @bp.route('/pesaje-neto/<codigo>', methods=['GET'])
+@login_required # Añadir protección
 def pesaje_neto(codigo):
     """
     Maneja la vista de pesaje neto y el procesamiento del mismo
@@ -922,6 +933,7 @@ def pesaje_neto(codigo):
 
 
 @bp.route('/pesajes-neto-lista', methods=['GET'])
+@login_required # Añadir protección
 def lista_pesajes_neto():
     """
     Muestra la lista de registros de pesaje neto desde la base de datos SQLite.
@@ -961,6 +973,7 @@ def lista_pesajes_neto():
 
 
 @bp.route('/ver_resultados_pesaje/<codigo_guia>')
+@login_required # Añadir protección
 def ver_resultados_pesaje(codigo_guia):
     """
     Muestra los resultados del pesaje para una guía específica.
@@ -1105,6 +1118,7 @@ def ver_resultados_pesaje(codigo_guia):
         return render_template('error.html', message=f"Error al mostrar resultados: {str(e)}")
 
 @bp.route('/procesar_pesaje_directo', methods=['POST'])
+@login_required # Añadir protección
 def procesar_pesaje_directo():
     """
     Procesa la validación de foto para pesaje directo
@@ -1278,6 +1292,7 @@ def procesar_pesaje_directo():
 
 
 @bp.route('/solicitar_autorizacion_pesaje', methods=['POST'])
+@login_required # Añadir protección
 def solicitar_autorizacion_pesaje():
     """
     Solicita autorización para realizar un pesaje manual enviando datos al webhook.
@@ -1377,6 +1392,7 @@ def solicitar_autorizacion_pesaje():
 
 
 @bp.route('/validar_codigo_autorizacion', methods=['POST'])
+@login_required # Añadir protección
 def validar_codigo_autorizacion():
     """
     Valida un código de autorización temporal para pesaje manual.
@@ -1456,6 +1472,7 @@ def validar_codigo_autorizacion():
 
 # --- NUEVO ENDPOINT PARA PROCESO PEPA ---
 @bp.route('/registrar_y_marcar_pepa', methods=['POST'])
+@login_required # Añadir protección
 def registrar_y_marcar_pepa():
     """
     Registra el peso bruto para el proceso Pepa y marca la clasificación como completada.

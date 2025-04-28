@@ -7,10 +7,38 @@ import secrets
 from werkzeug.middleware.proxy_fix import ProxyFix
 # Importar la función del filtro
 from .utils.common import format_datetime_filter
+# Importar Flask-Login
+from flask_login import LoginManager
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Instanciar LoginManager globalmente o dentro de create_app
+# Es común hacerlo globalmente y luego inicializarlo
+login_manager = LoginManager()
+# Configurar la vista a la que redirigir si el usuario no está logueado
+# Usaremos 'auth.login' que crearemos más adelante en el blueprint 'auth'
+login_manager.login_view = 'auth.login'
+# Opcional: Mensaje flash que se mostrará al usuario redirigido
+login_manager.login_message = "Por favor, inicia sesión para acceder a esta página."
+login_manager.login_message_category = "info"
+
+# Callback para recargar el objeto usuario desde el ID de usuario almacenado en la sesión
+@login_manager.user_loader
+def load_user(user_id):
+    # Importamos la función aquí para evitar importaciones circulares si
+    # auth_utils necesitara importar algo de __init__ en el futuro.
+    from app.utils.auth_utils import get_user_by_id
+    try:
+        return get_user_by_id(int(user_id))
+    except ValueError:
+        # Si user_id no es un entero válido
+        return None
+    except Exception as e:
+        # Loguear cualquier otro error inesperado durante la carga del usuario
+        logger.error(f"Error cargando usuario {user_id}: {e}")
+        return None
 
 def create_app(test_config=None):
     """
@@ -32,6 +60,18 @@ def create_app(test_config=None):
                 template_folder=template_folder_path,
                 static_folder=static_folder_path,
                 instance_relative_config=True)
+    
+    # --- Establecer SECRET_KEY directamente --- # <-- ELIMINAR/COMENTAR BLOQUE
+    # app.secret_key = os.environ.get('FLASK_SECRET_KEY')
+    # if not app.secret_key:
+    #     logger.error("¡ERROR CRÍTICO! La variable de entorno FLASK_SECRET_KEY no está definida.")
+    #     # Podrías lanzar una excepción aquí o usar una clave por defecto insegura para desarrollo
+    #     # raise ValueError("FLASK_SECRET_KEY no definida")
+    #     app.secret_key = 'clave-insegura-solo-desarrollo-definir-env' # Fallback inseguro
+    #     logger.warning("Usando clave secreta insegura por defecto.")
+    # else:
+    #      logger.info(f"SECRET_KEY cargada directamente en app desde variable de entorno: {app.secret_key[:8]}...")
+    # ------------------------------------- # <-- ELIMINAR/COMENTAR BLOQUE
     
     # Guardar BASE_DIR en la configuración de la app para usarlo después
     app.config['BASE_DIR'] = base_dir
@@ -96,10 +136,6 @@ def create_app(test_config=None):
     except Exception as e:
         logger.error(f"Error limpiando QRs problemáticos: {str(e)}")
     
-    # Configurar clave secreta directamente (no desde config.py)
-    app.secret_key = secrets.token_hex(32)
-    logger.info("Clave secreta configurada para la aplicación: %s", app.secret_key[:8] + '...')
-    
     # Configuración de Feature Flags para nuevos templates
     app.config['USAR_NUEVOS_TEMPLATES'] = True  # Cambiar a False para desactivar los nuevos templates
     app.config['USAR_NUEVOS_TEMPLATES_ENTRADA'] = True  # Específico para módulo de entrada
@@ -117,10 +153,10 @@ def create_app(test_config=None):
         app.logger.warning("No se pudo importar la configuración desde config.py")
     
     # Configurar ProxyFix para manejar correctamente encabezados de proxy
-    app.wsgi_app = ProxyFix(
-        app.wsgi_app, x_proto=1, x_host=1
-        # No incluir x_port=1 para evitar problemas con el puerto
-    )
+    # app.wsgi_app = ProxyFix( # <-- Comentar
+    #     app.wsgi_app, x_proto=1, x_host=1
+    #     # No incluir x_port=1 para evitar problemas con el puerto
+    # ) # <-- Comentar
     
     # --- Define Database Paths using BASE_DIR --- 
     app.config['TIQUETES_DB_PATH'] = os.path.join(base_dir, 'tiquetes.db')
@@ -133,6 +169,13 @@ def create_app(test_config=None):
         # Consider if you need to copy a default DB or stop the app here
     # --- End Define Database Paths ---
     
+    # Inicializar Flask-Login con la app
+    login_manager.init_app(app)
+
+    # --- DEBUG: Log Session Interface ---
+    logger.info(f"Session Interface: {app.session_interface}")
+    # --- FIN DEBUG ---
+
     # --- Mantenemos la creación de directorios como una salvaguarda ---
     # Ahora usará las rutas cargadas desde config.py
     folder_keys_to_ensure = ['UPLOAD_FOLDER', 'PDF_FOLDER', 'GUIAS_FOLDER', 'QR_FOLDER', 'IMAGES_FOLDER', 'FOTOS_RACIMOS_FOLDER']
@@ -200,7 +243,25 @@ def create_app(test_config=None):
     app.add_template_filter(format_datetime_filter, 'format_datetime')
     # ----------------------------------
     
+    # --- Añadir logging de cookies (CORREGIDO) --- 
+    # setup_logging_cookies(app)  # <-- Comentar o eliminar
+    # ---------------------------------------- 
+
     return app
+
+# Comentar o eliminar toda esta función
+# def setup_logging_cookies(app):
+#     @app.after_request
+#     def log_response_cookies(response):
+#         # Check if the 'session' cookie is being set
+#         set_cookie_header = response.headers.get('Set-Cookie')
+#         if set_cookie_header and 'session=' in set_cookie_header:
+#             app.logger.info(f"<<< DEBUG: Intentando establecer cookie de sesión: {set_cookie_header}")
+#         elif set_cookie_header:
+#              app.logger.info(f"<<< DEBUG: Cabecera Set-Cookie presente pero sin 'session': {set_cookie_header}")
+#         else:
+#             app.logger.info("<<< DEBUG: No se encontró cabecera Set-Cookie en la respuesta.")
+#         return response
 
 def register_blueprints(app):
     """
@@ -217,6 +278,8 @@ def register_blueprints(app):
     from app.blueprints.misc import bp as misc_bp
     # Importar el nuevo blueprint de presupuesto
     from app.blueprints.presupuesto import bp as presupuesto_bp
+    # Importar el blueprint de autenticación
+    from app.blueprints.auth import bp as auth_bp
     
     # Registrar blueprints con sus prefijos de URL
     app.register_blueprint(entrada_bp)
@@ -229,6 +292,8 @@ def register_blueprints(app):
     app.register_blueprint(misc_bp)
     # Registrar el blueprint de presupuesto
     app.register_blueprint(presupuesto_bp) # Ya tiene el prefijo definido en su __init__.py
+    # Registrar el blueprint de autenticación
+    app.register_blueprint(auth_bp, url_prefix='/auth')
     
     logger.info("Todos los blueprints registrados correctamente.")
 

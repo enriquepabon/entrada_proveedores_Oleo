@@ -36,6 +36,8 @@ from db_operations import (
     get_pesaje_neto_by_codigo_guia, # Podría ser útil
     get_salida_by_codigo_guia # Podría ser útil
 )
+# Importar login_required
+from flask_login import login_required
 
 # --- Funciones Auxiliares Definidas Globalmente --- 
 # (Re-insertando definición para asegurar reconocimiento por linter)
@@ -100,6 +102,7 @@ def allowed_file(filename):
 
 
 @bp.route('/guias/<filename>')
+@login_required # Añadir protección
 def serve_guia(filename):
     """
     Sirve los archivos HTML de las guías de proceso
@@ -168,6 +171,7 @@ def serve_guia(filename):
 
 
 @bp.route('/', methods=['GET', 'POST'])
+@login_required # Añadir protección
 def upload_file():
     """
     Handles file upload and processing
@@ -230,6 +234,7 @@ def upload_file():
 
 
 @bp.route('/reprocess_plate', methods=['POST'])
+@login_required # Añadir protección
 def reprocess_plate():
     # Inicializar Utils dentro del contexto de la aplicación
     utils = Utils(current_app)
@@ -276,6 +281,7 @@ def reprocess_plate():
 
 
 @bp.route('/revalidation_results')
+@login_required # Añadir protección
 def revalidation_success():
     """
     Renderiza la página de éxito de revalidación
@@ -368,6 +374,7 @@ def revalidation_success():
 
 
 @bp.route('/ver_resultados_pesaje/<codigo_guia>')
+@login_required # Añadir protección
 def ver_resultados_pesaje(codigo_guia):
     # Inicializar Utils dentro del contexto de la aplicación
     utils = Utils(current_app)
@@ -559,6 +566,7 @@ def ver_resultados_pesaje(codigo_guia):
 
 
 @bp.route('/process_validated_data', methods=['POST'])
+@login_required # Añadir protección
 def process_validated_data():
     """
     Procesa los datos validados y genera el PDF final.
@@ -817,6 +825,7 @@ def process_validated_data():
 
 
 @bp.route('/generar_pdf_registro/<codigo_guia>', methods=['GET'])
+@login_required # Añadir protección
 def generar_pdf_registro(codigo_guia):
     """
     Genera un PDF del registro de entrada basado en el código de guía.
@@ -886,6 +895,7 @@ def generar_pdf_registro(codigo_guia):
 
 
 @bp.route('/generar_pdf_pesaje/<codigo_guia>')
+@login_required # Añadir protección
 def generar_pdf_pesaje(codigo_guia):
     """
     Genera un PDF del pesaje basado en el código de guía.
@@ -1013,6 +1023,7 @@ def generar_pdf_pesaje(codigo_guia):
 
 
 @bp.route('/guia-centralizada/<path:codigo_guia>')
+@login_required # Añadir protección
 def ver_guia_centralizada(codigo_guia):
     """
     Vista centralizada de una guía, mostrando toda la información relevante.
@@ -1355,6 +1366,7 @@ def ver_guia_centralizada(codigo_guia):
 
 
 @bp.route('/guia-alt/<codigo_guia>')
+@login_required # Añadir protección
 def ver_guia_alternativa(codigo_guia):
     """
     Ruta alternativa para visualizar una guía - usa un método más directo para cargar el template
@@ -1489,6 +1501,7 @@ def ver_guia_alternativa(codigo_guia):
 
 
 @bp.route('/guardar_captura_tabla', methods=['POST'])
+@login_required # Añadir protección
 def guardar_captura_tabla():
     """
     Guarda la captura de la tabla de revisión como soporte.
@@ -1764,6 +1777,7 @@ def ensure_clasificaciones_schema():
             conn.close()
 
 @bp.route('/ver_detalle_proveedor/<codigo_guia>')
+@login_required # Añadir protección
 def ver_detalle_proveedor(codigo_guia):
     """
     Muestra una vista detallada de todo el proceso para una guía específica,
@@ -1877,6 +1891,7 @@ def ver_detalle_proveedor(codigo_guia):
         return render_template('error.html', message=f"Error al mostrar detalles: {str(e)}")
 
 @bp.route('/dashboard')
+@login_required # Añadir protección
 def dashboard():
     """
     Ruta para mostrar el dashboard con información general del sistema
@@ -1891,6 +1906,7 @@ def dashboard():
         return redirect(url_for('entrada.home'))
 
 @bp.route('/api/dashboard/stats', methods=['GET'])
+@login_required # Añadir protección
 def dashboard_stats():
     logger.info("API endpoint /api/dashboard/stats called")
     
@@ -2335,6 +2351,7 @@ def parse_datetime_str(date_str, time_str, default_time=None):
         return None
 
 @bp.route('/api/buscar_guias', methods=['GET'])
+@login_required # Añadir protección
 def buscar_guias():
     """
     API endpoint para buscar guías basado en múltiples criterios.
@@ -2482,6 +2499,7 @@ def buscar_guias():
 
 # Nueva ruta para el registro consolidado de fruta
 @bp.route('/registros-fruta-mlb')
+@login_required # Añadir protección
 def registro_fruta_mlb():
     """
     Muestra el listado consolidado de todos los registros de fruta.

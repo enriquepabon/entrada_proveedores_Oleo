@@ -21,13 +21,20 @@ app.config.update(
     IMAGES_FOLDER=os.path.join(STATIC_FOLDER_PATH, 'images'),
     EXCEL_FOLDER=os.path.join(STATIC_FOLDER_PATH, 'excels'),
     # Mantener otras configuraciones
-    SECRET_KEY=secrets.token_hex(32),
+    SECRET_KEY=os.environ.get('FLASK_SECRET_KEY', 'clave-secreta-solo-para-desarrollo-cambiar'),
     USAR_VISTA_DINAMICA=True,
     USAR_NUEVOS_TEMPLATES_ENTRADA=True,
     # Guardamos BASE_DIR aquí también para consistencia
     BASE_DIR=BASE_DIR,
     STATIC_FOLDER=STATIC_FOLDER_PATH # Añadimos STATIC_FOLDER explícitamente
 )
+
+# --- Configuración Explícita de Cookies de Sesión ---
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_PATH'] = '/'
+app.config['SESSION_COOKIE_SECURE'] = False # True solo si usas HTTPS
+# --------------------------------------------------
 
 # Eliminamos la configuración de SERVER_NAME para permitir que Flask determine automáticamente
 # el host y puerto en entorno de producción

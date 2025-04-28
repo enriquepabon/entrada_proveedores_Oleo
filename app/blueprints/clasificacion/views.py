@@ -40,6 +40,8 @@ from .helpers import ( # Importar funciones auxiliares necesarias
 from app.utils.common import CommonUtils as Utils, format_datetime_filter, UTC, BOGOTA_TZ, get_db_connection, get_utc_timestamp_str
 import db_operations
 import db_utils
+# Importar login_required
+from flask_login import login_required
 
 # Configurar logger
 logger = logging.getLogger(__name__)
@@ -47,6 +49,7 @@ logger = logging.getLogger(__name__)
 # --- Rutas de Vistas Movidas ---
 
 @bp.route('/<codigo>')
+@login_required # Añadir protección
 def clasificacion(codigo):
     """
     Vista principal para la clasificación de racimos
@@ -157,6 +160,7 @@ def clasificacion(codigo):
 
 
 @bp.route('/prueba-clasificacion/<codigo>')
+@login_required # Añadir protección
 def prueba_clasificacion(codigo):
     """
     Endpoint de prueba para verificar datos disponibles para clasificación.
@@ -192,11 +196,13 @@ def prueba_clasificacion(codigo):
         return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
 
 @bp.route('/clasificaciones')
+@login_required # Añadir protección
 def listar_clasificaciones():
     # Redirigir a la nueva ruta filtrada
     return redirect(url_for('.listar_clasificaciones_filtradas'))
 
 @bp.route('/clasificaciones/lista')
+@login_required # Añadir protección
 def listar_clasificaciones_filtradas():
     """Muestra la lista de clasificaciones, leyendo desde la base de datos."""
     try:
@@ -266,6 +272,7 @@ def listar_clasificaciones_filtradas():
 
 
 @bp.route('/ver_resultados_clasificacion/<path:url_guia>')
+@login_required # Añadir protección
 def ver_resultados_clasificacion(url_guia):
     """Muestra los resultados consolidados de la clasificación."""
     logger.info(f"Accediendo a resultados de clasificación para: {url_guia}")
@@ -423,6 +430,7 @@ def ver_resultados_clasificacion(url_guia):
                            )
 
 @bp.route('/procesar_clasificacion_manual/<path:url_guia>', methods=['GET', 'POST'])
+@login_required # Añadir protección
 def procesar_clasificacion_manual(url_guia):
     """
     Muestra la pantalla de procesamiento para clasificación automática manual
@@ -474,6 +482,7 @@ def procesar_clasificacion_manual(url_guia):
 processing_status = {}
 
 @bp.route('/generar_pdf_clasificacion/<codigo_guia>')
+@login_required # Añadir protección
 def generar_pdf_clasificacion(codigo_guia):
     """
     Genera un PDF con los resultados de la clasificación.
@@ -600,6 +609,7 @@ def generar_pdf_clasificacion(codigo_guia):
         return redirect(url_for('clasificacion.ver_resultados_clasificacion', url_guia=codigo_guia))
 
 @bp.route('/print_view_clasificacion/<codigo_guia>')
+@login_required # Añadir protección
 def print_view_clasificacion(codigo_guia):
     """
     Muestra una vista para impresión de los resultados de clasificación.
@@ -684,6 +694,7 @@ def print_view_clasificacion(codigo_guia):
 
 # --- INICIO DE LA FUNCIÓN VER_DETALLES_CLASIFICACION ---
 @bp.route('/ver_detalles_clasificacion/<path:url_guia>')
+@login_required # Añadir protección
 def ver_detalles_clasificacion(url_guia):
     """
     Muestra los detalles de clasificación por foto para una guía específica,
@@ -934,6 +945,7 @@ def ver_detalles_clasificacion(url_guia):
 
 # --- INICIO DE LA FUNCIÓN TEST_ANNOTATED_IMAGE ---
 @bp.route('/test_annotated_image/<path:url_guia>')
+@login_required # Añadir protección
 def test_annotated_image(url_guia):
     """
     Ruta para probar la generación de imágenes anotadas con detecciones simuladas

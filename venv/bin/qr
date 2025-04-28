@@ -1,5 +1,5 @@
 #!/bin/sh
-'''exec' "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatización registro MLB/TiquetesApp/venv/bin/python3.11" "$0" "$@"
+'''exec' "/Users/enriquepabon/Library/CloudStorage/GoogleDrive-epabon@oleoflores.com/My Drive/Proyectos automatizaciones/Proyecto automatización registro MLB/TiquetesApp/venv/bin/python3.13" "$0" "$@"
 ' '''
 # -*- coding: utf-8 -*-
 import re

@@ -14,7 +14,9 @@
 1.  Revisa cada paso del plan adaptado.
 2.  Ejecuta las acciones descritas en cada paso en tu entorno local.
 3.  Confirma que el paso se completó correctamente antes de solicitar proceder al siguiente.
-4.  Si encuentras algún problema o tienes una estructura preferida (ej. dónde ubicar modelos/utils de auth), házmelo saber.
+4.  **Importante:** Después de instalar nuevas librerías (como en el Paso 1), actualizaremos el archivo `requirements.txt` para reflejar las nuevas dependencias.
+5.  **Despliegue:** Ten presente que el objetivo final es desplegar en PythonAnywhere. Asegúrate de que los cambios funcionen allí y que las dependencias se instalen correctamente (`pip install -r requirements.txt` en la consola de PythonAnywhere).
+6.  Si encuentras algún problema o tienes una estructura preferida (ej. dónde ubicar modelos/utils de auth), házmelo saber.
 
 ---
 
@@ -26,6 +28,7 @@
 *   **Comandos:**
     ```bash
     pip install Flask-Login Flask-WTF
+    pip freeze > requirements.txt  # Actualizar requirements
     ```
     *(Nota: `Werkzeug` ya debería estar instalado como dependencia de Flask).*
 *   **Código (`app/__init__.py`):**
