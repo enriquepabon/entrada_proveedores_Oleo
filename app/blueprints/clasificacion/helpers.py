@@ -570,9 +570,23 @@ def process_images_with_roboflow(codigo_guia, fotos_paths, guia_fotos_dir, json_
                     categorias_final[clase]['porcentaje'] = round((categorias_final[clase]['cantidad'] / total_general_categorias) * 100, 2)
 
             image_result['conteo_categorias'] = categorias_final
-            image_result['num_racimos_detectados'] = total_general_categorias
-            image_result['total_racimos_imagen'] = total_general_categorias
-            image_result['total_racimos'] = total_general_categorias
+            # --- CORRECCIÓN: Usar potholes_count si existe para el total --- 
+            if image_result['roboflow_potholes_count'] is not None:
+                 try:
+                     # Asegurar que sea un entero válido
+                     total_para_usar = int(image_result['roboflow_potholes_count'])
+                     logger.info(f"Usando roboflow_potholes_count ({total_para_usar}) como total para img {idx+1}")
+                 except (ValueError, TypeError):
+                     logger.warning(f"roboflow_potholes_count no es entero válido ({image_result['roboflow_potholes_count']}). Usando total_general_categorias ({total_general_categorias}).")
+                     total_para_usar = total_general_categorias
+            else:
+                 logger.info(f"roboflow_potholes_count es None. Usando total_general_categorias ({total_general_categorias}) como total para img {idx+1}")
+                 total_para_usar = total_general_categorias
+
+            image_result['num_racimos_detectados'] = total_para_usar
+            image_result['total_racimos_imagen'] = total_para_usar
+            image_result['total_racimos'] = total_para_usar
+            # --- FIN CORRECCIÓN ---
 
             logger.info(f"Asignación final img {idx+1} - num_racimos_detectados: {image_result['num_racimos_detectados']}")
 
@@ -803,10 +817,10 @@ def process_thread(app, codigo_guia, fotos_paths, guia_fotos_dir, json_path):
                 # Obtener el total de racimos detectados del resumen
                 'total_racimos_detectados': results.get('clasificacion_automatica', {}).get('conteo_total_racimos') if results else None,
                 # Guardar el resumen de categorías como JSON en clasificacion_consolidada
-                'clasificacion_consolidada': json.dumps(results.get('clasificacion_automatica', {}).get('categorias', {}), ensure_ascii=False) if results else None
-                # Quitar campos específicos de categoría, ya que están en el JSON consolidado
-                # 'verde_automatico': ..., etc.
-                # Quitar 'resultados_auto_resumen' ya que no existe y usamos 'clasificacion_consolidada'
+                'clasificacion_consolidada': json.dumps(results.get('clasificacion_automatica', {}).get('categorias', {}), ensure_ascii=False) if results else None,
+                # --- NUEVO: Guardar también el JSON completo en clasificacion_automatica_json ---
+                'clasificacion_automatica_json': json.dumps(results.get('clasificacion_automatica', {}), ensure_ascii=False, default=str) if results else None 
+                # --- FIN NUEVO ---
             }
             # --- Fin preparación datos DB ---
 

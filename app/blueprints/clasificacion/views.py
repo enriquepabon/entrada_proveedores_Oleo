@@ -399,15 +399,30 @@ def ver_resultados_clasificacion(url_guia):
 
     # Calcular porcentajes para la clasificación manual
     clasificacion_manual_con_porcentajes = {}
-    total_manual = sum(v for v in clasificacion_manual.values() if isinstance(v, (int, float)))
-    if total_manual > 0:
+    try:
+        # Intentar convertir cantidad_racimos a entero
+        cantidad_racimos_int = int(cantidad_racimos) if cantidad_racimos is not None and cantidad_racimos != 'N/A' else 0
+    except (ValueError, TypeError):
+        logger.warning(f"No se pudo convertir cantidad_racimos ({cantidad_racimos}) a entero para guía {codigo_guia}. Usando 0.")
+        cantidad_racimos_int = 0
+
+    # Determinar el divisor correcto basado en la cantidad total de racimos
+    divisor_manual = 100 if cantidad_racimos_int > 1000 else 28
+    logger.info(f"Usando divisor manual fijo: {divisor_manual} (basado en cantidad_racimos: {cantidad_racimos_int})")
+
+    if divisor_manual > 0: # Asegurarse de que el divisor no sea cero
         for cat, cant in clasificacion_manual.items():
             if isinstance(cant, (int, float)):
-                porcentaje = round((cant / total_manual) * 100, 1) if total_manual > 0 else 0.0
+                # Calcular porcentaje usando el divisor fijo
+                porcentaje = round((cant / divisor_manual) * 100, 1)
                 clasificacion_manual_con_porcentajes[cat] = {'cantidad': cant, 'porcentaje': porcentaje}
             else: # Mantener la clave pero con 0 si el valor no era numérico
                  clasificacion_manual_con_porcentajes[cat] = {'cantidad': 0, 'porcentaje': 0.0}
-
+    else:
+         # Si el divisor es 0 (caso raro), asignar 0% a todo
+         logger.warning(f"Divisor manual es 0 para guía {codigo_guia}. Asignando 0% a todo.")
+         for cat, cant in clasificacion_manual.items():
+              clasificacion_manual_con_porcentajes[cat] = {'cantidad': cant if isinstance(cant, (int, float)) else 0, 'porcentaje': 0.0}
 
     end_time = time.time()
     logger.info(f"Tiempo para cargar resultados de {url_guia}: {end_time - start_time:.2f} segundos")

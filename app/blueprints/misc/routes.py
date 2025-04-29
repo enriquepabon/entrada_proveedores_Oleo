@@ -2082,11 +2082,15 @@ def dashboard_stats():
 
         # Para promedios de calidad
         calidad_sumas_manual = {'Verde': 0, 'Sobremaduro': 0, 'Daño Corona': 0, 'Pendunculo Largo': 0, 'Podrido': 0}
-        calidad_contadores_manual = calidad_sumas_manual.copy() # Contador por categoría
-        calidad_sumas_automatica = calidad_sumas_manual.copy()
-        calidad_contadores_automatica = calidad_sumas_manual.copy()
-        num_guias_con_clasif_manual = 0
-        num_guias_con_clasif_automatica = 0
+        # --- NUEVO: Totalizador de racimos manuales --- 
+        total_racimos_manuales_clasificados = 0 
+        # --- FIN NUEVO ---
+        # --- NUEVO: Conteos y total para calidad automática ---
+        calidad_conteos_automatica = calidad_sumas_manual.copy() # Usar para sumar CANTIDADES
+        total_racimos_automaticos_sumados = 0
+        # --- FIN NUEVO ---
+        num_guias_con_clasif_manual = 0 # <-- Ya no se usa para el cálculo del promedio
+        num_guias_con_clasif_automatica = 0 # <-- Ya no se usa para el cálculo del promedio
 
         # Para tiempos promedio
         tiempos_diff = {
@@ -2138,23 +2142,25 @@ def dashboard_stats():
 
             # Mapeo nombres JSON a claves internas
             map_manual = {'verdes': 'Verde', 'sobremaduros': 'Sobremaduro', 'danio_corona': 'Daño Corona', 'pedunculo_largo': 'Pendunculo Largo', 'podridos': 'Podrido'}
-            tiene_clasif_manual = False
+            tiene_clasif_manual_esta_guia = False # Flag para esta guía
+            racimos_manuales_esta_guia = 0 # Contador para esta guía
             for json_key, internal_key in map_manual.items():
                 try:
                     valor = float(manual_data.get(json_key, 0.0) or 0.0) # Asegurar float
-                    calidad_sumas_manual[internal_key] += valor
-                    calidad_contadores_manual[internal_key] += 1 # Contar si hay dato
-                    tiene_clasif_manual = True
+                    if valor > 0:
+                        calidad_sumas_manual[internal_key] += valor
+                        racimos_manuales_esta_guia += valor # Sumar al total de esta guía
+                        tiene_clasif_manual_esta_guia = True
                 except (ValueError, TypeError):
                     pass # Ignorar si no es número
 
-            if tiene_clasif_manual:
-                 num_guias_con_clasif_manual += 1
-
+            if tiene_clasif_manual_esta_guia:
+                 total_racimos_manuales_clasificados += racimos_manuales_esta_guia # Sumar al total general
 
             # --- Calidad Automática ---
             auto_json_str = clasif_data.get('clasificacion_automatica_json')
             auto_data = {}
+            tiene_clasif_automatica_esta_guia = False # Flag para esta guía
             if auto_json_str:
                 try:
                     auto_data = json.loads(auto_json_str)
@@ -2162,20 +2168,42 @@ def dashboard_stats():
 
             # Mapeo nombres JSON a claves internas (asumiendo estructura anidada)
             # {'verdes': {'cantidad': X, 'porcentaje': Y}, ...}
-            map_auto = {'verdes': 'Verde', 'sobremaduros': 'Sobremaduro', 'danio_corona': 'Daño Corona', 'pedunculo_largo': 'Pendunculo Largo', 'podridos': 'Podrido'}
-            tiene_clasif_automatica = False
+            # --- CORRECCIÓN: Usar claves singulares que coinciden con el JSON guardado --- 
+            map_auto = {'verde': 'Verde', 'sobremaduro': 'Sobremaduro', 'danio_corona': 'Daño Corona', 'pendunculo_largo': 'Pendunculo Largo', 'podrido': 'Podrido'}
+            # --- FIN CORRECCIÓN ---
+            
+            # Sumar CONTEOS por categoría desde el JSON (para numeradores)
+            racimos_auto_esta_guia = 0 # Reiniciar para esta guía
+            logger.debug(f"  [AUTO] Procesando JSON automático: {auto_data}")
             for json_key, internal_key in map_auto.items():
                  try:
-                    # Obtener el porcentaje
-                    valor_pct = float(auto_data.get(json_key, {}).get('porcentaje', 0.0) or 0.0)
-                    calidad_sumas_automatica[internal_key] += valor_pct
-                    calidad_contadores_automatica[internal_key] += 1
-                    tiene_clasif_automatica = True
-                 except (ValueError, TypeError):
+                    categoria_data = auto_data.get('categorias', {}).get(json_key, {})
+                    valor_cantidad_raw = categoria_data.get('cantidad', 0)
+                    logger.debug(f"    [AUTO] Leyendo {json_key}: cat_data={categoria_data}, raw_cantidad={valor_cantidad_raw}")
+                    valor_cantidad = int(valor_cantidad_raw or 0)
+                    logger.debug(f"      -> valor_cantidad (int): {valor_cantidad}")
+                    if valor_cantidad > 0:
+                        calidad_conteos_automatica[internal_key] += valor_cantidad
+                        # Ya no sumamos al total de esta guía aquí para el denominador
+                        tiene_clasif_automatica_esta_guia = True
+                 except (ValueError, TypeError) as e:
+                     logger.warning(f"    [AUTO] Error procesando cantidad para {json_key}: {e}. Valor raw: {valor_cantidad_raw}")
                      pass
 
-            if tiene_clasif_automatica:
-                 num_guias_con_clasif_automatica += 1
+            # --- REVERTIDO: Sumar el total_racimos_detectados de la TABLA para el DENOMINADOR ---
+            try:
+                racimos_detectados_guia_db = int(clasif_data.get('total_racimos_detectados', 0) or 0)
+                if racimos_detectados_guia_db > 0:
+                     total_racimos_automaticos_sumados += racimos_detectados_guia_db
+                     logger.debug(f"  [AUTO DENOM] Sumado al total (denominador) desde DB: {racimos_detectados_guia_db}. Nuevo total: {total_racimos_automaticos_sumados}")
+                     tiene_clasif_automatica_esta_guia = True # Marcar que hay datos automáticos si hay total
+            except (ValueError, TypeError):
+                 logger.warning(f"[AUTO DENOM] Valor inválido para total_racimos_detectados en DB para guía {data.get('codigo_guia')}: {clasif_data.get('total_racimos_detectados')}")
+            # --- FIN REVERTIDO ---
+
+            # Incrementar contador de guías si tiene datos automáticos
+            if tiene_clasif_automatica_esta_guia:
+                num_guias_con_clasif_automatica += 1
 
             # --- Tiempos Promedio ---
             # Helper para parsear timestamp UTC y manejar errores
@@ -2236,9 +2264,36 @@ def dashboard_stats():
 
 
         # --- Finalizar Cálculos ---
-        # Promedios de Calidad
-        calidad_promedios_manual = {k: (calidad_sumas_manual[k] / num_guias_con_clasif_manual if num_guias_con_clasif_manual > 0 else 0) for k in calidad_sumas_manual}
-        calidad_promedios_automatica = {k: (calidad_sumas_automatica[k] / num_guias_con_clasif_automatica if num_guias_con_clasif_automatica > 0 else 0) for k in calidad_sumas_automatica}
+        # Promedios de Calidad Manual (Ahora como Porcentaje del Total de Muestra: 28 o 1000)
+        calidad_promedios_manual = {}
+        # Determinar el divisor basado en el total de racimos manuales clasificados
+        if total_racimos_manuales_clasificados > 0:
+            divisor_manual = 28 if total_racimos_manuales_clasificados < 1000 else 1000
+            logger.info(f"Calculando porcentaje manual con divisor: {divisor_manual} (total racimos manuales: {total_racimos_manuales_clasificados})")
+            for k in calidad_sumas_manual:
+                # Calcular porcentaje usando el divisor determinado
+                percentage = round((calidad_sumas_manual[k] / divisor_manual * 100), 1)
+                calidad_promedios_manual[k] = percentage
+        else:
+            # Si no hay racimos clasificados, todos los porcentajes son 0
+            logger.info("No hay racimos manuales clasificados, porcentajes manuales serán 0.")
+            for k in calidad_sumas_manual:
+                calidad_promedios_manual[k] = 0.0
+
+        # Promedios de Calidad Automática (Ahora como Porcentaje del Total Automático)
+        calidad_promedios_automatica = {}
+        # --- NUEVO LOG --- 
+        logger.debug(f"[AUTO CALC] Conteos sumados para cálculo: {calidad_conteos_automatica}")
+        # --- FIN NUEVO LOG ---
+        if total_racimos_automaticos_sumados > 0:
+             logger.info(f"Calculando porcentaje automático con divisor: {total_racimos_automaticos_sumados}")
+             for k in calidad_conteos_automatica:
+                 percentage = round((calidad_conteos_automatica[k] / total_racimos_automaticos_sumados * 100), 1)
+                 calidad_promedios_automatica[k] = percentage
+        else:
+             logger.info("No hay racimos automáticos clasificados, porcentajes automáticos serán 0.")
+             for k in calidad_conteos_automatica:
+                 calidad_promedios_automatica[k] = 0.0
 
         # Promedios de Tiempos
         tiempos_promedio_proceso = {}
@@ -2312,7 +2367,10 @@ def dashboard_stats():
             ],
              "alertas_calidad_tabla": [
                  # ... 
-             ]
+             ],
+            # --- NUEVO: Añadir total racimos manuales a la respuesta --- 
+            "total_racimos_manuales_clasificados": total_racimos_manuales_clasificados,
+            # --- FIN NUEVO ---
 
         }
 
