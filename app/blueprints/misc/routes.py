@@ -315,6 +315,11 @@ def revalidation_success():
             
         data = webhook_response['data']
         
+        # >>> NUEVO: Extraer datos Madre/Hijas
+        is_madre = data.get('madre', False)
+        hijas_str = data.get('hijas', '')
+        # <<< FIN NUEVO
+        
         # Determinar qué campos fueron modificados
         modified_fields = {}
         for row in table_data:
@@ -366,7 +371,12 @@ def revalidation_success():
                              acarreo_modificado=session.get('acarreo_modificado', False),
                              cargo_modificado=session.get('cargo_modificado', False),
                              transportador_modificado=session.get('transportador_modificado', False),
-                             fecha_modificado=session.get('fecha_modificado', False))
+                             fecha_modificado=session.get('fecha_modificado', False),
+                             # >>> NUEVO: Pasar datos Madre/Hijas al template
+                             is_madre=is_madre,
+                             hijas_str=hijas_str
+                             # <<< FIN NUEVO
+                             )
     except Exception as e:
         logger.error(f"Error en revalidation_success: {str(e)}")
         logger.error(traceback.format_exc())
@@ -783,6 +793,11 @@ def process_validated_data():
                 
                 # ---- ADD NOTA TO THE RECORD ----
                 datos_registro['nota'] = webhook_data.get('nota', webhook_data.get('Nota', '')) # Add the note here
+                
+                # >>> NUEVO: Añadir datos Madre/Hijas al registro
+                datos_registro['is_madre'] = webhook_data.get('madre', False)
+                datos_registro['hijas_str'] = webhook_data.get('hijas', '')
+                # <<< FIN NUEVO
                 
                 # Guardar en la base de datos
                 if db_utils.store_entry_record(datos_registro):

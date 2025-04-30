@@ -133,6 +133,24 @@ def clasificacion(codigo):
                  flash("Error encontrando ruta de pesaje.", "error")
                  return redirect(url_for('misc.ver_guia_centralizada', codigo_guia=codigo_guia_completo))
 
+        # Verificar si se debe reclasificar
+        reclasificar = request.args.get('reclasificar', 'false').lower() == 'true'
+        
+        # --- NUEVO: Obtener datos de entry_records ---
+        entry_record = None
+        is_madre = False
+        hijas_str = None
+        try:
+            entry_record = db_utils.get_entry_record_by_guide_code(codigo_guia_completo)
+            if entry_record:
+                is_madre = entry_record.get('is_madre', 0) == 1 # SQLite almacena como 0/1
+                hijas_str = entry_record.get('hijas_str')
+                logger.info(f"Datos de entrada para {codigo_guia_completo}: is_madre={is_madre}, hijas_str={hijas_str}")
+            else:
+                 logger.warning(f"No se encontró registro de entrada para {codigo_guia_completo} al buscar is_madre/hijas_str.")
+        except Exception as db_err:
+            logger.error(f"Error obteniendo entry_record para {codigo_guia_completo}: {db_err}")
+        # --- FIN NUEVO ---
 
         # Preparar datos finales para la plantilla
         template_data = {
@@ -145,7 +163,9 @@ def clasificacion(codigo):
             'tipo_pesaje': datos_guia.get('tipo_pesaje', 'N/A'),
             'fecha_pesaje': format_datetime_filter(datos_guia.get('timestamp_pesaje_utc'), '%d/%m/%Y'), # Usar formateador
             'hora_pesaje': format_datetime_filter(datos_guia.get('timestamp_pesaje_utc'), '%H:%M:%S'), # Usar formateador
-            'codigo_guia_transporte_sap': datos_guia.get('codigo_guia_transporte_sap', 'N/A')
+            'codigo_guia_transporte_sap': datos_guia.get('codigo_guia_transporte_sap', 'N/A'),
+            'is_madre': is_madre,
+            'hijas_str': hijas_str
         }
 
         logger.info(f"Renderizando plantilla clasificacion_form.html con datos: {template_data}")
@@ -305,12 +325,38 @@ def ver_resultados_clasificacion(url_guia):
         if 'clasificacion_automatica' not in datos_combinados or not isinstance(datos_combinados['clasificacion_automatica'], dict):
              datos_combinados['clasificacion_automatica'] = {}
 
+    # --- NUEVO: Obtener is_madre y hijas_str --- 
+    is_madre = False
+    hijas_str = None
+    try:
+        # Usar datos_combinados que ya puede tener info de entry_record de get_datos_guia
+        if 'is_madre' in datos_combinados:
+            is_madre = datos_combinados.get('is_madre', 0) == 1
+            hijas_str = datos_combinados.get('hijas_str')
+            logger.info(f"Madre/Hijas obtenidos de datos_combinados para {url_guia}: is_madre={is_madre}")
+        else:
+             # Fallback: intentar obtener directamente de entry_records si no vino de get_datos_guia
+             entry_record = db_utils.get_entry_record_by_guide_code(url_guia)
+             if entry_record:
+                 is_madre = entry_record.get('is_madre', 0) == 1
+                 hijas_str = entry_record.get('hijas_str')
+                 logger.info(f"Madre/Hijas obtenidos directamente de DB para {url_guia}: is_madre={is_madre}")
+             else:
+                  logger.warning(f"No se encontró entry_record para {url_guia} al buscar madre/hijas.")
+    except Exception as db_err:
+        logger.error(f"Error obteniendo madre/hijas para {url_guia}: {db_err}")
+    # --- FIN NUEVO ---
 
+    # Extraer datos para la plantilla
     codigo_guia = datos_combinados.get('codigo_guia', url_guia)
-    codigo_proveedor = datos_combinados.get('codigo_proveedor', 'N/A')
-    nombre_proveedor = datos_combinados.get('nombre_proveedor', 'N/A')
+    # --- CORRECCIÓN DEFINITIVA: Usar directamente datos_guia --- 
+    codigo_proveedor = datos_guia.get('codigo_proveedor', 'N/A') if datos_guia else 'N/A'
+    nombre_proveedor = datos_guia.get('nombre_proveedor', 'N/A') if datos_guia else 'N/A'
+    # --- FIN CORRECCIÓN DEFINITIVA ---
     peso_bruto = datos_combinados.get('peso_bruto', 'N/A')
-    cantidad_racimos = datos_combinados.get('cantidad_racimos') or datos_combinados.get('racimos', 'N/A')
+    cantidad_racimos = (datos_guia.get('cantidad_racimos') or datos_guia.get('racimos') 
+                        if datos_guia 
+                        else datos_combinados.get('cantidad_racimos') or datos_combinados.get('racimos', 'N/A'))
 
     # Timestamp de clasificación (prioridad: DB > Guía general)
     timestamp_clasificacion_utc_str = datos_combinados.get('timestamp_clasificacion_utc')
@@ -427,6 +473,14 @@ def ver_resultados_clasificacion(url_guia):
     end_time = time.time()
     logger.info(f"Tiempo para cargar resultados de {url_guia}: {end_time - start_time:.2f} segundos")
 
+    # --- DEBUGGING ADICIONAL --- 
+    logger.info(f"### VALORES FINALES PARA TEMPLATE ###")
+    logger.info(f"### codigo_proveedor: {codigo_proveedor} (Tipo: {type(codigo_proveedor)}) ###")
+    logger.info(f"### nombre_proveedor: {nombre_proveedor} (Tipo: {type(nombre_proveedor)}) ###")
+    logger.info(f"### is_madre: {is_madre} (Tipo: {type(is_madre)}) ###")
+    logger.info(f"### hijas_str: {hijas_str} (Tipo: {type(hijas_str)}) ###")
+    # --- FIN DEBUGGING ADICIONAL ---
+
     # Renderizar la plantilla con los datos combinados
     return render_template('clasificacion/clasificacion_resultados.html',
                            codigo_guia=codigo_guia,
@@ -441,7 +495,9 @@ def ver_resultados_clasificacion(url_guia):
                            clasificacion_automatica_consolidada=clasificacion_automatica_consolidada,
                            total_racimos_detectados=total_racimos_a_mostrar,
                            hay_detalles_por_foto=hay_detalles_por_foto,
-                           tiene_pesaje_neto=bool(datos_combinados.get('peso_neto'))
+                           tiene_pesaje_neto=bool(datos_combinados.get('peso_neto')),
+                           is_madre=is_madre,
+                           hijas_str=hijas_str
                            )
 
 @bp.route('/procesar_clasificacion_manual/<path:url_guia>', methods=['GET', 'POST'])
@@ -541,8 +597,8 @@ def generar_pdf_clasificacion(codigo_guia):
         clasificacion_automatica = clasificacion_data.get('clasificacion_automatica', {})
         
         # Preparar datos para la plantilla
-        codigo_proveedor = clasificacion_data.get('codigo_proveedor', datos_guia.get('codigo_proveedor', 'N/A'))
-        nombre_proveedor = clasificacion_data.get('nombre_proveedor', datos_guia.get('nombre_proveedor', 'N/A')) # Corregido acceso a nombre_proveedor
+        codigo_proveedor = datos_guia.get('codigo_proveedor', 'N/A')
+        nombre_proveedor = datos_guia.get('nombre_proveedor', 'N/A')
         
         # Generar QR
         # Asegurarse que QR_FOLDER está configurado en app.config
@@ -665,8 +721,8 @@ def print_view_clasificacion(codigo_guia):
         clasificacion_automatica = clasificacion_data.get('clasificacion_automatica', {})
         
         # Preparar datos para la plantilla
-        codigo_proveedor = clasificacion_data.get('codigo_proveedor', datos_guia.get('codigo_proveedor', 'N/A'))
-        nombre_proveedor = clasificacion_data.get('nombre_proveedor', datos_guia.get('nombre_proveedor', 'N/A'))
+        codigo_proveedor = datos_guia.get('codigo_proveedor', 'N/A')
+        nombre_proveedor = datos_guia.get('nombre_proveedor', 'N/A')
         
         # Obtener fotos de clasificación
         fotos = []
@@ -855,7 +911,7 @@ def ver_detalles_clasificacion(url_guia):
                     return file_url
                 except Exception as url_err:
                     logger.error(f"get_safe_static_url: Error generando URL estática para '{clean_rel_path}': {url_err}")
-                    return None
+                    return None # O devolver ruta relativa como fallback
             else:
                 logger.warning(f"get_safe_static_url: Archivo estático NO encontrado en disco: '{physical_path}' (ruta JSON: '{relative_path_from_json}')")
                 return None

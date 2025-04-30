@@ -110,8 +110,8 @@
 <div class="container">
     <div class="row mb-3">
         <div class="col-12">
-            <a href="{{ url_for('pesaje.lista_pesajes') }}" class="btn btn-outline-primary">
-                <i class="fas fa-arrow-left me-2"></i>Volver a Pesajes
+            <a href="{{ url_for('misc.ver_guia_centralizada', codigo_guia=codigo_guia) }}" class="btn btn-outline-primary">
+                <i class="fas fa-arrow-left me-2"></i>Volver a Guía Centralizada
             </a>
             <h2 class="mt-3">Clasificación de Racimos</h2>
             <p class="text-muted">Información de clasificación para la guía</p>
@@ -131,72 +131,98 @@
         </div>
 
         <!-- Información del proveedor y guía -->
-        <div class="info-section">
-            <h5 class="card-header mb-3">Información General</h5>
-            <div class="row">
-                <div class="col-md-6">
-                    <div class="info-row">
-                        <div class="info-label">Código Guía:</div>
-                        <div class="info-value"><span class="badge bg-primary code-badge">{{ codigo_guia }}</span></div>
-                    </div>
-                    <div class="info-row">
-                        <div class="info-label">Código Proveedor:</div>
-                        <div class="info-value">{{ codigo_proveedor }}</div>
-                    </div>
-                    <div class="info-row">
-                        <div class="info-label">Nombre Proveedor:</div>
-                        <div class="info-value">{{ nombre_proveedor }}</div>
-                    </div>
-                    <div class="info-row">
-                        <div class="info-label">Cantidad de Racimos:</div>
-                        <div class="info-value">{{ cantidad_racimos }}</div>
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="info-row">
-                        <div class="info-label">Peso Bruto:</div>
-                        <div class="info-value weight-value">{{ peso_bruto }} kg</div>
-                    </div>
-                    <div class="info-row">
-                        <div class="info-label">Tipo de Clasificación:</div>
-                        <div class="info-value">
-                            <span class="badge bg-{{ 'warning' if en_reclasificacion else 'primary' }}">
-                                {{ 'Reclasificación' if en_reclasificacion else 'Primera clasificación' }}
-                            </span>
-                        </div>
-                    </div>
-                    <div class="info-row">
-                        <div class="info-label">Tipo de Pesaje:</div>
-                        <div class="info-value">
-                            <span class="badge bg-{{ 'success' if tipo_pesaje == 'directo' else ('primary' if tipo_pesaje == 'bascula' else 'info') }}">
-                                {% if tipo_pesaje == 'directo' %}
-                                    Soporte Foto
-                                {% elif tipo_pesaje == 'virtual' %}
-                                    Manual
-                                {% elif tipo_pesaje == 'bascula' %}
-                                    Directo
-                                {% else %}
-                                    {{ tipo_pesaje|title if tipo_pesaje else 'No especificado' }}
-                                {% endif %}
-                            </span>
-                        </div>
-                    </div>
-                    <div class="info-row">
-                        <div class="info-label">Código Guía SAP:</div>
-                        <div class="info-value">{{ codigo_guia_transporte_sap if codigo_guia_transporte_sap else 'No disponible' }}</div>
-                    </div>
-                    <div class="info-row">
-                        <div class="info-label">Fecha/Hora Pesaje:</div>
-                        <div class="info-value">{{ fecha_pesaje if fecha_pesaje else 'N/A' }} {{ hora_pesaje if hora_pesaje else '' }}</div>
-                    </div>
-                </div>
+        <div class="card info-card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Información General</h5>
             </div>
-            <!-- Contenedores para los resultados y acciones -->
-            <div class="d-none">
-                <input type="hidden" id="codigo" value="{{ codigo_proveedor }}">
-                <input type="hidden" id="codigo_guia" name="codigo_guia" value="{{ codigo_guia }}">
-                <input type="hidden" id="cantidad_racimos_hidden" value="{{ cantidad_racimos }}">
-                <input type="hidden" id="nombreProveedor" value="{{ nombre_proveedor }}">
+            <div class="card-body">
+                <div class="row"> {# Fila principal para las 3 columnas #}
+                    <div class="col-md-4"> {# Columna 1 #}
+                        <div class="mb-3">
+                            <div class="info-label"><i class="fas fa-barcode me-2 text-primary"></i>Código Guía:</div>
+                            <div class="info-value"><span class="badge bg-primary code-badge">{{ codigo_guia }}</span></div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="info-label"><i class="fas fa-user-tag me-2 text-primary"></i>Código Proveedor:</div>
+                            <div class="info-value">{{ codigo_proveedor }}</div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="info-label"><i class="fas fa-user me-2 text-primary"></i>Nombre Proveedor:</div>
+                            <div class="info-value">{{ nombre_proveedor }}</div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="info-label"><i class="fas fa-boxes me-2 text-primary"></i>Cantidad de Racimos:</div>
+                            <div class="info-value">{{ cantidad_racimos }}</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4"> {# Columna 2 #}
+                        <div class="mb-3">
+                            <div class="info-label"><i class="fas fa-weight-hanging me-2 text-success"></i>Peso Bruto:</div>
+                            <div class="info-value weight-value">{{ peso_bruto }} kg</div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="info-label"><i class="fas fa-tags me-2 text-info"></i>Tipo de Clasificación:</div>
+                            <div class="info-value">
+                                <span class="badge bg-{{ 'warning' if en_reclasificacion else 'primary' }}">
+                                    {{ 'Reclasificación' if en_reclasificacion else 'Primera clasificación' }}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="info-label"><i class="fas fa-balance-scale me-2 text-info"></i>Tipo de Pesaje:</div>
+                            <div class="info-value">
+                                <span class="badge bg-{{ 'success' if tipo_pesaje == 'directo' else ('primary' if tipo_pesaje == 'bascula' else 'info') }}">
+                                    {% if tipo_pesaje == 'directo' %}
+                                        Soporte Foto
+                                    {% elif tipo_pesaje == 'virtual' %}
+                                        Manual
+                                    {% elif tipo_pesaje == 'bascula' %}
+                                        Directo
+                                    {% else %}
+                                        {{ tipo_pesaje|title if tipo_pesaje else 'No especificado' }}
+                                    {% endif %}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="info-label"><i class="fas fa-file-invoice me-2 text-secondary"></i>Código Guía SAP:</div>
+                            <div class="info-value">{{ codigo_guia_transporte_sap if codigo_guia_transporte_sap else 'No disponible' }}</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4"> {# Columna 3 #}
+                        <div class="mb-3">
+                            <div class="info-label"><i class="fas fa-calendar-alt me-2 text-secondary"></i>Fecha/Hora Pesaje:</div>
+                            <div class="info-value">{{ fecha_pesaje if fecha_pesaje else 'N/A' }} {{ hora_pesaje if hora_pesaje else '' }}</div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="info-label"><i class="fas fa-sitemap me-2 text-warning"></i>Tipo de Guía:</div>
+                            <div class="info-value">
+                                {% if is_madre is defined and is_madre %}
+                                    <span class="badge bg-warning text-dark">Madre</span>
+                                {% elif is_madre is defined and not is_madre %}
+                                    <span class="badge bg-secondary">Normal</span>
+                                {% else %}
+                                    <span class="badge bg-light text-muted">No disponible</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% if is_madre is defined and is_madre and hijas_str is defined and hijas_str %}
+                        <div class="mb-3">
+                            <div class="info-label"><i class="fas fa-link me-2 text-warning"></i>Guías Hijas Asociadas:</div>
+                            <div class="info-value">
+                                <pre style="white-space: pre-wrap; margin: 0; font-family: inherit; background-color: #e9ecef; padding: 5px 10px; border-radius: 4px; font-size: 0.9em;">{{ hijas_str }}</pre>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div> {# Cierre de la fila principal #}
+                <!-- Contenedores para los resultados y acciones -->
+                <div class="d-none">
+                    <input type="hidden" id="codigo" value="{{ codigo_proveedor }}">
+                    <input type="hidden" id="codigo_guia" name="codigo_guia" value="{{ codigo_guia }}">
+                    <input type="hidden" id="cantidad_racimos_hidden" value="{{ cantidad_racimos }}">
+                    <input type="hidden" id="nombreProveedor" value="{{ nombre_proveedor }}">
+                </div>
             </div>
         </div>
 

@@ -258,6 +258,24 @@
                                     <div class="col-12 mb-3">
                                         <strong>Nota:</strong> <span id="nota">{{ nota }}</span>
                                     </div>
+                                    <div class="col-md-6 mb-3">
+                                        <strong>Tipo de Guía:</strong>
+                                        <span id="tipo_guia">
+                                            {% if is_madre %}
+                                                <span class="badge bg-warning text-dark">Madre</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary">Normal</span>
+                                            {% endif %}
+                                        </span>
+                                    </div>
+                                    <div class="col-md-6 mb-3"></div>
+                                    
+                                    {% if is_madre and hijas_str %}
+                                    <div class="col-12 mb-3">
+                                        <strong>Guías Hijas Asociadas:</strong>
+                                        <pre id="hijas" style="white-space: pre-wrap; margin: 0; font-family: inherit; background-color: #f8f9fa; padding: 10px; border-radius: 4px;">{{ hijas_str }}</pre>
+                                    </div>
+                                    {% endif %}
                                 </div>
                             </div>
                         </div>

@@ -372,6 +372,20 @@
                                         <li class="list-group-item"><strong>Código Transportista:</strong> {{ datos_guia.codigo_transportista|default('N/A') }}</li>
                                         <li class="list-group-item"><strong>Se Acarreó:</strong> {{ datos_guia.acarreo|default('N/A') }}</li>
                                         <li class="list-group-item"><strong>Se Cargó:</strong> {{ datos_guia.cargo|default('N/A') }}</li>
+                                        <li class="list-group-item"><strong>Tipo de Guía:</strong> 
+                                            {% if datos_guia.is_madre is defined and datos_guia.is_madre %}
+                                                <span class="badge bg-warning text-dark">Madre</span>
+                                            {% elif datos_guia.is_madre is defined and not datos_guia.is_madre %}
+                                                <span class="badge bg-secondary">Normal</span>
+                                            {% else %}
+                                                <span class="badge bg-light text-muted">No disponible</span>
+                                            {% endif %}
+                                        </li>
+                                        {% if datos_guia.is_madre is defined and datos_guia.is_madre and datos_guia.hijas_str is defined and datos_guia.hijas_str %}
+                                        <li class="list-group-item"><strong>Guías Hijas Asociadas:</strong>
+                                            <pre style="white-space: pre-wrap; margin: 0; font-family: inherit; background-color: #f8f9fa; padding: 5px; border-radius: 4px; font-size: 0.9em;">{{ datos_guia.hijas_str }}</pre>
+                                        </li>
+                                        {% endif %}
                                     </ul>
                                 </div>
                             </div>

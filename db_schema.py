@@ -41,6 +41,8 @@ CREATE TABLE IF NOT EXISTS entry_records (
     fecha_tiquete TEXT, -- Added
     pdf_filename TEXT, -- Added
     qr_filename TEXT, -- Added
+    is_madre INTEGER DEFAULT 0, -- 0 = Normal, 1 = Madre
+    hijas_str TEXT, -- Códigos de guías hijas separados por comas o saltos de línea
     estado TEXT DEFAULT 'activo',
     fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -162,7 +164,6 @@ CREATE TABLE IF NOT EXISTS presupuesto_mensual (
     fecha_carga TIMESTAMP DEFAULT CURRENT_TIMESTAMP -- Cuándo se cargó/actualizó este dato
 );
 """
-# --- FIN NUEVO --- 
 
 # --- NUEVO: Esquema para la tabla de Usuarios --- 
 CREATE_USERS_TABLE = """
@@ -175,7 +176,6 @@ CREATE TABLE IF NOT EXISTS users (
     fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 """
-# --- FIN NUEVO --- 
 
 def create_tables():
     """

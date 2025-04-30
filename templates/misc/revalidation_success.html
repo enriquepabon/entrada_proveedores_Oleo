@@ -263,6 +263,24 @@
                         <th>Hora de Registro:</th>
                         <td>{{ hora_registro|default('No disponible', true) }}</td>
                     </tr>
+                    <tr>
+                        <th>Tipo de Guía:</th>
+                        <td>
+                            {% if is_madre %}
+                                <span class="badge bg-warning text-dark">Madre</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Normal</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% if is_madre and hijas_str %}
+                    <tr>
+                        <th>Guías Hijas:</th>
+                        <td>
+                            <pre style="white-space: pre-wrap; margin: 0; font-family: inherit;">{{ hijas_str }}</pre> 
+                        </td>
+                    </tr>
+                    {% endif %}
                 </tbody>
             </table>
         </div>

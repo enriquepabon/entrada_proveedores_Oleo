@@ -5,6 +5,7 @@ import traceback
 from datetime import datetime
 import json
 import sqlite3
+import pytz
 from app.blueprints.salida import bp
 from app.utils.common import CommonUtils as Utils
 from flask_login import login_required
@@ -94,6 +95,29 @@ def registro_salida(codigo_guia):
             flash("El pesaje neto no ha sido registrado para esta guía.", "warning")
             return redirect(url_for('pesaje_neto.pesaje_neto', codigo_guia=codigo_guia))
             
+        # --- NUEVO: Función auxiliar para convertir timestamps --- 
+        def convertir_timestamp_local(timestamp_utc_str):
+            if not timestamp_utc_str or timestamp_utc_str in ['N/A', '']:
+                # Devuelve tuplas consistentes
+                return 'N/A', '' 
+            try:
+                utc_dt = datetime.strptime(timestamp_utc_str, '%Y-%m-%d %H:%M:%S')
+                utc_dt = pytz.utc.localize(utc_dt)
+                bogota_tz = pytz.timezone('America/Bogota')
+                bogota_dt = utc_dt.astimezone(bogota_tz)
+                return bogota_dt.strftime('%d/%m/%Y'), bogota_dt.strftime('%H:%M:%S')
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Error convirtiendo timestamp '{timestamp_utc_str}': {e}")
+                return 'Error Fmt', '' # Devuelve tuplas consistentes
+        # --- FIN NUEVO --- 
+
+        # --- NUEVO: Convertir todos los timestamps relevantes --- 
+        datos_guia['fecha_registro'], datos_guia['hora_registro'] = convertir_timestamp_local(datos_guia.get('timestamp_registro_utc'))
+        datos_guia['fecha_pesaje_bruto'], datos_guia['hora_pesaje_bruto'] = convertir_timestamp_local(datos_guia.get('timestamp_pesaje_utc'))
+        datos_guia['fecha_clasificacion'], datos_guia['hora_clasificacion'] = convertir_timestamp_local(datos_guia.get('timestamp_clasificacion_utc'))
+        datos_guia['fecha_pesaje_neto'], datos_guia['hora_pesaje_neto'] = convertir_timestamp_local(datos_guia.get('timestamp_pesaje_neto_utc'))
+        # --- FIN NUEVO ---
+        
         # Obtener fecha y hora actuales para mostrar en el formulario
         now = datetime.now()
         now_date = now.strftime('%d/%m/%Y')

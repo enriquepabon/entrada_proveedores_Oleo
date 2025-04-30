@@ -175,26 +175,87 @@
         <h4 class="text-center mb-2">{{ datos.codigo_guia }}</h4>
         <h4 class="text-center mb-4">{{ datos.nombre_proveedor|default(datos.nombre, true) }}</h4>
         
-        <!-- Información General -->
-        <div class="info-section">
-            <div class="row">
-                <div class="col-md-6">
-                    <p><strong>Código:</strong> {{ datos.codigo_proveedor|default(datos.codigo, true) }}</p>
-                    <p><strong>Guía:</strong> {{ datos.codigo_guia }}</p>
-                    <p><strong>Proveedor:</strong> {{ datos.nombre_proveedor|default(datos.nombre_agricultor|default(datos.nombre, true), true) }}</p>
-                    <p><strong>Cantidad de Racimos:</strong> {{ datos.cantidad_racimos }}</p>
-                    <p><strong>Peso Bruto:</strong> {{ datos.peso_bruto }} kg</p>
-                </div>
-                <div class="col-md-6">
-                    <p><strong>Tipo de Pesaje Bruto:</strong> {{ datos.tipo_pesaje }}</p>
-                    <p><strong>Fecha de Registro:</strong> {{ datos.fecha_registro }}</p>
-                    <p><strong>Hora de Registro:</strong> {{ datos.hora_registro }}</p>
-                    <p><strong>Transportador:</strong> {{ datos.transportador|default(datos.transportista, true) }}</p>
-                    <p><strong>Placa:</strong> {{ datos.placa }}</p>
-                    <p><strong>Guía Transporte SAP:</strong> {{ datos.codigo_guia_transporte_sap|default('No disponible', true) }}</p>
-                </div>
+        <!-- NUEVA Información General (3 columnas con iconos) -->
+        <div class="card info-card mb-4"> 
+            <div class="card-header">
+                <h5 class="mb-0">Información General</h5>
+            </div>
+            <div class="card-body">
+                <div class="row"> {# Fila principal para las 3 columnas #}
+                    <div class="col-md-4"> {# Columna 1 #}
+                        <div class="mb-3">
+                            <div class="info-label"><i class="fas fa-barcode me-2 text-primary"></i>Código Guía:</div>
+                            <div class="info-value"><span class="badge bg-primary code-badge">{{ datos.codigo_guia }}</span></div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="info-label"><i class="fas fa-user-tag me-2 text-primary"></i>Código Proveedor:</div>
+                            <div class="info-value">{{ datos.codigo_proveedor|default(datos.codigo, 'N/A') }}</div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="info-label"><i class="fas fa-user me-2 text-primary"></i>Nombre Proveedor:</div>
+                            <div class="info-value">{{ datos.nombre_proveedor|default(datos.nombre_agricultor|default(datos.nombre, 'N/A')) }}</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4"> {# Columna 2 #}
+                        <div class="mb-3">
+                            <div class="info-label"><i class="fas fa-boxes me-2 text-primary"></i>Cantidad Racimos:</div>
+                            <div class="info-value">{{ datos.cantidad_racimos|default('N/A') }}</div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="info-label"><i class="fas fa-weight-hanging me-2 text-success"></i>Peso Bruto:</div>
+                            <div class="info-value weight-value">{{ datos.peso_bruto|default('N/A') }} kg</div>
+                        </div>
+                         <div class="mb-3">
+                            <div class="info-label"><i class="fas fa-balance-scale me-2 text-info"></i>Tipo Pesaje Bruto:</div>
+                            <div class="info-value">
+                                <span class="badge bg-{{ 'success' if datos.tipo_pesaje == 'directo' else ('primary' if datos.tipo_pesaje == 'bascula' else 'info') }}">
+                                    {% if datos.tipo_pesaje == 'directo' %}
+                                        Soporte Foto
+                                    {% elif datos.tipo_pesaje == 'virtual' %}
+                                        Manual
+                                    {% elif datos.tipo_pesaje == 'bascula' %}
+                                        Directo
+                                    {% else %}
+                                        {{ datos.tipo_pesaje|title if datos.tipo_pesaje else 'No especificado' }}
+                                    {% endif %}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4"> {# Columna 3 #}
+                       <div class="mb-3">
+                            <div class="info-label"><i class="fas fa-calendar-alt me-2 text-secondary"></i>Fecha/Hora Registro:</div>
+                            <div class="info-value">{{ datos.fecha_registro|default('N/A') }} {{ datos.hora_registro|default('') }}</div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="info-label"><i class="fas fa-file-invoice me-2 text-secondary"></i>Guía Transporte SAP:</div>
+                            <div class="info-value">{{ datos.codigo_guia_transporte_sap|default('N/A') }}</div>
+                        </div>
+                         <div class="mb-3">
+                            <div class="info-label"><i class="fas fa-sitemap me-2 text-warning"></i>Tipo de Guía:</div>
+                            <div class="info-value">
+                                {% if datos.is_madre is defined and datos.is_madre %}
+                                    <span class="badge bg-warning text-dark">Madre</span>
+                                {% elif datos.is_madre is defined and not datos.is_madre %}
+                                    <span class="badge bg-secondary">Normal</span>
+                                {% else %}
+                                    <span class="badge bg-light text-muted">No disponible</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% if datos.is_madre is defined and datos.is_madre and datos.hijas_str is defined and datos.hijas_str %}
+                        <div class="mb-3">
+                            <div class="info-label"><i class="fas fa-link me-2 text-warning"></i>Guías Hijas Asociadas:</div>
+                            <div class="info-value">
+                                <pre style="white-space: pre-wrap; margin: 0; font-family: inherit; background-color: #e9ecef; padding: 5px 10px; border-radius: 4px; font-size: 0.9em;">{{ datos.hijas_str }}</pre>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div> {# Cierre de la fila principal #}
             </div>
         </div>
+        <!-- FIN NUEVA Información General -->
 
         <!-- Sección de pesaje directo con webhook -->
         <div id="seccionDirecta" class="weighing-section mb-4">

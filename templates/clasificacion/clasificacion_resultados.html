@@ -363,42 +363,88 @@
 {% endblock %}
 
 {% block results_stats %}
-<div class="row mb-4">
-    <div class="col-md-3">
-        {{ cards.simple_stat_card(
-            "Proveedor", 
-            codigo_proveedor, 
-            "user", 
-            "primary",
-            nombre_proveedor
-        ) }}
+{# --- ELIMINAR DEBUGGING --- #}
+{# <div class="alert alert-warning">
+    <p>DEBUG: Código Proveedor = {{ codigo_proveedor }} | Tipo: {{ codigo_proveedor.__class__ }}</p>
+    <p>DEBUG: Nombre Proveedor = {{ nombre_proveedor }} | Tipo: {{ nombre_proveedor.__class__ }}</p>
+</div> #}
+{# --- FIN ELIMINAR DEBUGGING --- #}
+
+<div class="card info-card mb-4"> 
+    <div class="card-header">
+        <h5 class="mb-0">Información General</h5>
     </div>
-    <div class="col-md-3">
-        {{ cards.simple_stat_card(
-            "Peso Bruto", 
-            peso_bruto|string + " kg", 
-            "weight-hanging", 
-            "success"
-        ) }}
-    </div>
-    <div class="col-md-3">
-        {{ cards.simple_stat_card(
-            "Racimos", 
-            cantidad_racimos|string, 
-            "layer-group", 
-            "info"
-        ) }}
-    </div>
-    <div class="col-md-3">
-        {{ cards.simple_stat_card(
-            "Fecha", 
-            fecha_clasificacion, 
-            "calendar-alt", 
-            "secondary",
-            hora_clasificacion
-        ) }}
-    </div>
-</div>
+    <div class="card-body">
+        <div class="row"> {# Fila principal para las 3 columnas #}
+            <div class="col-md-4"> {# Columna 1 #}
+                <div class="mb-3">
+                    <div class="info-label"><i class="fas fa-barcode me-2 text-primary"></i>Código Guía:</div>
+                    <div class="info-value"><span class="badge bg-primary code-badge">{{ codigo_guia | default('N/A') }}</span></div>
+                </div>
+                <div class="mb-3">
+                    <div class="info-label"><i class="fas fa-user-tag me-2 text-primary"></i>Código Proveedor:</div>
+                    <div class="info-value">
+                        {% if codigo_proveedor and codigo_proveedor != 'None' %}
+                            {{ codigo_proveedor }}
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <div class="info-label"><i class="fas fa-user me-2 text-primary"></i>Nombre Proveedor:</div>
+                    <div class="info-value">
+                        {% if nombre_proveedor and nombre_proveedor != 'None' %}
+                            {{ nombre_proveedor }}
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </div> 
+                </div>
+            </div>
+            <div class="col-md-4"> {# Columna 2 #}
+                 <div class="mb-3">
+                    <div class="info-label"><i class="fas fa-boxes me-2 text-primary"></i>Cantidad de Racimos:</div>
+                    <div class="info-value">{{ cantidad_racimos | default('N/A') }}</div>
+                </div>
+                <div class="mb-3">
+                    <div class="info-label"><i class="fas fa-weight-hanging me-2 text-success"></i>Peso Bruto:</div>
+                    <div class="info-value weight-value">{{ peso_bruto ~ " kg" if peso_bruto is not none else 'N/A' }}</div> 
+                </div>
+            </div>
+            <div class="col-md-4"> {# Columna 3 #}
+                <div class="mb-3">
+                    <div class="info-label"><i class="fas fa-calendar-alt me-2 text-secondary"></i>Fecha Clasificación:</div>
+                    <div class="info-value">{{ fecha_clasificacion | default('N/A') }}</div>
+                </div>
+                <div class="mb-3">
+                    <div class="info-label"><i class="fas fa-clock me-2 text-secondary"></i>Hora Clasificación:</div>
+                    <div class="info-value">{{ hora_clasificacion | default('N/A') }}</div>
+                </div>
+                {% if is_madre is defined %}
+                <div class="mb-3">
+                    <div class="info-label"><i class="fas fa-sitemap me-2 text-warning"></i>Tipo de Guía:</div>
+                    <div class="info-value">
+                        {% if is_madre %}
+                            <span class="badge bg-warning text-dark">Madre</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Normal</span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+                {% if is_madre is defined and is_madre and hijas_str is defined and hijas_str %}
+                <div class="mb-3">
+                    <div class="info-label"><i class="fas fa-link me-2 text-warning"></i>Guías Hijas Asociadas:</div>
+                    <div class="info-value">
+                        <pre style="white-space: pre-wrap; margin: 0; font-family: inherit; background-color: #e9ecef; padding: 5px 10px; border-radius: 4px; font-size: 0.9em;">{{ hijas_str }}</pre>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div> {# Cierre de la fila principal #}
+    </div> {# Cierre de card-body #}
+</div> {# Cierre de card info-card #}
 
 <!-- Sección para mostrar el estado del procesamiento automático -->
 <div id="procesamiento-status" class="alert alert-info d-none">

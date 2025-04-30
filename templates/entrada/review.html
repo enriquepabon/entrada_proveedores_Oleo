@@ -160,15 +160,23 @@
     <div class="review-container">
         <h2 class="text-center mb-4">Revisión de Datos</h2>
         
-        <div class="row">
-            <div class="col-md-8">
+        {# Row specifically for the ticket image #}
+        <div class="row mb-4">
+            <div class="col-md-8 offset-md-2"> {# Center the image column #}
                 {% if image_filename %}
                 <div class="text-center">
                     <img src="{{ url_for('static', filename='uploads/' + image_filename) }}?{{ timestamp }}" 
                          alt="Tiquete" class="tiquete-image">
                 </div>
                 {% endif %}
+            </div>
+        </div>
 
+        {# New row for the table and side panels #}
+        <div class="row">
+            {# Table column #}
+            <div class="col-md-6"> 
+                {# Remove image from here #}
                 <form id="reviewForm" class="mt-4">
                     <div class="table-responsive">
                         <table id="dataTable" class="table table-bordered">
@@ -248,7 +256,28 @@
                 </form>
             </div>
             
-            <div class="col-md-4">
+            {# Tipo de Guia column - Remove mt-5 #}
+            <div class="col-md-3"> 
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Tipo de Guía:</h5>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" value="" id="checkMadre" name="madre">
+                            <label class="form-check-label" for="checkMadre">
+                                Es Guía Madre
+                            </label>
+                        </div>
+                        <div id="hijasContainer" class="mb-3 d-none">
+                            <label for="inputHijas" class="form-label">Códigos Guías Hijas:</label>
+                            <textarea class="form-control" id="inputHijas" name="hijas" rows="4" placeholder="Ingrese un código por línea"></textarea>
+                            <div class="form-text">Ingrese los códigos de las guías asociadas.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# Placa column - Remove mt-5 #}
+            <div class="col-md-3"> 
                 {% if plate_image_filename %}
                 <div class="plate-section">
                     <h4>Información de Placa</h4>
@@ -280,6 +309,9 @@
     <script>
         let originalValues = {};
         const loadingOverlay = document.getElementById('loadingOverlay');
+        const checkMadre = document.getElementById('checkMadre');
+        const hijasContainer = document.getElementById('hijasContainer');
+        const inputHijas = document.getElementById('inputHijas');
         
         function showLoading() {
             loadingOverlay.style.display = 'flex';
@@ -346,12 +378,22 @@
                     });
                 });
 
+                // Get Madre/Hijas data
+                const isMadre = checkMadre.checked;
+                const hijasValue = inputHijas.value;
+
+                const payload = {
+                    table_data: tableData,
+                    madre: isMadre,
+                    hijas: isMadre ? hijasValue : '' // Send hijas only if madre is checked
+                };
+
                 const response = await fetch('/update_data', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ table_data: tableData })
+                    body: JSON.stringify(payload) // Send updated payload
                 });
 
                 const data = await response.json();
@@ -403,6 +445,18 @@
                     suggestedInput.value = originalValue;
                 }
             });
+
+            // Add event listener for Madre checkbox
+            if (checkMadre && hijasContainer) {
+                checkMadre.addEventListener('change', function() {
+                    if (this.checked) {
+                        hijasContainer.classList.remove('d-none');
+                    } else {
+                        hijasContainer.classList.add('d-none');
+                        inputHijas.value = ''; // Clear hijas if unchecked
+                    }
+                });
+            }
         });
 
         // Agregar manejador para el botón de reprocesar placa

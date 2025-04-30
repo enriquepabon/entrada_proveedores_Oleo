@@ -4,21 +4,66 @@
 <div class="container py-4">
     <h2 class="text-center mb-4">Registro de Peso</h2>
 
-    <!-- Información General -->
-    <div class="info-section">
-        <div class="row">
-            <div class="col-md-6">
-                <p><strong>Código Proveedor:</strong> {{ datos.codigo }}</p>
-                <p><strong>Nombre Proveedor:</strong> {{ datos.nombre_proveedor }}</p>
-                <p><strong>Código Guía:</strong> {{ datos.codigo_guia }}</p>
-                <p><strong>Fecha y Hora Entrada:</strong> {{ datos.timestamp_registro_utc | format_datetime if datos.timestamp_registro_utc else 'N/A' }}</p>
-            </div>
-            <div class="col-md-6">
-                <p><strong>Fecha y Hora Pesaje:</strong> {{ datos.timestamp_pesaje_utc | format_datetime if datos.timestamp_pesaje_utc else 'Pendiente' }}</p>
-                <p><strong>Racimos:</strong> {{ datos.cantidad_racimos }}</p>
-                <p><strong>Se Cargó:</strong> {{ datos.cargo }}</p>
-                <p><strong>Se Acarreó:</strong> {{ datos.acarreo }}</p>
-                <p><strong>Transportista:</strong> {{ datos.transportista }}</p>
+    <!-- Información General Mejorada -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-light">
+            <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>Información General</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <!-- Columna Izquierda: Proveedor y Guía -->
+                <div class="col-lg-6 mb-3 mb-lg-0">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-5"><i class="fas fa-user me-1 text-primary"></i>Código Proveedor:</dt>
+                        <dd class="col-sm-7">{{ datos.codigo }}</dd>
+
+                        <dt class="col-sm-5"><i class="fas fa-id-card me-1 text-primary"></i>Nombre Proveedor:</dt>
+                        <dd class="col-sm-7">{{ datos.nombre_proveedor }}</dd>
+
+                        <dt class="col-sm-5"><i class="fas fa-barcode me-1 text-primary"></i>Código Guía:</dt>
+                        <dd class="col-sm-7">{{ datos.codigo_guia }}</dd>
+
+                        <dt class="col-sm-5"><i class="fas fa-calendar-alt me-1 text-primary"></i>Fecha/Hora Entrada:</dt>
+                        <dd class="col-sm-7">{{ datos.timestamp_registro_utc | format_datetime if datos.timestamp_registro_utc else 'N/A' }}</dd>
+                        
+                        <dt class="col-sm-5"><i class="fas fa-project-diagram me-1 text-primary"></i>Tipo de Guía:</dt>
+                        <dd class="col-sm-7">
+                            {% if datos.is_madre is defined and datos.is_madre %}
+                                <span class="badge bg-warning text-dark">Madre</span>
+                            {% elif datos.is_madre is defined and not datos.is_madre %}
+                                <span class="badge bg-secondary">Normal</span>
+                            {% else %}
+                                <span class="badge bg-light text-muted">No disponible</span>
+                            {% endif %}
+                        </dd>
+                    </dl>
+                </div>
+                <!-- Columna Derecha: Detalles y Guías Hijas -->
+                <div class="col-lg-6">
+                    <dl class="row mb-0">
+                        <dt class="col-sm-5"><i class="fas fa-calendar-check me-1 text-secondary"></i>Fecha/Hora Pesaje:</dt>
+                        <dd class="col-sm-7">{{ datos.timestamp_pesaje_utc | format_datetime if datos.timestamp_pesaje_utc else 'Pendiente' }}</dd>
+
+                        <dt class="col-sm-5"><i class="fas fa-boxes me-1 text-secondary"></i>Racimos:</dt>
+                        <dd class="col-sm-7">{{ datos.cantidad_racimos }}</dd>
+
+                        <dt class="col-sm-5"><i class="fas fa-truck-loading me-1 text-secondary"></i>Se Cargó:</dt>
+                        <dd class="col-sm-7">{{ datos.cargo }}</dd>
+
+                        <dt class="col-sm-5"><i class="fas fa-truck-moving me-1 text-secondary"></i>Se Acarreó:</dt>
+                        <dd class="col-sm-7">{{ datos.acarreo }}</dd>
+
+                        <dt class="col-sm-5"><i class="fas fa-id-badge me-1 text-secondary"></i>Transportista:</dt>
+                        <dd class="col-sm-7">{{ datos.transportista }}</dd>
+                    </dl>
+                    
+                    {% if datos.is_madre is defined and datos.is_madre and datos.hijas_str is defined and datos.hijas_str %}
+                    <div class="mt-3 border-top pt-3">
+                        <h6 class="mb-2"><i class="fas fa-sitemap me-1 text-warning"></i>Guías Hijas Asociadas:</h6>
+                        <pre class="bg-light p-2 rounded" style="white-space: pre-wrap; font-size: 0.9em;">{{ datos.hijas_str }}</pre>
+                    </div>
+                    {% endif %}
+                </div>
             </div>
         </div>
     </div>

@@ -545,6 +545,18 @@ def pesaje_neto(codigo_guia):
             
         logger.info(f"Datos recuperados para pesaje neto: {datos}")
         
+        # --- NUEVO: Asegurar que fecha_registro y hora_registro se calculen --- 
+        if datos.get('timestamp_registro_utc'):
+            try:
+                fecha_local, hora_local = convertir_timestamp_a_fecha_hora(datos['timestamp_registro_utc'])
+                datos['fecha_registro'] = fecha_local
+                datos['hora_registro'] = hora_local
+            except Exception as e:
+                 logger.warning(f"Error al convertir timestamp para {codigo_guia} en pesaje_neto: {e}")
+                 datos['fecha_registro'] = datos.get('fecha_registro', 'Error Conv')
+                 datos['hora_registro'] = datos.get('hora_registro', '')
+        # --- FIN NUEVO ---
+        
         return render_template('pesaje/pesaje_neto.html', datos=datos)
         
     except Exception as e:
