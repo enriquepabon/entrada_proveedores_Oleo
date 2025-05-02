@@ -43,6 +43,30 @@ def ensure_pesajes_neto_schema():
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         
+        # --- INICIO MODIFICACIÓN: Crear tabla si no existe ---
+        # Definición de la tabla obtenida de db_schema.py
+        CREATE_PESAJES_NETO_TABLE = """
+        CREATE TABLE IF NOT EXISTS pesajes_neto (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            codigo_guia TEXT UNIQUE NOT NULL,
+            codigo_proveedor TEXT,
+            nombre_proveedor TEXT,
+            peso_bruto REAL,
+            peso_tara REAL,
+            peso_neto REAL,
+            peso_producto REAL,
+            tipo_pesaje_neto TEXT,
+            timestamp_pesaje_neto_utc TEXT,
+            comentarios TEXT,
+            respuesta_sap TEXT,
+            estado TEXT DEFAULT 'activo',
+            fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """
+        cursor.execute(CREATE_PESAJES_NETO_TABLE)
+        conn.commit()
+        # --- FIN MODIFICACIÓN ---
+
         # Verificar columnas existentes
         cursor.execute("PRAGMA table_info(pesajes_neto)")
         columns = {col[1] for col in cursor.fetchall()}
