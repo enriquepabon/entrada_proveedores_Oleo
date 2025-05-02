@@ -13,6 +13,9 @@ from concurrent.futures import ThreadPoolExecutor
 from app.blueprints.entrada import bp
 from app.utils.common import CommonUtils as Utils
 from app.blueprints.misc.routes import PROCESS_WEBHOOK_URL, PLACA_WEBHOOK_URL, REVALIDATION_WEBHOOK_URL, REGISTER_WEBHOOK_URL
+# --- INICIO MODIFICACIÓN: Importar allowed_file ---
+from app.blueprints.misc.routes import allowed_file 
+# --- FIN MODIFICACIÓN ---
 import glob
 from app.utils.image_processing import process_plate_image
 import db_utils  # Importar db_utils para operaciones de base de datos
@@ -26,6 +29,9 @@ from urllib3.poolmanager import PoolManager
 # --- FIN NUEVOS IMPORTS ---
 # Importar login_required
 from flask_login import login_required
+# --- INICIO MODIFICACIÓN: Importar secure_filename ---
+from werkzeug.utils import secure_filename
+# --- FIN MODIFICACIÓN ---
 
 # Configurar logging
 logger = logging.getLogger(__name__)
@@ -1771,6 +1777,85 @@ def detalles_registro(codigo_guia):
         logger.error(traceback.format_exc())
         flash(f"Error al cargar los detalles: {str(e)}", "error")
         return redirect(url_for('entrada.lista_entradas'))
+
+@bp.route('/', methods=['GET', 'POST'])
+@login_required # Añadir protección
+def upload_file():
+    """
+    Handles file upload and processing
+    """
+    # Inicializar Utils dentro del contexto de la aplicación
+    utils = Utils(current_app)
+
+    if request.method == 'POST':
+        try:
+            session.clear()
+
+            if 'file' not in request.files:
+                return render_template('error.html', message="No se ha seleccionado ningún archivo.")
+
+            file = request.files['file']
+            plate_file = request.files.get('plate_file')
+
+            if file.filename == '':
+                return render_template('error.html', message="No se ha seleccionado ningún archivo.")
+
+            if file and allowed_file(file.filename):
+                try:
+                    # --- INICIO MODIFICACIÓN ---
+                    # Asegurarse de que el directorio de uploads exista
+                    uploads_dir = current_app.config.get('UPLOAD_FOLDER', os.path.join(os.getcwd(), 'static', 'uploads'))
+                    if not os.path.exists(uploads_dir):
+                        os.makedirs(uploads_dir)
+
+                    # Generar un nombre base único (ej. usando timestamp)
+                    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                    # Obtener extensión original
+                    original_filename, file_extension = os.path.splitext(file.filename)
+                    # Crear nombre de archivo único y seguro
+                    # Usando prefijo 'tiquete_' y timestamp para claridad
+                    # Asegurarse que la extensión tenga un punto si no lo tiene
+                    if file_extension and not file_extension.startswith('.'):
+                        file_extension = '.' + file_extension
+                    elif not file_extension:
+                        file_extension = '.jpg' # Asumir jpg si no hay extensión
+
+                    unique_filename = f"tiquete_{secure_filename(original_filename)}_{timestamp}{file_extension}"
+
+                    # Usar el nombre ÚNICO para guardar
+                    image_path = os.path.join(uploads_dir, unique_filename)
+                    file.save(image_path)
+
+                    # Guardar el nombre ÚNICO en la sesión
+                    session['image_filename'] = unique_filename
+                    logger.info(f"Imagen guardada en: {image_path}") # Log ahora muestra el nombre único
+                    # --- FIN MODIFICACIÓN ---
+
+                    # Procesar imagen de placa si existe
+                    if plate_file and plate_file.filename != '' and allowed_file(plate_file.filename):
+                        plate_filename = secure_filename(plate_file.filename)
+                        plate_path = os.path.join(uploads_dir, plate_filename)
+                        plate_file.save(plate_path)
+                        session['plate_image_filename'] = plate_filename
+                        logger.info(f"Imagen de placa guardada en: {plate_path}")
+
+                    # Guardar sesión antes de redirigir
+                    session.modified = True
+                    logger.info(f"Redirigiendo a: {url_for('entrada.processing')}")
+                    return redirect(url_for('entrada.processing'))
+                except Exception as e:
+                    logger.error(f"Error guardando archivo: {str(e)}")
+                    logger.error(traceback.format_exc())
+                    return render_template('error.html', message=f"Error procesando el archivo: {str(e)}")
+            else:
+                return render_template('error.html', message="Tipo de archivo no permitido.")
+        except Exception as e:
+            logger.error(f"Error general en upload_file: {str(e)}")
+            logger.error(traceback.format_exc())
+            return render_template('error.html', message=f"Error general en la aplicación: {str(e)}")
+
+    # Si es GET, redirigir a la pantalla principal
+    return redirect(url_for('entrada.home'))
 
 
 

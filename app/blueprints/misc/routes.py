@@ -38,6 +38,9 @@ from db_operations import (
 )
 # Importar login_required
 from flask_login import login_required
+# --- INICIO MODIFICACIÓN: Importar ensure_pesajes_neto_schema ---
+from app.blueprints.pesaje_neto.routes import ensure_pesajes_neto_schema 
+# --- FIN MODIFICACIÓN ---
 
 # --- Funciones Auxiliares Definidas Globalmente --- 
 # (Re-insertando definición para asegurar reconocimiento por linter)
@@ -1044,6 +1047,9 @@ def ver_guia_centralizada(codigo_guia):
     Vista centralizada de una guía, mostrando toda la información relevante.
     """
     try:
+        # --- INICIO MODIFICACIÓN: Llamar ensure_pesajes_neto_schema ---
+        ensure_pesajes_neto_schema()
+        # --- FIN MODIFICACIÓN ---
         import db_utils
         from flask import current_app
         
