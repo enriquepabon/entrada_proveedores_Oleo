@@ -477,6 +477,19 @@
                     document.getElementById('pesoNetoDisplay').textContent = respuestaSAP.peso_neto;
                 }
                 
+                // Mostrar el peso neto si está disponible
+                if (respuestaSAP.peso_neto) {
+                    document.getElementById('pesoNetoDisplay').textContent = respuestaSAP.peso_neto;
+                    // --- INICIO MODIFICACIÓN: Procesar valores numéricos ---
+                    const pesoTara = respuestaSAP.peso_tara_valor || respuestaSAP.peso_tara || '';
+                    const pesoNeto = respuestaSAP.peso_neto_valor || respuestaSAP.peso_neto || '';
+                    
+                    // Asignar valores procesados a los campos del formulario
+                    document.getElementById('peso_tara').value = pesoTara.toString().replace(/[^\d.]/g, '');
+                    document.getElementById('peso_neto').value = pesoNeto.toString().replace(/[^\d.]/g, '');
+                    // --- FIN MODIFICACIÓN ---
+                }
+                
                 // Mostrar las secciones adicionales
                 document.getElementById('verificacionPlacaSection').classList.remove('hidden');
                 document.getElementById('fotosAdicionalesSection').classList.remove('hidden');
@@ -642,12 +655,16 @@
                 }
             }
             
-            // --- INICIO: Comentar lógica de peso_producto basada en SAP --- 
-            // if (result.peso_producto_valor) {
-            //     // Actualizar el display del peso producto si está disponible en la respuesta SAP
-            //     document.getElementById('pesoProductoDisplay').textContent = `${result.peso_producto_valor} kg`; 
-            // }
-            // --- FIN: Comentar lógica de peso_producto basada en SAP --- 
+            // --- INICIO MODIFICACIÓN: Procesar valores numéricos en el parseo local ---
+            if (result.peso_tara_valor || result.peso_tara) {
+                const pesoTara = (result.peso_tara_valor || result.peso_tara).toString().replace(/[^\d.]/g, '');
+                document.getElementById('peso_tara').value = pesoTara;
+            }
+            if (result.peso_neto_valor || result.peso_neto) {
+                const pesoNeto = (result.peso_neto_valor || result.peso_neto).toString().replace(/[^\d.]/g, '');
+                document.getElementById('peso_neto').value = pesoNeto;
+            }
+            // --- FIN MODIFICACIÓN ---
 
             return result;
         }
