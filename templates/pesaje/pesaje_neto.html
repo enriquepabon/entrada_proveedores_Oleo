@@ -477,27 +477,6 @@
                     document.getElementById('pesoNetoDisplay').textContent = respuestaSAP.peso_neto;
                 }
                 
-                // Mostrar el peso del producto si está disponible
-                if (respuestaSAP.peso_producto_valor) {
-                    document.getElementById('pesoProductoDisplay').textContent = `${respuestaSAP.peso_producto_valor} kg`;
-                } else if (respuestaSAP.peso_bruto_valor && respuestaSAP.peso_tara_valor) {
-                    // Calcular el peso del producto si no está disponible pero tenemos bruto y tara
-                    const pesoBruto = parseFloat(respuestaSAP.peso_bruto_valor);
-                    const pesoTara = parseFloat(respuestaSAP.peso_tara_valor);
-                    const pesoProducto = (pesoBruto - pesoTara).toFixed(3);
-                    document.getElementById('pesoProductoDisplay').textContent = `${pesoProducto} kg`;
-                }
-                
-                if (respuestaSAP.fecha && respuestaSAP.hora) {
-                    document.getElementById('fechaHoraDisplay').textContent = `${respuestaSAP.fecha} ${respuestaSAP.hora}`;
-                } else {
-                    // Si no hay fecha y hora específicas, usar la fecha y hora actual
-                    const now = new Date();
-                    const fecha = now.toLocaleDateString('es-ES');
-                    const hora = now.toLocaleTimeString('es-ES');
-                    document.getElementById('fechaHoraDisplay').textContent = `${fecha} ${hora}`;
-                }
-                
                 // Mostrar las secciones adicionales
                 document.getElementById('verificacionPlacaSection').classList.remove('hidden');
                 document.getElementById('fotosAdicionalesSection').classList.remove('hidden');
@@ -663,15 +642,13 @@
                 }
             }
             
-            // Calcular el peso del producto si tenemos los valores necesarios
-            if (result.peso_bruto_valor && result.peso_tara_valor) {
-                const pesoBruto = parseFloat(result.peso_bruto_valor);
-                const pesoTara = parseFloat(result.peso_tara_valor);
-                result.peso_producto_valor = (pesoBruto - pesoTara).toFixed(3);
-                result.peso_producto = `${result.peso_producto_valor} kg`;
-            }
-            
-            console.log("Datos parseados:", result);
+            // --- INICIO: Comentar lógica de peso_producto basada en SAP --- 
+            // if (result.peso_producto_valor) {
+            //     // Actualizar el display del peso producto si está disponible en la respuesta SAP
+            //     document.getElementById('pesoProductoDisplay').textContent = `${result.peso_producto_valor} kg`; 
+            // }
+            // --- FIN: Comentar lógica de peso_producto basada en SAP --- 
+
             return result;
         }
 
