@@ -258,15 +258,27 @@ def registrar_peso_neto_directo():
             error_message = "No se encontraron los datos originales de la guía"
             raise ValueError(error_message)
             
-        # Calcular peso_producto si es posible
-        peso_bruto = datos_originales.get('peso_bruto')
-        peso_producto = None
-        if peso_bruto is not None and peso_tara is not None:
+        # Calcular peso_producto (Tara - Bruto) -> REVERTIDO: Calcular como Bruto - Tara 
+        # -> AJUSTE FINAL: Asignar peso_neto como peso_producto
+        peso_producto = peso_neto # Asignar peso_neto directamente
+        
+        logger.info(f"Pesos validados: tara={peso_tara}, neto={peso_neto}, producto={peso_producto}")
+        
+        # Modificar el JSON de respuesta_sap antes de guardarlo
+        if respuesta_sap:
             try:
-                 peso_bruto_float = float(peso_bruto)
-                 peso_producto = round(peso_bruto_float - peso_tara, 3) # Calculate with 3 decimals
-            except (ValueError, TypeError):
-                 logger.warning(f"No se pudo calcular peso_producto para {codigo_guia}, peso_bruto o peso_tara no son numéricos.")
+                respuesta_sap_dict = json.loads(respuesta_sap)
+                # Asegurar que peso_neto (string) exista antes de usarlo
+                peso_neto_str = str(peso_neto) if peso_neto is not None else '0.0'
+                respuesta_sap_dict['peso_producto_valor'] = peso_neto_str
+                respuesta_sap_dict['peso_producto'] = f"{peso_neto_str} kg"
+                respuesta_sap = json.dumps(respuesta_sap_dict) # Convertir de nuevo a JSON string
+                logger.info(f"respuesta_sap JSON modificado para igualar peso_neto: {respuesta_sap}")
+            except json.JSONDecodeError as json_err:
+                logger.error(f"Error procesando respuesta_sap JSON: {json_err}. Se guardará el original.")
+            except Exception as e:
+                logger.error(f"Error inesperado modificando respuesta_sap: {e}")
+        # --- FIN MODIFICACIÓN ---
         
         # Actualizar directamente en la base de datos
         try:

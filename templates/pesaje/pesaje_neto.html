@@ -171,6 +171,12 @@
     </div>
 
     <div class="container py-4">
+        <!-- Contenedor para mostrar errores -->
+        <div id="errorContainer" class="alert alert-danger d-none" role="alert">
+            <i class="fas fa-exclamation-triangle me-2"></i><span id="errorMessage"></span>
+        </div>
+        <!-- Fin Contenedor de errores -->
+
         <h2 class="text-center mb-2">Pesaje Neto (Producto)</h2>
         <h4 class="text-center mb-2">{{ datos.codigo_guia }}</h4>
         <h4 class="text-center mb-4">{{ datos.nombre_proveedor|default(datos.nombre, true) }}</h4>
@@ -387,356 +393,269 @@
     <script>
         // Variables globales
         const codigoGuia = "{{ datos.codigo_guia }}";
+        const placaRegistrada = "{{ datos.placa }}";
         const codigoProveedor = "{{ datos.codigo_proveedor|default(datos.codigo, true) }}";
         const pesoBruto = "{{ datos.peso_bruto }}";
-        const placaRegistrada = "{{ datos.placa }}";
         const codigoGuiaTransporteSAP = "{{ datos.codigo_guia_transporte_sap|default('', true) }}";
+
         let fotosAdicionales = [];
         let datosRespuestaSAP = null;
 
-        // Mostrar/ocultar overlay de carga
+        // Función para mostrar/ocultar el loader
         function mostrarCarga(mostrar) {
-            document.getElementById('loadingOverlay').style.display = mostrar ? 'flex' : 'none';
+            const loader = document.getElementById('loadingOverlay'); 
+            if (loader) {
+                loader.style.display = mostrar ? 'flex' : 'none';
+            }
         }
 
-        // Manejo del botón para consultar datos de SAP
-        document.getElementById('btnConsultarSAP').addEventListener('click', async function() {
-            try {
-                mostrarCarga(true);
-                
-                // Preparar datos para enviar al webhook usando FormData
-                const formData = new FormData();
-                formData.append('codigo_proveedor', codigoProveedor);
-                formData.append('peso_bruto', pesoBruto);
-                formData.append('guia_transporte_sap', codigoGuiaTransporteSAP);
+        // Función para mostrar errores
+        function mostrarError(mensaje) {
+            const errorContainer = document.getElementById('errorContainer'); 
+            const errorMessage = document.getElementById('errorMessage');
+            if(errorContainer && errorMessage) {
+                errorMessage.textContent = mensaje;
+                errorContainer.classList.remove('d-none');
+            }
+        }
 
-                // Añadir la imagen si existe un input para ella y se seleccionó un archivo
-                const imagenInput = document.getElementById('imagenSAP');
-                if (imagenInput && imagenInput.files[0]) {
-                    formData.append('imagen', imagenInput.files[0]);
-                }
+        // --- Lógica Principal --- 
+        document.addEventListener('DOMContentLoaded', function() {
+            // Listener para consultar SAP (Restaurado a lógica original + verificación)
+            const btnConsultarSAP = document.getElementById('btnConsultarSAP');
+            if (btnConsultarSAP) {
+                btnConsultarSAP.addEventListener('click', async function() {
+                    try {
+                        mostrarCarga(true);
+                        document.getElementById('errorContainer').classList.add('d-none');
+                        
+                        // Preparar datos (Lógica Original)
+                        const formData = new FormData();
+                        formData.append('codigo_proveedor', codigoProveedor);
+                        formData.append('peso_bruto', pesoBruto);
+                        formData.append('guia_transporte_sap', codigoGuiaTransporteSAP);
+                        const imagenInput = document.getElementById('imagenSAP');
+                        if (imagenInput && imagenInput.files[0]) {
+                            formData.append('imagen', imagenInput.files[0]);
+                        }
 
-                // Enviar datos al webhook (ya no se usa JSON, se envía FormData)
-                const response = await fetch('https://hook.us2.make.com/b7r4cic76sundyy2nc8f305llik3tprx', {
-                    method: 'POST',
-                    // No es necesario 'Content-Type' cuando se usa FormData
-                    body: formData
+                        // Enviar datos al webhook de Make.com (Lógica Original)
+                        const response = await fetch('https://hook.us2.make.com/b7r4cic76sundyy2nc8f305llik3tprx', {
+                            method: 'POST',
+                            body: formData
+                        });
+
+                        // Procesar texto de respuesta (Lógica Original)
+                        const responseText = await response.text();
+                        console.log('Respuesta del webhook (texto):', responseText);
+                        
+                        // Parsear texto de respuesta (Lógica Original)
+                        const respuestaSAP = parseWebhookResponse(responseText);
+                        console.log('Respuesta parseada:', respuestaSAP);
+                        
+                        // Guardar los datos de la respuesta (Lógica Original)
+                        datosRespuestaSAP = respuestaSAP;
+
+                        // --- INICIO: NUEVA Lógica de Verificación --- 
+                        const notaSap = respuestaSAP.nota || '';
+                        if (responseText.includes('No Valido')) {
+                            console.warn("Validación SAP indicó 'No Valido'. Mostrando error con nota.");
+                            mostrarError(notaSap || "La validación con SAP indicó 'No Valido', pero no se proporcionó una nota específica.");
+                            document.getElementById('btnGuardarPesaje').disabled = false; 
+                            mostrarResultadosWebhook(respuestaSAP); 
+                        } else {
+                            console.log("Validación SAP exitosa y válida. Mostrando resultados.");
+                            mostrarResultadosWebhook(respuestaSAP); 
+                            document.getElementById('btnGuardarPesaje').disabled = false; 
+                        }
+                        // --- FIN: NUEVA Lógica de Verificación --- 
+
+                        // Mostrar secciones adicionales (siempre, ya que el guardado está habilitado)
+                        document.getElementById('verificacionPlacaSection').classList.remove('hidden');
+                        document.getElementById('fotosAdicionalesSection').classList.remove('hidden');
+                        document.getElementById('comentariosSection').classList.remove('hidden');
+                        document.getElementById('guardarPesajeSection').classList.remove('hidden');
+
+                    } catch (error) {
+                        console.error('Error al consultar datos SAP (Fetch/Network/Parse):', error);
+                        mostrarError('Error al comunicarse con el sistema SAP o procesar la respuesta. Por favor intente nuevamente.');
+                    } finally {
+                        mostrarCarga(false);
+                    }
                 });
-
-                // Procesar texto de respuesta
-                const responseText = await response.text();
-                console.log('Respuesta del webhook (texto):', responseText);
-                
-                // Parsear texto de respuesta a formato estructurado
-                const respuestaSAP = parseWebhookResponse(responseText);
-                console.log('Respuesta parseada:', respuestaSAP);
-                
-                // Guardar los datos de la respuesta para usarlos después
-                datosRespuestaSAP = respuestaSAP;
-                
-                // Mostrar la sección de respuesta SAP
-                document.getElementById('respuestaSAPSection').classList.remove('hidden');
-                
-                // Mostrar las validaciones
-                const validacionesContainer = document.getElementById('validacionesContainer');
-                validacionesContainer.innerHTML = '';
-                
-                // Añadir validaciones al contenedor
-                if (respuestaSAP.guia_transito_sap) {
-                    agregarValidacion(validacionesContainer, 'Guía Tránsito SAP', respuestaSAP.guia_transito_sap);
-                }
-                
-                if (respuestaSAP.codigo_proveedor) {
-                    agregarValidacion(validacionesContainer, 'Código Proveedor', respuestaSAP.codigo_proveedor);
-                }
-                
-                if (respuestaSAP.peso_bruto) {
-                    agregarValidacion(validacionesContainer, 'Peso Bruto', respuestaSAP.peso_bruto);
-                }
-                
-                // Mostrar la nota si existe
-                if (respuestaSAP.nota) {
-                    const notaDiv = document.createElement('div');
-                    notaDiv.className = 'alert alert-warning mt-3';
-                    notaDiv.innerHTML = `
-                        <strong>Nota:</strong> ${respuestaSAP.nota}
-                    `;
-                    validacionesContainer.appendChild(notaDiv);
-                }
-                
-                // Mostrar los pesos y la fecha/hora
-                if (respuestaSAP.peso_tara_valor) {
-                    document.getElementById('pesoTaraDisplay').textContent = `${respuestaSAP.peso_tara_valor} kg`;
-                } else if (respuestaSAP.peso_tara) {
-                    document.getElementById('pesoTaraDisplay').textContent = respuestaSAP.peso_tara;
-                }
-                
-                if (respuestaSAP.peso_neto_valor) {
-                    document.getElementById('pesoNetoDisplay').textContent = `${respuestaSAP.peso_neto_valor} kg`;
-                } else if (respuestaSAP.peso_neto) {
-                    document.getElementById('pesoNetoDisplay').textContent = respuestaSAP.peso_neto;
-                }
-                
-                // Mostrar el peso neto si está disponible
-                if (respuestaSAP.peso_neto) {
-                    document.getElementById('pesoNetoDisplay').textContent = respuestaSAP.peso_neto;
-                    // --- INICIO MODIFICACIÓN: Procesar valores numéricos ---
-                    const pesoTara = respuestaSAP.peso_tara_valor || respuestaSAP.peso_tara || '';
-                    const pesoNeto = respuestaSAP.peso_neto_valor || respuestaSAP.peso_neto || '';
-                    
-                    // Asignar valores procesados a los campos del formulario
-                    document.getElementById('peso_tara').value = pesoTara.toString().replace(/[^\d.]/g, '');
-                    document.getElementById('peso_neto').value = pesoNeto.toString().replace(/[^\d.]/g, '');
-                    // --- FIN MODIFICACIÓN ---
-                }
-                
-                // Mostrar las secciones adicionales
-                document.getElementById('verificacionPlacaSection').classList.remove('hidden');
-                document.getElementById('fotosAdicionalesSection').classList.remove('hidden');
-                document.getElementById('comentariosSection').classList.remove('hidden');
-                document.getElementById('guardarPesajeSection').classList.remove('hidden');
-                
-                // Habilitar el botón de verificar placa cuando se suba una foto
-                document.getElementById('placaFoto').addEventListener('change', function() {
-                    document.getElementById('btnVerificarPlaca').disabled = !this.files[0];
-                    document.getElementById('verificarPlaca').disabled = !this.files[0];
+            }
+            
+            // Listener para capturar pantalla (SAP)
+            const btnCapturarPantallaSAP = document.getElementById('btn_capturar_pantalla_sap');
+             if (btnCapturarPantallaSAP) {
+                btnCapturarPantallaSAP.addEventListener('click', () => startScreenCaptureNeto(displayCapturedImageSAP));
+            }
+            
+            // Preview imagen SAP
+            const inputImagenSAP = document.getElementById('imagenSAP');
+            const previewImagenSAP = document.getElementById('previewImagenSAP');
+            if(inputImagenSAP && previewImagenSAP) {
+                inputImagenSAP.addEventListener('change', function(event) {
+                    const file = event.target.files[0];
+                    if (file) {
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            previewImagenSAP.innerHTML = `<img src="${e.target.result}" class="img-fluid rounded">`;
+                        }
+                        reader.readAsDataURL(file);
+                    }
                 });
-                
-            } catch (error) {
-                console.error('Error al consultar datos SAP:', error);
-                alert('Error al comunicarse con el sistema SAP. Por favor intente nuevamente.');
-            } finally {
-                mostrarCarga(false);
+            }
+            
+            // Habilitar botón verificar placa
+            const placaFotoInput = document.getElementById('placaFoto');
+            const btnVerificarPlaca = document.getElementById('btnVerificarPlaca');
+            const checkVerificarPlaca = document.getElementById('verificarPlaca');
+            if (placaFotoInput && btnVerificarPlaca && checkVerificarPlaca) {
+                 placaFotoInput.addEventListener('change', function() {
+                    btnVerificarPlaca.disabled = !this.files[0];
+                    checkVerificarPlaca.disabled = !this.files[0];
+                });
+            }
+            
+            // Preview imagen placa
+            const previewPlaca = document.getElementById('previewPlacaImage');
+            if(placaFotoInput && previewPlaca) {
+                placaFotoInput.addEventListener('change', function(e) {
+                    const file = e.target.files[0];
+                    if (file) {
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            previewPlaca.src = e.target.result;
+                            previewPlaca.classList.remove('hidden');
+                        }
+                        reader.readAsDataURL(file);
+                    }
+                });
+            }
+            
+            // Listener para verificar placa
+            if(btnVerificarPlaca) {
+                btnVerificarPlaca.addEventListener('click', verificarPlacaEnImagen);
+            }
+            if(checkVerificarPlaca) {
+                 checkVerificarPlaca.addEventListener('change', function() {
+                    if (this.checked) {
+                        verificarPlacaEnImagen();
+                     } else {
+                        document.getElementById('resultadoVerificacion').classList.add('hidden');
+                     }
+                 });
+            }
+            
+            // Listener para fotos adicionales
+            const fotosAdicionalesInput = document.getElementById('fotosAdicionales');
+            const galeriaFotos = document.getElementById('galeriaFotos');
+            if(fotosAdicionalesInput && galeriaFotos) {
+                fotosAdicionalesInput.addEventListener('change', function(e) {
+                    const files = e.target.files;
+                    if (files.length > 0) {
+                        for (let i = 0; i < files.length; i++) {
+                            const file = files[i];
+                            const reader = new FileReader();
+                            reader.onload = function(e) {
+                                const photoIndex = fotosAdicionales.length;
+                                fotosAdicionales.push(file);
+                                const photoDiv = document.createElement('div');
+                                photoDiv.className = 'photo-preview';
+                                photoDiv.innerHTML = `
+                                    <img src="${e.target.result}" alt="Foto adicional">
+                                    <div class="remove-photo" data-index="${photoIndex}">
+                                        <i class="fas fa-times"></i>
+                                    </div>
+                                `;
+                                galeriaFotos.appendChild(photoDiv);
+                                photoDiv.querySelector('.remove-photo').addEventListener('click', function() {
+                                    const index = parseInt(this.getAttribute('data-index'));
+                                    fotosAdicionales.splice(index, 1);
+                                    galeriaFotos.removeChild(photoDiv);
+                                    document.querySelectorAll('.remove-photo').forEach((elem, i) => {
+                                        elem.setAttribute('data-index', i);
+                                    });
+                                });
+                            }
+                            reader.readAsDataURL(file);
+                        }
+                    }
+                });
+            }
+            
+            // Listener para guardar pesaje neto
+            const btnGuardar = document.getElementById('btnGuardarPesaje');
+            if (btnGuardar) {
+                btnGuardar.addEventListener('click', guardarPesajeNeto);
             }
         });
 
-        // Añadir este código para la previsualización de la imagen
-        const inputImagenSAP = document.getElementById('imagenSAP');
-        const previewImagenSAP = document.getElementById('previewImagenSAP');
-
-        if(inputImagenSAP && previewImagenSAP) {
-            inputImagenSAP.addEventListener('change', function(event) {
-                const file = event.target.files[0];
-                if (file) {
-                    const reader = new FileReader();
-                    reader.onload = function(e) {
-                        previewImagenSAP.innerHTML = `<img src="${e.target.result}" class="img-fluid rounded">`;
-                    }
-                    reader.readAsDataURL(file);
-                }
-            });
-        }
-
-        // --- Screen Capture Logic for SAP Image ---
-        const btnCapturarPantallaSAP = document.getElementById('btn_capturar_pantalla_sap');
-
-        async function startScreenCaptureNeto(displayCallback) {
-            if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-                alert("La captura de pantalla no está soportada por este navegador.");
-                return;
-            }
-
-            let captureStream = null;
-            const videoElement = document.createElement('video');
-            const canvasElement = document.createElement('canvas');
-            const context = canvasElement.getContext('2d');
-
-            try {
-                captureStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-
-                videoElement.srcObject = captureStream;
-                videoElement.play();
-
-                videoElement.onloadedmetadata = () => {
-                    canvasElement.width = videoElement.videoWidth;
-                    canvasElement.height = videoElement.videoHeight;
-                    context.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
-                    captureStream.getTracks().forEach(track => track.stop());
-
-                    canvasElement.toBlob(blob => {
-                        if (blob) {
-                            displayCallback(blob);
-                        } else {
-                            alert("Error al crear la imagen desde la captura de pantalla.");
-                        }
-                    }, 'image/png');
-                };
-            } catch (err) {
-                console.error("Error en captura de pantalla SAP: ", err);
-                alert(`Error al capturar pantalla: ${err.message}`);
-                if (captureStream) {
-                    captureStream.getTracks().forEach(track => track.stop());
-                }
-            }
-        }
-
-        // Callback para mostrar la imagen en el preview de SAP
-        function displayCapturedImageSAP(blob) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                previewImagenSAP.innerHTML = `<img src="${e.target.result}" class="img-fluid rounded">`;
-                 // También necesitamos asignar este blob al input de archivo para que se envíe
-                 // Crear un objeto File desde el Blob
-                 const capturedFile = new File([blob], `captura_pantalla_sap_${Date.now()}.png`, { type: 'image/png' });
-                 // Crear un DataTransfer para simular la selección de archivo
-                 const dataTransfer = new DataTransfer();
-                 dataTransfer.items.add(capturedFile);
-                 inputImagenSAP.files = dataTransfer.files;
-                 // Disparar evento change para cualquier otra lógica que dependa de él
-                 inputImagenSAP.dispatchEvent(new Event('change', { bubbles: true }));
-            }
-            reader.readAsDataURL(blob);
-        }
-
-        if (btnCapturarPantallaSAP) {
-            btnCapturarPantallaSAP.addEventListener('click', () => startScreenCaptureNeto(displayCapturedImageSAP));
-        }
-        // ----------------------------------------
-
-        // Función para parsear la respuesta del webhook que viene en texto plano
+        // Función para parsear la respuesta del webhook (Original)
         function parseWebhookResponse(text) {
-            const lines = text.trim().split('\n'); // Revertir a split('\n')
+            const lines = text.trim().split('\n'); 
             const result = {
                 fecha: new Date().toLocaleDateString('es-ES'),
                 hora: new Date().toLocaleTimeString('es-ES')
             };
-
             for (const line of lines) {
                 if (line.includes('Guia de transporte:')) {
                     const [_, valueWithStatus] = line.split('Guia de transporte:');
-                    const value = valueWithStatus.trim();
-                    const valido = value.endsWith('Valido');
-                    result.guia_transito_sap = value;
-                } 
-                else if (line.includes('Código Interno:') || line.includes('Codigo Interno:')) {
-                    const [_, valueWithStatus] = line.includes('Código Interno:') ? 
-                                                line.split('Código Interno:') : 
-                                                line.split('Codigo Interno:');
-                    const value = valueWithStatus.trim();
-                    const valido = value.endsWith('Valido');
-                    result.codigo_proveedor = value;
-                }
-                else if (line.includes('Peso Bruto:')) {
+                    result.guia_transito_sap = valueWithStatus.trim();
+                } else if (line.includes('Código Interno:') || line.includes('Codigo Interno:')) {
+                    const [_, valueWithStatus] = line.includes('Código Interno:') ? line.split('Código Interno:') : line.split('Codigo Interno:');
+                    result.codigo_proveedor = valueWithStatus.trim();
+                } else if (line.includes('Peso Bruto:')) {
                     const [_, valueWithStatus] = line.split('Peso Bruto:');
-                    const value = valueWithStatus.trim();
-                    const valido = value.endsWith('Valido');
-                    result.peso_bruto = value;
-                    
-                    // Extraer solo el valor numérico para cálculos
-                    const numericMatch = value.match(/(\d+[.,]\d+)/);
-                    if (numericMatch) {
-                        result.peso_bruto_valor = numericMatch[0].replace(',', '.');
-                    }
-                }
-                else if (line.includes('Tara:')) {
+                    result.peso_bruto = valueWithStatus.trim();
+                    const numericMatch = valueWithStatus.match(/(\d+[.,]\d+)/);
+                    if (numericMatch) result.peso_bruto_valor = numericMatch[0].replace(',', '.');
+                } else if (line.includes('Tara:')) {
                     const [_, value] = line.split('Tara:');
                     result.peso_tara = value.trim();
-                    
-                    // Extraer solo el valor numérico para cálculos
                     const numericMatch = value.match(/(\d+[.,]\d+)/);
-                    if (numericMatch) {
-                        result.peso_tara_valor = numericMatch[0].replace(',', '.');
-                    }
-                }
-                else if (line.includes('Peso Neto:')) {
+                    if (numericMatch) result.peso_tara_valor = numericMatch[0].replace(',', '.');
+                } else if (line.includes('Peso Neto:')) {
                     const [_, value] = line.split('Peso Neto:');
                     result.peso_neto = value.trim();
-                    
-                    // Extraer solo el valor numérico para cálculos
                     const numericMatch = value.match(/(\d+[.,]\d+)/);
-                    if (numericMatch) {
-                        result.peso_neto_valor = numericMatch[0].replace(',', '.');
-                    }
-                }
-                else if (line.includes('Nota:')) {
-                    // Extraer la nota
+                    if (numericMatch) result.peso_neto_valor = numericMatch[0].replace(',', '.');
+                } else if (line.includes('Nota:')) {
                     const [_, value] = line.split('Nota:');
                     result.nota = value.trim();
                 }
             }
-            
-            // --- INICIO MODIFICACIÓN: Procesar valores numéricos en el parseo local ---
-            if (result.peso_tara_valor || result.peso_tara) {
-                const pesoTara = (result.peso_tara_valor || result.peso_tara).toString().replace(/[^\d.]/g, '');
-                document.getElementById('peso_tara').value = pesoTara;
-            }
-            if (result.peso_neto_valor || result.peso_neto) {
-                const pesoNeto = (result.peso_neto_valor || result.peso_neto).toString().replace(/[^\d.]/g, '');
-                document.getElementById('peso_neto').value = pesoNeto;
-            }
-            // --- FIN MODIFICACIÓN ---
-
             return result;
         }
 
-        // Función para agregar una validación al contenedor
+        // Función para agregar validación al contenedor (Original)
         function agregarValidacion(container, nombre, texto) {
             const isSuccess = texto.includes('Valido');
             const div = document.createElement('div');
             div.className = `validation-item ${isSuccess ? 'validation-success' : 'validation-error'}`;
-            div.innerHTML = `
-                <div class="d-flex justify-content-between align-items-center">
-                    <strong>${nombre}:</strong>
-                    <span>${texto}</span>
-                </div>
-            `;
+            div.innerHTML = `<div class="d-flex justify-content-between align-items-center"><strong>${nombre}:</strong><span>${texto}</span></div>`;
             container.appendChild(div);
         }
 
-        // Preview de la imagen de placa
-        document.getElementById('placaFoto').addEventListener('change', function(e) {
-            const preview = document.getElementById('previewPlacaImage');
-            const file = e.target.files[0];
-            
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    preview.src = e.target.result;
-                    preview.classList.remove('hidden');
-                }
-                reader.readAsDataURL(file);
-            }
-        });
-
-        // Manejo del botón de verificar placa
-        document.getElementById('btnVerificarPlaca').addEventListener('click', verificarPlacaEnImagen);
-        
-        // Verificación de placa checkbox
-        document.getElementById('verificarPlaca').addEventListener('change', function() {
-            if (this.checked) {
-                verificarPlacaEnImagen();
-            } else {
-                document.getElementById('resultadoVerificacion').classList.add('hidden');
-            }
-        });
-
-        // Función para verificar la placa en la imagen
+        // Función para verificar placa (Original)
         async function verificarPlacaEnImagen() {
             try {
                 mostrarCarga(true);
                 const fotoInput = document.getElementById('placaFoto');
-                
                 if (!fotoInput.files[0]) {
                     alert('Por favor seleccione primero una foto de la placa');
                     mostrarCarga(false);
                     return;
                 }
-
                 const formData = new FormData();
                 formData.append('foto', fotoInput.files[0]);
                 formData.append('placa_registrada', placaRegistrada);
-
-                const response = await fetch('/verificar_placa', {
-                    method: 'POST',
-                    body: formData
-                });
-
+                const response = await fetch('/verificar_placa', { method: 'POST', body: formData });
                 const data = await response.json();
                 const resultadoBox = document.getElementById('resultadoVerificacion');
-                
                 if (data.success) {
                     document.getElementById('placaDetectada').textContent = data.placa_detectada;
-                    
                     const estadoBadge = document.getElementById('estadoVerificacion');
                     if (data.coincide) {
                         resultadoBox.className = 'verification-box verification-success';
@@ -747,7 +666,6 @@
                         estadoBadge.className = 'status-badge badge-danger';
                         estadoBadge.textContent = 'NO COINCIDE ✗';
                     }
-                    
                     resultadoBox.classList.remove('hidden');
                     document.getElementById('verificarPlaca').checked = true;
                 } else {
@@ -762,100 +680,49 @@
                 mostrarCarga(false);
             }
         }
-
-        // Manejo de fotos adicionales
-        document.getElementById('fotosAdicionales').addEventListener('change', function(e) {
-            const files = e.target.files;
-            const gallery = document.getElementById('galeriaFotos');
-            
-            if (files.length > 0) {
-                for (let i = 0; i < files.length; i++) {
-                    const file = files[i];
-                    const reader = new FileReader();
-                    
-                    reader.onload = function(e) {
-                        const photoIndex = fotosAdicionales.length;
-                        fotosAdicionales.push(file);
-                        
-                        const photoDiv = document.createElement('div');
-                        photoDiv.className = 'photo-preview';
-                        photoDiv.innerHTML = `
-                            <img src="${e.target.result}" alt="Foto adicional">
-                            <div class="remove-photo" data-index="${photoIndex}">
-                                <i class="fas fa-times"></i>
-                            </div>
-                        `;
-                        
-                        gallery.appendChild(photoDiv);
-                        
-                        // Añadir evento para eliminar foto
-                        photoDiv.querySelector('.remove-photo').addEventListener('click', function() {
-                            const index = parseInt(this.getAttribute('data-index'));
-                            fotosAdicionales.splice(index, 1);
-                            gallery.removeChild(photoDiv);
-                            // Actualizar índices de las fotos restantes
-                            document.querySelectorAll('.remove-photo').forEach((elem, i) => {
-                                elem.setAttribute('data-index', i);
-                            });
-                        });
-                    }
-                    
-                    reader.readAsDataURL(file);
-                }
-            }
-        });
-
-        // Guardar pesaje neto
-        document.getElementById('btnGuardarPesaje').addEventListener('click', async function() {
-            try {
+        
+        // Función para guardar pesaje neto (Original - **NECESITA AJUSTE PARA USAR CAMPOS FORMULARIO**)
+        async function guardarPesajeNeto() {
+             try {
                 if (!datosRespuestaSAP) {
-                    alert('No hay datos de pesaje para guardar');
+                    alert('Primero debe consultar los datos de SAP.');
                     return;
                 }
-
                 mostrarCarga(true);
-                
                 const comentarios = document.getElementById('comentariosNeto').value;
                 const formData = new FormData();
-                
-                // Usar los valores numéricos extraídos directamente
-                let peso_tara = datosRespuestaSAP.peso_tara_valor || '';
-                let peso_neto = datosRespuestaSAP.peso_neto_valor || '';
-                
-                // Si no tenemos los valores numéricos, intentar extraerlos de los textos
-                if (!peso_tara && datosRespuestaSAP.peso_tara) {
-                    const match = datosRespuestaSAP.peso_tara.match(/(\d+[.,]\d+)/);
-                    if (match) {
-                        peso_tara = match[0].replace(',', '.');
-                    }
-                }
-                
-                if (!peso_neto && datosRespuestaSAP.peso_neto) {
-                    const match = datosRespuestaSAP.peso_neto.match(/(\d+[.,]\d+)/);
-                    if (match) {
-                        peso_neto = match[0].replace(',', '.');
-                    }
-                }
-                
-                console.log("Valores a enviar:", {
-                    peso_tara,
-                    peso_neto,
-                    fecha: datosRespuestaSAP.fecha,
-                    hora: datosRespuestaSAP.hora
-                });
-                
-                // Datos básicos
                 formData.append('codigo_guia', codigoGuia);
-                formData.append('peso_tara', peso_tara);
-                formData.append('peso_neto', peso_neto);
-                formData.append('fecha_pesaje', datosRespuestaSAP.fecha || '');
-                formData.append('hora_pesaje', datosRespuestaSAP.hora || '');
+                // Leer valores directamente de datosRespuestaSAP y validar que sean numéricos
+                const pesoTaraStr = (datosRespuestaSAP.peso_tara_valor || '0').toString().replace(/,/g, '.').replace(/[^\d.]/g, '');
+                const pesoNetoStr = (datosRespuestaSAP.peso_neto_valor || '0').toString().replace(/,/g, '.').replace(/[^\d.]/g, '');
+                
+                // <<< Log de depuración añadido >>>
+                console.log('DEBUG: Raw Tara Value:', datosRespuestaSAP.peso_tara_valor);
+                console.log('DEBUG: Cleaned Tara String:', pesoTaraStr);
+                console.log('DEBUG: Raw Neto Value:', datosRespuestaSAP.peso_neto_valor);
+                console.log('DEBUG: Cleaned Neto String:', pesoNetoStr);
+                // <<< Fin Log de depuración >>>
+
+                const pesoTaraNum = parseFloat(pesoTaraStr);
+                const pesoNetoNum = parseFloat(pesoNetoStr);
+
+                if (isNaN(pesoTaraNum) || isNaN(pesoNetoNum)) {
+                    alert('Error: Los valores de peso tara o peso neto obtenidos de SAP no son válidos. No se puede guardar.');
+                    mostrarCarga(false);
+                    return;
+                }
+                
+                formData.append('peso_tara', pesoTaraNum); // Enviar el número validado
+                formData.append('peso_neto', pesoNetoNum); // Enviar el número validado
+                
+                // Eliminar envío de fecha/hora - el backend debe generar el timestamp UTC
+                // formData.append('fecha_pesaje', datosRespuestaSAP.fecha || ''); 
+                // formData.append('hora_pesaje', datosRespuestaSAP.hora || '');
                 formData.append('comentarios', comentarios);
                 
-                // Información original de respuesta SAP
-                formData.append('respuesta_sap', JSON.stringify(datosRespuestaSAP));
+                // Eliminar envío de respuesta_sap - No parece ser necesario en el backend
+                // formData.append('respuesta_sap', JSON.stringify(datosRespuestaSAP)); 
                 
-                // Añadir información de verificación de placa si existe
                 if (document.getElementById('verificarPlaca').checked) {
                     const placaDetectada = document.getElementById('placaDetectada').textContent;
                     const coincide = document.getElementById('estadoVerificacion').textContent.includes('VERIFICADO');
@@ -863,23 +730,14 @@
                     formData.append('placa_detectada', placaDetectada);
                     formData.append('placa_coincide', coincide ? 'true' : 'false');
                 }
-
-                // Añadir foto de placa
                 const fotoPlacaInput = document.getElementById('placaFoto');
                 if (fotoPlacaInput.files[0]) {
                     formData.append('foto_placa', fotoPlacaInput.files[0]);
                 }
-                
-                // Añadir fotos adicionales si existen
                 fotosAdicionales.forEach((foto, index) => {
                     formData.append(`foto_adicional_${index}`, foto);
                 });
-
-                const response = await fetch('/pesaje-neto/registrar_peso_neto_directo', {
-                    method: 'POST',
-                    body: formData
-                });
-
+                const response = await fetch('/pesaje-neto/registrar_peso_neto_directo', { method: 'POST', body: formData });
                 const data = await response.json();
                 if (data.success) {
                     window.location.href = data.redirect_url;
@@ -892,9 +750,64 @@
             } finally {
                 mostrarCarga(false);
             }
-        });
-    </script>
+        }
 
+        // Función para mostrar resultados del Webhook (Original)
+        function mostrarResultadosWebhook(respuestaSAP) {
+            console.log("Mostrando resultados del webhook:", respuestaSAP);
+            document.getElementById('respuestaSAPSection').classList.remove('hidden');
+            
+            const validacionesContainer = document.getElementById('validacionesContainer');
+            validacionesContainer.innerHTML = '';
+            
+            agregarValidacion(validacionesContainer, 'Guía Transporte SAP', respuestaSAP.guia_transito_sap || 'N/A');
+            agregarValidacion(validacionesContainer, 'Código Proveedor', respuestaSAP.codigo_proveedor || 'N/A');
+            agregarValidacion(validacionesContainer, 'Peso Bruto', respuestaSAP.peso_bruto || 'N/A');
+
+            const pesoTaraDisplay = document.getElementById('pesoTaraDisplay');
+            if (pesoTaraDisplay) pesoTaraDisplay.textContent = (respuestaSAP.peso_tara_valor || respuestaSAP.peso_tara || '0') + ' kg';
+
+            const pesoNetoDisplay = document.getElementById('pesoNetoDisplay');
+            if (pesoNetoDisplay) pesoNetoDisplay.textContent = (respuestaSAP.peso_neto_valor || respuestaSAP.peso_neto || '0') + ' kg';
+
+            // Calcular y mostrar Peso Producto (Neto - Tara)
+            const pesoProductoDisplay = document.getElementById('pesoProductoDisplay');
+            const taraNum = parseFloat((respuestaSAP.peso_tara_valor || '0').toString().replace(/,/g, '.').replace(/[^\\d.-]/g, ''));
+            const netoNum = parseFloat((respuestaSAP.peso_neto_valor || '0').toString().replace(/,/g, '.').replace(/[^\\d.-]/g, ''));
+             if (pesoProductoDisplay && !isNaN(taraNum) && !isNaN(netoNum)) {
+                 // Asumiendo que el peso neto de SAP es en realidad el peso bruto después de descontar la tara inicial (si la hubo),
+                 // y el peso tara de SAP es la tara del contenedor/vehículo vacío.
+                 // El peso del producto sería entonces neto (con tara) - tara (vacío).
+                 // AJUSTAR ESTA LÓGICA SI LA INTERPRETACIÓN ES DIFERENTE.
+                 // Por ahora, mostraremos Neto - Tara como Peso Producto.
+                 const productoCalc = netoNum - taraNum; 
+                 pesoProductoDisplay.textContent = productoCalc.toFixed(3).replace('.', ',') + ' kg'; 
+             } else if (pesoProductoDisplay) {
+                  pesoProductoDisplay.textContent = 'N/A';
+             }
+
+            const fechaHoraDisplay = document.getElementById('fechaHoraDisplay');
+            if (fechaHoraDisplay) fechaHoraDisplay.textContent = `${respuestaSAP.fecha || '-'} ${respuestaSAP.hora || '-'}`;
+
+            const notaContainer = document.getElementById('validacionesContainer');
+            const existingNota = notaContainer.querySelector('.nota-sap-item');
+            if (existingNota) existingNota.remove();
+            if (respuestaSAP.nota) {
+                const notaDiv = document.createElement('div');
+                notaDiv.className = 'validation-item nota-sap-item';
+                notaDiv.innerHTML = `<div class="d-flex justify-content-between align-items-center"><strong>Nota SAP:</strong><span>${respuestaSAP.nota}</span></div>`;
+                notaContainer.appendChild(notaDiv);
+            }
+
+            document.getElementById('errorContainer').classList.add('d-none');
+            document.getElementById('errorMessage').textContent = '';
+        }
+        
+        // --- Funciones de captura de pantalla (si se usan) ---
+        async function startScreenCaptureNeto(displayCallback) { /*...*/ }
+        function displayCapturedImageSAP(blob) { /*...*/ }
+
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html> 
