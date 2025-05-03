@@ -181,6 +181,10 @@
         <h4 class="text-center mb-2">{{ datos.codigo_guia }}</h4>
         <h4 class="text-center mb-4">{{ datos.nombre_proveedor|default(datos.nombre, true) }}</h4>
         
+        <!-- NUEVO: Input oculto para codigo_guia -->
+        <input type="hidden" id="codigo_guia" value="{{ datos.codigo_guia }}">
+        <!-- FIN NUEVO -->
+
         <!-- NUEVA Información General (3 columnas con iconos) -->
         <div class="card info-card mb-4"> 
             <div class="card-header">
@@ -683,37 +687,56 @@
         
         // Función para guardar pesaje neto
         function guardarPesajeNeto() {
+            // --- CORREGIDO: Leer codigo_guia del input oculto --- 
             const codigoGuia = document.getElementById('codigo_guia').value;
+            // --- FIN CORRECCIÓN ---
             
-            // --- LEER VALORES DIRECTAMENTE DEL FORMULARIO --- 
-            const pesoTaraDisplay = document.getElementById('peso_tara_valor')?.innerText || '0';
-            const pesoNetoDisplay = document.getElementById('peso_neto_valor')?.innerText || '0';
-            const comentarios = document.getElementById('comentarios_neto')?.value || ''; // Obtener comentarios
+            // --- LEER VALORES DIRECTAMENTE DEL FORMULARIO (spans) ---
+            const pesoTaraDisplayElement = document.getElementById('pesoTaraDisplay');
+            const pesoNetoDisplayElement = document.getElementById('pesoNetoDisplay');
 
-            // Limpiar y parsear los valores leídos del display
-            const pesoTaraStr = pesoTaraDisplay.replace(/,/g, '.').replace(/[^\\d.]/g, '');
-            const pesoNetoStr = pesoNetoDisplay.replace(/,/g, '.').replace(/[^\\d.]/g, '');
+            const pesoTaraDisplay = pesoTaraDisplayElement ? pesoTaraDisplayElement.innerText : 'ERROR_NO_ELEMENT';
+            const pesoNetoDisplay = pesoNetoDisplayElement ? pesoNetoDisplayElement.innerText : 'ERROR_NO_ELEMENT';
 
-            console.log('DEBUG: Tara from display:', pesoTaraDisplay, 'Cleaned:', pesoTaraStr);
+            // <<< Log de depuración para valores raw del DOM >>>
+            console.log('[GuardarPesajeNeto] Raw Tara from DOM:', pesoTaraDisplay);
+            console.log('[GuardarPesajeNeto] Raw Neto from DOM:', pesoNetoDisplay);
+            // <<< Fin Log >>>
+
+            // --- CORRECCIÓN: Simplificar la limpieza --- 
+            // Solo reemplazar comas por puntos. parseFloat ignorará ' kg' y espacios.
+            const pesoTaraStr = (pesoTaraDisplay || '0').replace(/,/g, '.');
+            const pesoNetoStr = (pesoNetoDisplay || '0').replace(/,/g, '.');
+            // --- FIN CORRECCIÓN --- 
+
+            console.log('DEBUG: Tara from display:', pesoTaraDisplay, 'Cleaned:', pesoTaraStr); // Mantener logs para verificar
             console.log('DEBUG: Neto from display:', pesoNetoDisplay, 'Cleaned:', pesoNetoStr);
+            // <<< NUEVO: Log específico de strings limpios >>>
+            console.log('[GuardarPesajeNeto] Cleaned Tara String for parseFloat:', pesoTaraStr);
+            console.log('[GuardarPesajeNeto] Cleaned Neto String for parseFloat:', pesoNetoStr);
+            // <<< FIN NUEVO >>>
 
             const pesoTaraNum = parseFloat(pesoTaraStr);
             const pesoNetoNum = parseFloat(pesoNetoStr);
 
-            console.log('DEBUG: Parsed Tara Num from display:', pesoTaraNum);
-            console.log('DEBUG: Parsed Neto Num from display:', pesoNetoNum);
+            // <<< Log para valores parseados >>>
+            console.log('[GuardarPesajeNeto] Parsed Tara Num:', pesoTaraNum);
+            console.log('[GuardarPesajeNeto] Parsed Neto Num:', pesoNetoNum);
+            // <<< Fin Log >>>
 
+            // Validar que los números sean válidos después de leer del DOM
             if (isNaN(pesoTaraNum) || isNaN(pesoNetoNum)) {
                 alert('Error: Los valores de peso tara o peso neto leídos del formulario no son válidos. No se puede guardar.');
-                return;
+                console.error('[GuardarPesajeNeto] Falló isNaN. Tara:', pesoTaraNum, 'Neto:', pesoNetoNum); // Log de error
+                return; // Detener si la conversión falló
             }
-            // --- FIN LEER VALORES ---
 
+            // Si la validación es exitosa, proceder a enviar
             const formData = new FormData();
             formData.append('codigo_guia', codigoGuia);
             formData.append('peso_tara', pesoTaraNum.toString()); // Enviar número validado
             formData.append('peso_neto', pesoNetoNum.toString()); // Enviar número validado
-            formData.append('comentarios', comentarios); // Enviar comentarios
+            formData.append('comentarios', document.getElementById('comentariosNeto').value || ''); // Enviar comentarios
 
             // Agregar respuesta_sap si existe la variable global (mejor si se puede evitar)
             if (typeof datosRespuestaSAP !== 'undefined' && datosRespuestaSAP) {
@@ -744,7 +767,7 @@
             // --- Fin Logs --- 
 
             // Enviar datos al backend
-            fetch('/pesaje_neto/registrar_peso_neto_directo', {
+            fetch('/pesaje-neto/registrar_peso_neto_directo', {
                 method: 'POST',
                 body: formData
             })

@@ -330,7 +330,9 @@ def registrar_peso_neto_directo():
         
         # Actualizar directamente en la base de datos
         try:
-            conn = sqlite3.connect(db_path)
+            # --- AUMENTAR TIMEOUT ---
+            conn = sqlite3.connect(db_path, timeout=10) # Timeout de 10 segundos
+            # --- FIN AUMENTAR TIMEOUT ---
             cursor = conn.cursor()
             
             # Primero verificar si existe el registro
