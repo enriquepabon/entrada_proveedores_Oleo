@@ -187,6 +187,7 @@ def create_tables():
     try:
         # Obtener la ruta de la base de datos desde la configuración de la app
         db_path = current_app.config['TIQUETES_DB_PATH']
+        logger.info(f"[create_tables] DEBUG: Intentando usar DB path: {db_path}")
 
         # Asegurar que el directorio de la base de datos exista
         db_dir = os.path.dirname(db_path)
