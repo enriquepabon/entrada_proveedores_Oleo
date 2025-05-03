@@ -162,20 +162,29 @@ def ver_resultados_pesaje_neto(codigo_guia):
             return render_template('error.html', message="Guía no encontrada"), 404
 
         # Obtener los datos más recientes de la base de datos
+        conn = None # Initialize conn outside try
         try:
-            conn = sqlite3.connect('tiquetes.db')
+            # --- CORREGIDO: Usar la ruta configurada ---
+            db_path = current_app.config['TIQUETES_DB_PATH']
+            logger.info(f"[ver_resultados_pesaje_neto] Conectando a DB: {db_path}") # Log añadido
+            conn = sqlite3.connect(db_path)
+            # --- FIN CORRECCIÓN ---
             cursor = conn.cursor()
-            cursor.execute("""
-                SELECT peso_bruto, peso_tara, peso_neto, peso_producto, 
+            # --- CORREGIDO: Seleccionar todos los campos relevantes de la tabla ---
+            # Asegúrate que los nombres aquí coincidan EXACTAMENTE con la definición de la tabla
+            cursor.execute(
+                """
+                SELECT peso_bruto, peso_tara, peso_neto, peso_producto,
                        timestamp_pesaje_neto_utc, comentarios, respuesta_sap, tipo_pesaje_neto
-                FROM pesajes_neto 
+                FROM pesajes_neto
                 WHERE codigo_guia = ?
-            """, (codigo_guia,))
+                """, (codigo_guia,)
+            )
             result = cursor.fetchone()
-            
+
             if result:
                 # --- CORREGIDO: Desempaquetar todos los campos recuperados ---
-                (peso_bruto_db, peso_tara_db, peso_neto_db, peso_producto_db, 
+                (peso_bruto_db, peso_tara_db, peso_neto_db, peso_producto_db,
                  timestamp_pesaje_neto_utc, comentarios_db, respuesta_sap_db, tipo_pesaje_neto_db) = result
                  
                 # Convertir timestamp a fecha y hora local
@@ -202,18 +211,30 @@ def ver_resultados_pesaje_neto(codigo_guia):
                  # Asegurar que el estado refleje que no se completó el pesaje neto si no hay datos
                  datos_guia['pesaje_neto_completado'] = False
                  # Puedes poner valores por defecto si es necesario
-                 datos_guia.setdefault('peso_bruto', 'N/A')
+                 datos_guia.setdefault('peso_bruto', 'N/A') # Mantener el bruto si viene de la guía
                  datos_guia.setdefault('peso_tara', 'N/A')
                  datos_guia.setdefault('peso_neto', 'N/A')
                  datos_guia.setdefault('peso_producto', 'N/A')
                  datos_guia.setdefault('fecha_pesaje_neto', 'N/A')
                  datos_guia.setdefault('hora_pesaje_neto', 'N/A')
                  datos_guia.setdefault('tipo_pesaje_neto', 'N/A')
+        except sqlite3.Error as db_error: # Capturar específicamente errores de DB
+            logger.error(f"Error SQLite recuperando datos de la base de datos: {str(db_error)}")
+            logger.error(traceback.format_exc()) # Log completo
+            # Establecer valores por defecto o marcar error en datos_guia si falla la DB
+            datos_guia['pesaje_neto_completado'] = False
+            datos_guia.setdefault('peso_neto', 'Error DB')
+            # ... otros defaults si es necesario ...
         except Exception as e:
-            logger.error(f"Error recuperando datos de la base de datos: {str(e)}")
+            logger.error(f"Error general recuperando datos de la base de datos: {str(e)}")
+            logger.error(traceback.format_exc()) # Log completo
+            datos_guia['pesaje_neto_completado'] = False
+            datos_guia.setdefault('peso_neto', 'Error General')
         finally:
-            if 'conn' in locals():
+            # --- CORREGIDO: Usar la variable 'conn' definida fuera del try ---
+            if conn:
                 conn.close()
+            # --- FIN CORRECCIÓN ---
 
         # Preparar los datos para la plantilla
         context = {
