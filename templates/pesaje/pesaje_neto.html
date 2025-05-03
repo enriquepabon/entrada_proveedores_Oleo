@@ -712,16 +712,15 @@
                     return;
                 }
                 
-                formData.append('peso_tara', pesoTaraNum); // Enviar el número validado
-                formData.append('peso_neto', pesoNetoNum); // Enviar el número validado
-                
-                // Eliminar envío de fecha/hora - el backend debe generar el timestamp UTC
-                // formData.append('fecha_pesaje', datosRespuestaSAP.fecha || ''); 
-                // formData.append('hora_pesaje', datosRespuestaSAP.hora || '');
+                console.log('DEBUG: Parsed Tara Num:', pesoTaraNum);
+                console.log('DEBUG: Parsed Neto Num:', pesoNetoNum);
+
+                // --- CORRECCIÓN: Enviar los números validados --- 
+                formData.append('peso_tara', pesoTaraNum.toString()); // Enviar número validado
+                formData.append('peso_neto', pesoNetoNum.toString()); // Enviar número validado
+                // --- FIN CORRECCIÓN ---
+
                 formData.append('comentarios', comentarios);
-                
-                // Eliminar envío de respuesta_sap - No parece ser necesario en el backend
-                // formData.append('respuesta_sap', JSON.stringify(datosRespuestaSAP)); 
                 
                 if (document.getElementById('verificarPlaca').checked) {
                     const placaDetectada = document.getElementById('placaDetectada').textContent;
