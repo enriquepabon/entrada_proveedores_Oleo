@@ -162,26 +162,49 @@ def ver_resultados_pesaje_neto(codigo_guia):
             conn = sqlite3.connect('tiquetes.db')
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT peso_tara, peso_neto, timestamp_pesaje_neto_utc, comentarios, respuesta_sap
+                SELECT peso_bruto, peso_tara, peso_neto, peso_producto, 
+                       timestamp_pesaje_neto_utc, comentarios, respuesta_sap, tipo_pesaje_neto
                 FROM pesajes_neto 
                 WHERE codigo_guia = ?
             """, (codigo_guia,))
             result = cursor.fetchone()
             
             if result:
-                peso_tara, peso_neto, timestamp_pesaje_neto_utc, comentarios, respuesta_sap = result
+                # --- CORREGIDO: Desempaquetar todos los campos recuperados ---
+                (peso_bruto_db, peso_tara_db, peso_neto_db, peso_producto_db, 
+                 timestamp_pesaje_neto_utc, comentarios_db, respuesta_sap_db, tipo_pesaje_neto_db) = result
+                 
                 # Convertir timestamp a fecha y hora local
                 fecha_pesaje_neto, hora_pesaje_neto = convertir_timestamp_a_fecha_hora(timestamp_pesaje_neto_utc)
-                # Actualizar los datos con los valores más recientes
+                
+                # Actualizar los datos con los valores más recientes de la DB
                 datos_guia.update({
-                    'peso_tara': peso_tara,
-                    'peso_neto': peso_neto,
+                    'peso_bruto': peso_bruto_db, # Añadir peso bruto recuperado
+                    'peso_tara': peso_tara_db,
+                    'peso_neto': peso_neto_db,
+                    'peso_producto': peso_producto_db, # Añadir peso producto recuperado
                     'fecha_pesaje_neto': fecha_pesaje_neto,
                     'hora_pesaje_neto': hora_pesaje_neto,
-                    'comentarios_neto': comentarios,
-                    'respuesta_sap': respuesta_sap
+                    'timestamp_pesaje_neto_utc': timestamp_pesaje_neto_utc, # Guardar también el UTC
+                    'comentarios_neto': comentarios_db,
+                    'respuesta_sap': respuesta_sap_db,
+                    'tipo_pesaje_neto': tipo_pesaje_neto_db, # Añadir tipo pesaje neto
+                    'pesaje_neto_completado': True # Marcar como completado si se encontraron datos
                 })
-                logger.info(f"Datos actualizados desde la base de datos: peso_tara={peso_tara}, peso_neto={peso_neto}")
+                logger.info(f"Datos actualizados desde la base de datos: bruto={peso_bruto_db}, tara={peso_tara_db}, neto={peso_neto_db}, producto={peso_producto_db}")
+            else:
+                 # --- NUEVO: Log si no se encuentran datos en pesajes_neto ---
+                 logger.warning(f"No se encontraron datos en la tabla pesajes_neto para la guía {codigo_guia}. Se mostrarán los datos de get_datos_guia.")
+                 # Asegurar que el estado refleje que no se completó el pesaje neto si no hay datos
+                 datos_guia['pesaje_neto_completado'] = False
+                 # Puedes poner valores por defecto si es necesario
+                 datos_guia.setdefault('peso_bruto', 'N/A')
+                 datos_guia.setdefault('peso_tara', 'N/A')
+                 datos_guia.setdefault('peso_neto', 'N/A')
+                 datos_guia.setdefault('peso_producto', 'N/A')
+                 datos_guia.setdefault('fecha_pesaje_neto', 'N/A')
+                 datos_guia.setdefault('hora_pesaje_neto', 'N/A')
+                 datos_guia.setdefault('tipo_pesaje_neto', 'N/A')
         except Exception as e:
             logger.error(f"Error recuperando datos de la base de datos: {str(e)}")
         finally:
