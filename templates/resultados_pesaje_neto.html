@@ -198,7 +198,7 @@
                                 </div>
                                 <div class="col-md-6">
                                     <div class="info-label">Peso Producto</div>
-                                    <div id="peso-producto-valor" class="info-value">{{ "%.2f"|format(datos_guia.peso_producto|float) if datos_guia.peso_producto else '0.00' }} kg</div>
+                                    <div id="peso-producto-valor" class="info-value">{{ "%.2f"|format(datos_guia.peso_neto|float) if datos_guia.peso_neto else '0.00' }} kg</div>
                                 </div>
                             </div>
                             <div class="row mb-3">
@@ -356,7 +356,7 @@
                             'peso-bruto-valor': webhookData.peso_bruto_valor,
                             'peso-tara-valor': webhookData.peso_tara_valor,
                             'peso-neto-valor': webhookData.peso_neto_valor,
-                            'peso-producto-valor': webhookData.peso_producto_valor
+                            'peso-producto-valor': webhookData.peso_neto_valor
                         };
                         
                         // Actualizar cada peso

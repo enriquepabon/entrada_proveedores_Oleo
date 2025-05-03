@@ -338,6 +338,16 @@ class CommonUtils:
             logger.info(f"--- get_datos_guia Final Dict Before Return for {codigo_guia}: {datos_guia} ---")
             logger.info(f"--- Final Dict timestamp_clasificacion_utc before return: {datos_guia.get('timestamp_clasificacion_utc')} ---")
             
+            # --- INICIO MODIFICACIÓN: Asegurar que peso_producto == peso_neto ---
+            if 'peso_neto' in datos_guia and datos_guia['peso_neto'] is not None:
+                datos_guia['peso_producto'] = datos_guia['peso_neto']
+                logger.info(f"Asegurado que peso_producto ({datos_guia['peso_producto']}) es igual a peso_neto ({datos_guia['peso_neto']}) para {codigo_guia}")
+            elif 'peso_producto' in datos_guia:
+                 # Si no hay peso_neto pero sí peso_producto (de alguna fuente antigua), ponerlo a None
+                 datos_guia['peso_producto'] = None
+                 logger.info(f"Establecido peso_producto a None porque peso_neto no está disponible para {codigo_guia}")
+            # --- FIN MODIFICACIÓN ---
+
             return datos_guia
 
         except KeyError as ke:

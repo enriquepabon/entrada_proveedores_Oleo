@@ -149,6 +149,10 @@ def ver_resultados_pesaje_neto(codigo_guia):
     Muestra los resultados del pesaje neto para una guía específica.
     """
     try:
+        # --- NUEVO: Asegurar que la tabla exista antes de consultar ---
+        ensure_pesajes_neto_schema()
+        # --- FIN NUEVO ---
+        
         # Inicializar Utils dentro del contexto de la aplicación
         utils = current_app.config.get('utils', Utils(current_app))
         
