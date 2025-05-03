@@ -681,74 +681,88 @@
             }
         }
         
-        // Función para guardar pesaje neto (Original - **NECESITA AJUSTE PARA USAR CAMPOS FORMULARIO**)
-        async function guardarPesajeNeto() {
-             try {
-                if (!datosRespuestaSAP) {
-                    alert('Primero debe consultar los datos de SAP.');
-                    return;
-                }
-                mostrarCarga(true);
-                const comentarios = document.getElementById('comentariosNeto').value;
-                const formData = new FormData();
-                formData.append('codigo_guia', codigoGuia);
-                // Leer valores directamente de datosRespuestaSAP y validar que sean numéricos
-                const pesoTaraStr = (datosRespuestaSAP.peso_tara_valor || '0').toString().replace(/,/g, '.').replace(/[^\d.]/g, '');
-                const pesoNetoStr = (datosRespuestaSAP.peso_neto_valor || '0').toString().replace(/,/g, '.').replace(/[^\d.]/g, '');
-                
-                // <<< Log de depuración añadido >>>
-                console.log('DEBUG: Raw Tara Value:', datosRespuestaSAP.peso_tara_valor);
-                console.log('DEBUG: Cleaned Tara String:', pesoTaraStr);
-                console.log('DEBUG: Raw Neto Value:', datosRespuestaSAP.peso_neto_valor);
-                console.log('DEBUG: Cleaned Neto String:', pesoNetoStr);
-                // <<< Fin Log de depuración >>>
+        // Función para guardar pesaje neto
+        function guardarPesajeNeto() {
+            const codigoGuia = document.getElementById('codigo_guia').value;
+            
+            // --- LEER VALORES DIRECTAMENTE DEL FORMULARIO --- 
+            const pesoTaraDisplay = document.getElementById('peso_tara_valor')?.innerText || '0';
+            const pesoNetoDisplay = document.getElementById('peso_neto_valor')?.innerText || '0';
+            const comentarios = document.getElementById('comentarios_neto')?.value || ''; // Obtener comentarios
 
-                const pesoTaraNum = parseFloat(pesoTaraStr);
-                const pesoNetoNum = parseFloat(pesoNetoStr);
+            // Limpiar y parsear los valores leídos del display
+            const pesoTaraStr = pesoTaraDisplay.replace(/,/g, '.').replace(/[^\\d.]/g, '');
+            const pesoNetoStr = pesoNetoDisplay.replace(/,/g, '.').replace(/[^\\d.]/g, '');
 
-                if (isNaN(pesoTaraNum) || isNaN(pesoNetoNum)) {
-                    alert('Error: Los valores de peso tara o peso neto obtenidos de SAP no son válidos. No se puede guardar.');
-                    mostrarCarga(false);
-                    return;
-                }
-                
-                console.log('DEBUG: Parsed Tara Num:', pesoTaraNum);
-                console.log('DEBUG: Parsed Neto Num:', pesoNetoNum);
+            console.log('DEBUG: Tara from display:', pesoTaraDisplay, 'Cleaned:', pesoTaraStr);
+            console.log('DEBUG: Neto from display:', pesoNetoDisplay, 'Cleaned:', pesoNetoStr);
 
-                // --- CORRECCIÓN: Enviar los números validados --- 
-                formData.append('peso_tara', pesoTaraNum.toString()); // Enviar número validado
-                formData.append('peso_neto', pesoNetoNum.toString()); // Enviar número validado
-                // --- FIN CORRECCIÓN ---
+            const pesoTaraNum = parseFloat(pesoTaraStr);
+            const pesoNetoNum = parseFloat(pesoNetoStr);
 
-                formData.append('comentarios', comentarios);
-                
-                if (document.getElementById('verificarPlaca').checked) {
-                    const placaDetectada = document.getElementById('placaDetectada').textContent;
-                    const coincide = document.getElementById('estadoVerificacion').textContent.includes('VERIFICADO');
-                    formData.append('verificacion_placa', 'true');
-                    formData.append('placa_detectada', placaDetectada);
-                    formData.append('placa_coincide', coincide ? 'true' : 'false');
+            console.log('DEBUG: Parsed Tara Num from display:', pesoTaraNum);
+            console.log('DEBUG: Parsed Neto Num from display:', pesoNetoNum);
+
+            if (isNaN(pesoTaraNum) || isNaN(pesoNetoNum)) {
+                alert('Error: Los valores de peso tara o peso neto leídos del formulario no son válidos. No se puede guardar.');
+                return;
+            }
+            // --- FIN LEER VALORES ---
+
+            const formData = new FormData();
+            formData.append('codigo_guia', codigoGuia);
+            formData.append('peso_tara', pesoTaraNum.toString()); // Enviar número validado
+            formData.append('peso_neto', pesoNetoNum.toString()); // Enviar número validado
+            formData.append('comentarios', comentarios); // Enviar comentarios
+
+            // Agregar respuesta_sap si existe la variable global (mejor si se puede evitar)
+            if (typeof datosRespuestaSAP !== 'undefined' && datosRespuestaSAP) {
+                 try {
+                    // Modificar el objeto para asegurar que peso_producto = peso_neto
+                    let pesoNetoStringFormatted = pesoNetoNum.toFixed(3);
+                    datosRespuestaSAP.peso_producto_valor = pesoNetoStringFormatted;
+                    datosRespuestaSAP.peso_producto = `${pesoNetoStringFormatted} kg`;
+                    formData.append('respuesta_sap', JSON.stringify(datosRespuestaSAP));
+                    console.log('DEBUG: Enviando respuesta_sap modificada (desde variable global):', JSON.stringify(datosRespuestaSAP));
+                } catch (e) {
+                    console.error("Error stringifying datosRespuestaSAP:", e);
+                    formData.append('respuesta_sap', '{}');
                 }
-                const fotoPlacaInput = document.getElementById('placaFoto');
-                if (fotoPlacaInput.files[0]) {
-                    formData.append('foto_placa', fotoPlacaInput.files[0]);
-                }
-                fotosAdicionales.forEach((foto, index) => {
-                    formData.append(`foto_adicional_${index}`, foto);
-                });
-                const response = await fetch('/pesaje-neto/registrar_peso_neto_directo', { method: 'POST', body: formData });
-                const data = await response.json();
+            } else {
+                formData.append('respuesta_sap', '{}');
+                console.warn("DEBUG: datosRespuestaSAP no estaba definida al guardar.");
+            }
+            
+            // Deshabilitar botón para evitar doble envío
+            document.getElementById('btnGuardarPesaje').disabled = true;
+
+            // --- Logs antes de enviar --- 
+            console.log('DEBUG: FormData antes de enviar:');
+            for (let [key, value] of formData.entries()) {
+                console.log(`  ${key}: ${value}`);
+            }
+            // --- Fin Logs --- 
+
+            // Enviar datos al backend
+            fetch('/pesaje_neto/registrar_peso_neto_directo', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
                 if (data.success) {
                     window.location.href = data.redirect_url;
                 } else {
                     alert(data.message || 'Error registrando el peso');
                 }
-            } catch (error) {
+            })
+            .catch(error => {
                 console.error('Error:', error);
                 alert('Error al guardar el pesaje neto');
-            } finally {
+            })
+            .finally(() => {
                 mostrarCarga(false);
-            }
+            });
         }
 
         // Función para mostrar resultados del Webhook (Original)
