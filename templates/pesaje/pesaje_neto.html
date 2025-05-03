@@ -688,7 +688,14 @@
         // Función para guardar pesaje neto
         function guardarPesajeNeto() {
             // --- CORREGIDO: Leer codigo_guia del input oculto --- 
-            const codigoGuia = document.getElementById('codigo_guia').value;
+            const codigoGuiaElement = document.getElementById('codigo_guia');
+            if (!codigoGuiaElement) {
+                console.error("Error fatal: No se encontró el elemento 'codigo_guia' en el DOM.");
+                alert("Error interno: No se pudo obtener el código de guía. Recargue la página e intente de nuevo.");
+                return;
+            }
+            const codigoGuia = codigoGuiaElement.value;
+            console.log('[GuardarPesajeNeto] Código Guía obtenido:', codigoGuia);
             // --- FIN CORRECCIÓN ---
             
             // --- LEER VALORES DIRECTAMENTE DEL FORMULARIO (spans) ---
