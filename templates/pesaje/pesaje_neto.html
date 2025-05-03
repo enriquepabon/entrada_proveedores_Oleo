@@ -804,8 +804,93 @@
         }
         
         // --- Funciones de captura de pantalla (si se usan) ---
-        async function startScreenCaptureNeto(displayCallback) { /*...*/ }
-        function displayCapturedImageSAP(blob) { /*...*/ }
+        async function startScreenCaptureNeto(displayCallback) {
+            console.log('[ScreenCapture] Iniciando captura de pantalla...');
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+                alert("La captura de pantalla no está soportada por este navegador.");
+                console.error('[ScreenCapture] getDisplayMedia no soportado.');
+                return;
+            }
+
+            let captureStream = null;
+            const videoElement = document.createElement('video');
+            const canvasElement = document.createElement('canvas');
+            const context = canvasElement.getContext('2d');
+
+            try {
+                console.log('[ScreenCapture] Solicitando permiso getDisplayMedia...');
+                captureStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+                console.log('[ScreenCapture] Permiso concedido, stream obtenido.');
+
+                videoElement.srcObject = captureStream;
+                videoElement.play();
+
+                videoElement.onloadedmetadata = () => {
+                    console.log('[ScreenCapture] Metadatos del video cargados.');
+                    canvasElement.width = videoElement.videoWidth;
+                    canvasElement.height = videoElement.videoHeight;
+                    console.log(`[ScreenCapture] Dimensiones del canvas: ${canvasElement.width}x${canvasElement.height}`);
+
+                    context.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
+                    console.log('[ScreenCapture] Frame dibujado en canvas.');
+
+                    captureStream.getTracks().forEach(track => track.stop());
+                    console.log('[ScreenCapture] Stream detenido.');
+
+                    canvasElement.toBlob(blob => {
+                        if (blob) {
+                            console.log('[ScreenCapture] Blob creado exitosamente.');
+                            displayCallback(blob);
+                        } else {
+                            alert("Error al crear la imagen desde la captura de pantalla.");
+                            console.error('[ScreenCapture] Error en toBlob: blob es null.');
+                        }
+                    }, 'image/png');
+                };
+
+                videoElement.onerror = (e) => {
+                    console.error('[ScreenCapture] Error en el elemento de video:', e);
+                    alert('Error al cargar el video de la captura de pantalla.');
+                    if (captureStream) {
+                        captureStream.getTracks().forEach(track => track.stop());
+                    }
+                };
+
+            } catch (err) {
+                console.error("[ScreenCapture] Error en el bloque try/catch: ", err);
+                alert(`Error al capturar pantalla: ${err.message}`);
+                if (captureStream) {
+                    captureStream.getTracks().forEach(track => track.stop());
+                }
+            }
+        }
+
+        function displayCapturedImageSAP(blob) {
+            console.log('[ScreenCapture] Mostrando imagen capturada...');
+            const inputImagenSAP = document.getElementById('imagenSAP');
+            const previewImagenSAP = document.getElementById('previewImagenSAP');
+
+            if (!inputImagenSAP || !previewImagenSAP) {
+                 console.error('[ScreenCapture] Elementos inputImagenSAP o previewImagenSAP no encontrados.');
+                 alert('Error interno: No se encontraron los elementos para mostrar la imagen.');
+                 return;
+            }
+
+            // Crear URL para el Blob y mostrar en preview
+            const imageUrl = URL.createObjectURL(blob);
+            previewImagenSAP.innerHTML = `<img src="${imageUrl}" class="img-fluid rounded" style="max-width: 200px;">`;
+
+            // Crear un File object desde el Blob para asignarlo al input (si se necesita subir)
+            const file = new File([blob], "captura_pantalla_sap.png", { type: "image/png" });
+            const dataTransfer = new DataTransfer();
+            dataTransfer.items.add(file);
+            inputImagenSAP.files = dataTransfer.files;
+
+            // Simular evento change para que otros scripts reaccionen si es necesario
+            const event = new Event('change', { bubbles: true });
+            inputImagenSAP.dispatchEvent(event);
+            console.log('[ScreenCapture] Imagen mostrada y asignada al input.');
+        }
 
     </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
