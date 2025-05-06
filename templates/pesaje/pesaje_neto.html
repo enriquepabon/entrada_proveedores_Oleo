@@ -745,6 +745,16 @@
             formData.append('peso_neto', pesoNetoNum.toString()); // Enviar número validado
             formData.append('comentarios', document.getElementById('comentariosNeto').value || ''); // Enviar comentarios
 
+            // --- INICIO: Añadir imagen de soporte SAP al FormData ---
+            const imagenSAPInput = document.getElementById('imagenSAP');
+            if (imagenSAPInput && imagenSAPInput.files[0]) {
+                formData.append('imagen', imagenSAPInput.files[0]);
+                console.log('[GuardarPesajeNeto] Imagen SAP añadida al FormData:', imagenSAPInput.files[0].name);
+            } else {
+                console.log('[GuardarPesajeNeto] No se encontró imagen SAP para añadir.');
+            }
+            // --- FIN: Añadir imagen de soporte SAP al FormData ---
+
             // Agregar respuesta_sap si existe la variable global (mejor si se puede evitar)
             if (typeof datosRespuestaSAP !== 'undefined' && datosRespuestaSAP) {
                  try {

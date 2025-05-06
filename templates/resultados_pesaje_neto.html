@@ -292,6 +292,17 @@
             </div>
 
             <div class="col-md-6">
+                <!-- Imagen de Soporte SAP -->
+                {% if datos_guia.imagen_soporte_sap %}
+                <div class="results-section mb-4">
+                    <h4 class="mb-3 text-center">Imagen de Soporte SAP</h4>
+                    <div class="text-center">
+                        <img src="{{ url_for('static', filename=datos_guia.imagen_soporte_sap) }}" alt="Imagen de Soporte SAP" class="weight-image" style="max-height: 300px; width: auto; border-radius: 10px;">
+                    </div>
+                </div>
+                {% endif %}
+                <!-- Fin Imagen de Soporte SAP -->
+
                 <div class="actions-section no-print">
                     <h4 class="mb-4">Acciones</h4>
 

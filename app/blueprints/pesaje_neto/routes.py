@@ -10,6 +10,7 @@ import pytz
 from app.blueprints.pesaje_neto import bp
 from app.utils.common import CommonUtils as Utils
 from flask_login import login_required
+from werkzeug.utils import secure_filename
 
 # Configurar logging
 logger = logging.getLogger(__name__)
@@ -85,6 +86,10 @@ def ensure_pesajes_neto_schema():
             
         if 'respuesta_sap' not in columns:
             columns_to_add.append("respuesta_sap TEXT")
+            
+        # Add new column for SAP support image
+        if 'imagen_soporte_sap' not in columns:
+            columns_to_add.append("imagen_soporte_sap TEXT")
             
         # Add new date/time columns if missing
         if 'fecha_pesaje_neto' not in columns:
@@ -175,7 +180,8 @@ def ver_resultados_pesaje_neto(codigo_guia):
             cursor.execute(
                 """
                 SELECT peso_bruto, peso_tara, peso_neto, peso_producto,
-                       timestamp_pesaje_neto_utc, comentarios, respuesta_sap, tipo_pesaje_neto
+                       timestamp_pesaje_neto_utc, comentarios, respuesta_sap, tipo_pesaje_neto,
+                       imagen_soporte_sap
                 FROM pesajes_neto
                 WHERE codigo_guia = ?
                 """, (codigo_guia,)
@@ -185,7 +191,8 @@ def ver_resultados_pesaje_neto(codigo_guia):
             if result:
                 # --- CORREGIDO: Desempaquetar todos los campos recuperados ---
                 (peso_bruto_db, peso_tara_db, peso_neto_db, peso_producto_db,
-                 timestamp_pesaje_neto_utc, comentarios_db, respuesta_sap_db, tipo_pesaje_neto_db) = result
+                 timestamp_pesaje_neto_utc, comentarios_db, respuesta_sap_db, tipo_pesaje_neto_db,
+                 imagen_soporte_sap_db) = result
                  
                 # Convertir timestamp a fecha y hora local
                 fecha_pesaje_neto, hora_pesaje_neto = convertir_timestamp_a_fecha_hora(timestamp_pesaje_neto_utc)
@@ -202,9 +209,10 @@ def ver_resultados_pesaje_neto(codigo_guia):
                     'comentarios_neto': comentarios_db,
                     'respuesta_sap': respuesta_sap_db,
                     'tipo_pesaje_neto': tipo_pesaje_neto_db, # Añadir tipo pesaje neto
+                    'imagen_soporte_sap': imagen_soporte_sap_db, # Añadir ruta de imagen de soporte SAP
                     'pesaje_neto_completado': True # Marcar como completado si se encontraron datos
                 })
-                logger.info(f"Datos actualizados desde la base de datos: bruto={peso_bruto_db}, tara={peso_tara_db}, neto={peso_neto_db}, producto={peso_producto_db}")
+                logger.info(f"Datos actualizados desde la base de datos: bruto={peso_bruto_db}, tara={peso_tara_db}, neto={peso_neto_db}, producto={peso_producto_db}, imagen_sap={imagen_soporte_sap_db}")
             else:
                  # --- NUEVO: Log si no se encuentran datos en pesajes_neto ---
                  logger.warning(f"No se encontraron datos en la tabla pesajes_neto para la guía {codigo_guia}. Se mostrarán los datos de get_datos_guia.")
@@ -218,6 +226,7 @@ def ver_resultados_pesaje_neto(codigo_guia):
                  datos_guia.setdefault('fecha_pesaje_neto', 'N/A')
                  datos_guia.setdefault('hora_pesaje_neto', 'N/A')
                  datos_guia.setdefault('tipo_pesaje_neto', 'N/A')
+                 datos_guia.setdefault('imagen_soporte_sap', None) # Asegurar que exista la clave
         except sqlite3.Error as db_error: # Capturar específicamente errores de DB
             logger.error(f"Error SQLite recuperando datos de la base de datos: {str(db_error)}")
             logger.error(traceback.format_exc()) # Log completo
@@ -280,6 +289,43 @@ def registrar_peso_neto_directo():
         comentarios = request.form.get('comentarios', '')
         respuesta_sap = request.form.get('respuesta_sap')
         
+        # --- INICIO: Gestión de la imagen de soporte SAP ---
+        imagen_soporte_sap_path = None
+        if 'imagen' in request.files:
+            imagen_file = request.files['imagen']
+            if imagen_file and imagen_file.filename != '':
+                filename = secure_filename(imagen_file.filename)
+                upload_folder = os.path.join(current_app.config['BASE_DIR'], 'app', 'static', 'fotos_pesaje_neto')
+                
+                logger.info(f"Intentando crear directorio: {upload_folder}")
+                os.makedirs(upload_folder, exist_ok=True) # Asegurar que el directorio exista
+                
+                save_path = os.path.join(upload_folder, filename)
+                logger.info(f"Ruta de guardado completa para la imagen: {save_path}")
+                
+                try:
+                    imagen_file.save(save_path)
+                    logger.info(f"ÉXITO: Imagen de soporte SAP guardada en: {save_path}")
+                    
+                    # --- INICIO: Verificar existencia del archivo --- 
+                    if os.path.exists(save_path):
+                        logger.info(f"VERIFICADO: El archivo {save_path} existe en el disco después de guardar.")
+                        imagen_soporte_sap_path = os.path.join('fotos_pesaje_neto', filename).replace("\\\\", "/")
+                    else:
+                        logger.error(f"ERROR DE VERIFICACIÓN: El archivo {save_path} NO se encontró en el disco después de guardar.")
+                        imagen_soporte_sap_path = None # No guardar ruta si el archivo no está realmente allí
+                    # --- FIN: Verificar existencia del archivo --- 
+
+                except Exception as e:
+                    logger.error(f"ERROR AL GUARDAR IMAGEN DE SOPORTE SAP en {save_path}: {str(e)}")
+                    logger.error(traceback.format_exc())
+                    imagen_soporte_sap_path = None # No guardar la ruta en DB si el archivo no se pudo guardar
+            else:
+                logger.info("No se proporcionó un archivo de imagen válido o el nombre del archivo está vacío.")
+        else:
+            logger.info("No se encontró 'imagen' en request.files.")
+        # --- FIN: Gestión de la imagen de soporte SAP ---
+                
         data_received = {k: v for k, v in request.form.items()}
         logger.info(f"Datos recibidos para pesaje neto directo: {data_received}")
         
@@ -346,7 +392,7 @@ def registrar_peso_neto_directo():
                     SET peso_tara = ?, peso_neto = ?, peso_producto = ?, 
                         timestamp_pesaje_neto_utc = ?,
                         tipo_pesaje_neto = ?, comentarios = ?, respuesta_sap = ?, 
-                        peso_bruto = ?
+                        peso_bruto = ?, imagen_soporte_sap = ?
                     WHERE codigo_guia = ?
                 """, (
                     peso_tara,
@@ -357,6 +403,7 @@ def registrar_peso_neto_directo():
                     comentarios,
                     respuesta_sap,
                     datos_originales.get('peso_bruto'),
+                    imagen_soporte_sap_path, # Añadir ruta de imagen
                     codigo_guia
                 ))
             else:
@@ -365,8 +412,9 @@ def registrar_peso_neto_directo():
                     INSERT INTO pesajes_neto (
                         codigo_guia, peso_tara, peso_neto, peso_producto, 
                         timestamp_pesaje_neto_utc, tipo_pesaje_neto,
-                        comentarios, respuesta_sap, codigo_proveedor, nombre_proveedor, peso_bruto
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        comentarios, respuesta_sap, codigo_proveedor, nombre_proveedor, peso_bruto,
+                        imagen_soporte_sap
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     codigo_guia,
                     peso_tara,
@@ -378,7 +426,8 @@ def registrar_peso_neto_directo():
                     respuesta_sap,
                     datos_originales.get('codigo_proveedor'),
                     datos_originales.get('nombre_proveedor'),
-                    datos_originales.get('peso_bruto')
+                    datos_originales.get('peso_bruto'),
+                    imagen_soporte_sap_path # Añadir ruta de imagen
                 ))
             
             conn.commit()
@@ -408,6 +457,7 @@ def registrar_peso_neto_directo():
             'timestamp_pesaje_neto_utc': timestamp_utc,
             'comentarios_neto': comentarios,
             'respuesta_sap': respuesta_sap,
+            'imagen_soporte_sap': imagen_soporte_sap_path, # Añadir al diccionario de datos UI
             'pesaje_neto_completado': True
         }
         
