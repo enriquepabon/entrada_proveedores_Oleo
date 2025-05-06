@@ -80,6 +80,7 @@
                     <th>Código Guía</th>
                     <th>Cod. Prov.</th>
                     <th>Nombre Proveedor</th>
+                    <th>Guía SAP</th>
                     <th>Entradas</th>
                     <th class="text-end">Racimos</th>
                     <th class="text-end">P. Bruto (kg)</th>
@@ -92,7 +93,7 @@
             <tbody>
                 {% if registros %}
                     {% for registro in registros %}
-                    <tr data-codigo-guia="{{ registro.codigo_guia }}" data-original-estado="{{ registro.estado }}"> {# Añadir data-attribute para JS #}
+                    <tr data-codigo-guia="{{ registro.codigo_guia }}" data-original-estado-badge="<span class='badge {% if registro.estado == 'Cerrada' %}bg-success{% elif registro.estado == 'Pesaje Neto Completo' %}bg-info{% elif registro.estado == 'Clasificación Completa' %}bg-primary{% elif registro.estado == 'Pesaje Bruto Completo' %}bg-warning text-dark{% else %}bg-secondary{% endif %}'>{{ registro.estado | default('N/A') }}</span>">
                         <td>{{ registro.fecha_entrada | default('N/A') }}</td>
                         <td>{{ registro.hora_entrada | default('N/A') }}</td>
                         <td>
@@ -100,6 +101,7 @@
                         </td>
                         <td>{{ registro.codigo_proveedor | default('N/A') }}</td>
                         <td>{{ registro.nombre_proveedor | default('N/A') }}</td>
+                        <td>{{ registro.codigo_guia_transporte_sap | default('-') }}</td>
                         <td class="text-end">1</td>
                         <td class="text-end">{{ registro.cantidad_racimos | default(0) }}</td>
                         <td class="text-end">
@@ -146,18 +148,18 @@
                     {% endfor %}
                 {% else %}
                     <tr>
-                        <td colspan="12" class="text-center fst-italic text-muted py-3">No hay registros que coincidan con los filtros seleccionados.</td>
+                        <td colspan="13" class="text-center fst-italic text-muted py-3">No hay registros que coincidan con los filtros seleccionados.</td>
                     </tr>
                 {% endif %}
             </tbody>
              <tfoot>
                 <tr class="table-light">
                     <th colspan="5" class="text-end">Totales:</th>   {# Abarca las primeras 5 columnas hasta Nombre Proveedor #}
+                    <th></th>
                     <th class="text-end">{{ registros|length }}</th> {# Total Entradas (bajo la 6ta columna "Entradas") #}
                     <th class="text-end">{{ totales.racimos | default(0) }}</th>   {# Bajo Racimos (7ma) #}
                     <th class="text-end">{{ totales.bruto | format_es }}</th> {# Bajo P. Bruto (8va) #}
                     <th class="text-end">{{ totales.neto | format_es }}</th> {# Bajo P. Neto (9na) #}
-                    {# Las siguientes 3 columnas (Tipo Pesaje, Estado, Acciones) quedan vacías en el total #}
                     <th colspan="3"></th> 
                 </tr>
             </tfoot>
@@ -207,7 +209,7 @@
                 }
                 const currentRow = targetButton.closest('tr');
                 const estadoCell = currentRow.querySelector('.estado-cell');
-                const originalEstadoBadgeHTML = currentRow.dataset.originalEstadoBadge || '<span class="badge bg-secondary">N/A</span>';
+                const originalEstadoBadgeHTML = currentRow.dataset.originalEstadoBadge || '<span class="badge bg-secondary">Error</span>';
                 
                 fetch(`/guias/${codigoGuia}/toggle_active`, {
                     method: 'POST',

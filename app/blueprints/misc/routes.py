@@ -2680,6 +2680,10 @@ def registro_fruta_mlb():
         lista_consolidada_preparada = [] 
         for codigo_guia, datos in datos_combinados.items():
             entrada_data = datos.get('entrada') or {}
+            bruto_data = datos.get('bruto') or {}
+            clasif_data = datos.get('clasificacion') or {}
+            neto_data = datos.get('neto') or {}
+            
             if datos['salida']:
                 estado_actual = 'Cerrada'
             elif datos['neto']:
@@ -2692,9 +2696,6 @@ def registro_fruta_mlb():
                 estado_actual = 'Entrada Registrada'
             
             fecha_entrada, hora_entrada = convertir_timestamp_a_fecha_hora(entrada_data.get('timestamp_registro_utc'))
-            bruto_data = datos.get('bruto') or {}
-            clasif_data = datos.get('clasificacion') or {}
-            neto_data = datos.get('neto') or {}
 
             registro_preparado = {
                 'codigo_guia': codigo_guia,
@@ -2706,6 +2707,7 @@ def registro_fruta_mlb():
                 'peso_bruto': bruto_data.get('peso_bruto'), 
                 'tipo_pesaje': bruto_data.get('tipo_pesaje', 'N/A'),
                 'peso_neto': neto_data.get('peso_neto'),
+                'codigo_guia_transporte_sap': bruto_data.get('codigo_guia_transporte_sap', '-'), # NUEVO CAMPO
                 'tiene_clasificacion': bool(clasif_data), 
                 'estado': estado_actual, 
                 'is_active': entrada_data.get('is_active', 1) 

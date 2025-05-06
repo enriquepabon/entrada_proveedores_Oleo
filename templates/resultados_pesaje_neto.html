@@ -219,14 +219,23 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="row">
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <div class="info-label">Guía Transporte SAP</div>
+                                    <div class="info-value">{{ datos_guia.codigo_guia_transporte_sap|default('N/A') }}</div>
+                                </div>
                                 <div class="col-md-6">
                                     <div class="info-label">Fecha</div>
                                     <div id="fecha-pesaje" class="info-value">{{ datos_guia.fecha_pesaje_neto|default(datos_guia.fecha_pesaje, true) or 'No registrada' }}</div>
                                 </div>
+                            </div>
+                            <div class="row">
                                 <div class="col-md-6">
                                     <div class="info-label">Hora</div>
                                     <div id="hora-pesaje" class="info-value">{{ datos_guia.hora_pesaje_neto|default(datos_guia.hora_pesaje, true) or 'No registrada' }}</div>
+                                </div>
+                                <div class="col-md-6">
+                                    {# Puedes añadir otro campo aquí si es necesario o dejarlo vacío #}
                                 </div>
                             </div>
                             

@@ -58,6 +58,9 @@ app_config = {
 # Crear la aplicación con la configuración actualizada
 app = create_app(app_config)
 
+logger.info(f"App static folder: {app.static_folder}")
+logger.info(f"App static URL path: {app.static_url_path}")
+
 logger.setLevel(logging.DEBUG)
 app.logger.info('Iniciando servidor Flask...')
 

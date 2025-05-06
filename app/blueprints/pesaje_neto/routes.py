@@ -295,7 +295,7 @@ def registrar_peso_neto_directo():
             imagen_file = request.files['imagen']
             if imagen_file and imagen_file.filename != '':
                 filename = secure_filename(imagen_file.filename)
-                upload_folder = os.path.join(current_app.config['BASE_DIR'], 'app', 'static', 'fotos_pesaje_neto')
+                upload_folder = os.path.join(current_app.config['BASE_DIR'], 'static', 'fotos_pesaje_neto')
                 
                 logger.info(f"Intentando crear directorio: {upload_folder}")
                 os.makedirs(upload_folder, exist_ok=True) # Asegurar que el directorio exista
