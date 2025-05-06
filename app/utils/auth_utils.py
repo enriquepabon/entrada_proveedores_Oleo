@@ -20,6 +20,31 @@ def get_db_connection():
         logger.error(f"Error conectando a la base de datos: {e}")
         return None
 
+def ensure_users_schema_admin_column():
+    """Asegura que la tabla users tenga la columna is_admin."""
+    conn = get_db_connection()
+    if not conn:
+        logger.error("No se pudo conectar a la base de datos para verificar esquema de users.")
+        return False
+    try:
+        cursor = conn.cursor()
+        # Verificar si la columna is_admin existe
+        cursor.execute("PRAGMA table_info(users)")
+        columns = [column[1] for column in cursor.fetchall()]
+        if 'is_admin' not in columns:
+            cursor.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0")
+            conn.commit()
+            logger.info("Columna 'is_admin' añadida a la tabla 'users' con valor por defecto 0.")
+        else:
+            logger.info("Columna 'is_admin' ya existe en la tabla 'users'.")
+        return True
+    except sqlite3.Error as e:
+        logger.error(f"Error al verificar/añadir columna 'is_admin' a 'users': {e}")
+        return False
+    finally:
+        if conn:
+            conn.close()
+
 def get_user_by_id(user_id):
     """Obtiene un usuario por su ID."""
     conn = get_db_connection()
@@ -27,14 +52,16 @@ def get_user_by_id(user_id):
         return None
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT id, username, email, password_hash, is_active FROM users WHERE id = ?", (user_id,))
+        cursor.execute("SELECT id, username, email, password_hash, is_active, is_admin FROM users WHERE id = ?", (user_id,))
         user_data = cursor.fetchone()
         if user_data:
-            return User(id=user_data['id'], 
-                        username=user_data['username'], 
-                        email=user_data['email'], 
+            admin_val = user_data['is_admin'] if 'is_admin' in user_data.keys() else 0
+            return User(id=user_data['id'],
+                        username=user_data['username'],
+                        email=user_data['email'],
                         password_hash=user_data['password_hash'],
-                        is_active=user_data['is_active'])
+                        is_active=user_data['is_active'],
+                        is_admin=admin_val)
         return None
     except sqlite3.Error as e:
         logger.error(f"Error obteniendo usuario por ID {user_id}: {e}")
@@ -50,14 +77,16 @@ def get_user_by_username(username):
         return None
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT id, username, email, password_hash, is_active FROM users WHERE username = ?", (username,))
+        cursor.execute("SELECT id, username, email, password_hash, is_active, is_admin FROM users WHERE username = ?", (username,))
         user_data = cursor.fetchone()
         if user_data:
-            return User(id=user_data['id'], 
-                        username=user_data['username'], 
-                        email=user_data['email'], 
+            admin_val = user_data['is_admin'] if 'is_admin' in user_data.keys() else 0
+            return User(id=user_data['id'],
+                        username=user_data['username'],
+                        email=user_data['email'],
                         password_hash=user_data['password_hash'],
-                        is_active=user_data['is_active'])
+                        is_active=user_data['is_active'],
+                        is_admin=admin_val)
         return None
     except sqlite3.Error as e:
         logger.error(f"Error obteniendo usuario por username {username}: {e}")

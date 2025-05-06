@@ -37,7 +37,7 @@ from db_operations import (
     get_salida_by_codigo_guia # Podría ser útil
 )
 # Importar login_required
-from flask_login import login_required
+from flask_login import login_required, current_user # Asegúrate de que current_user esté importado
 # --- INICIO MODIFICACIÓN: Importar ensure_pesajes_neto_schema ---
 from app.blueprints.pesaje_neto.routes import ensure_pesajes_neto_schema 
 # --- FIN MODIFICACIÓN ---
@@ -2587,42 +2587,29 @@ def registro_fruta_mlb():
     """
     logger.info("Accediendo a /registros-fruta-mlb para obtener datos consolidados")
     
-    # --- PASO 9: Obtener parámetros de filtro --- 
     try:
-        # Fechas (default: últimos 30 días)
         today = date.today()
         default_start_date = today - timedelta(days=30)
         fecha_desde_str = request.args.get('fecha_desde', default_start_date.strftime('%Y-%m-%d'))
         fecha_hasta_str = request.args.get('fecha_hasta', today.strftime('%Y-%m-%d'))
-        
-        # Otros filtros
         codigo_proveedor_filtro = request.args.get('codigo_proveedor', '')
-        estado_filtro = request.args.get('estado', '') # El estado se filtra después de calcularlo
+        
+        # MODIFICADO: Obtener lista de estados
+        lista_estados_filtro = request.args.getlist('estado') 
 
-        # Guardar filtros para pasarlos a la plantilla
         filtros_activos = {
             'fecha_desde': fecha_desde_str,
             'fecha_hasta': fecha_hasta_str,
             'codigo_proveedor': codigo_proveedor_filtro,
-            'estado': estado_filtro
+            'estado': lista_estados_filtro # MODIFICADO: Guardar la lista
         }
         logger.info(f"Filtros recibidos: {filtros_activos}")
 
     except Exception as e:
-         logger.error(f"Error procesando parámetros de filtro: {e}", exc_info=True)
-         # Manejar error, quizás redirigir o mostrar mensaje
-         # Por ahora, continuaremos con valores por defecto si falla
-         today = date.today()
-         fecha_desde_str = (today - timedelta(days=30)).strftime('%Y-%m-%d')
-         fecha_hasta_str = today.strftime('%Y-%m-%d')
-         codigo_proveedor_filtro = ''
-         estado_filtro = ''
-         filtros_activos = {
-            'fecha_desde': fecha_desde_str,
-            'fecha_hasta': fecha_hasta_str,
-            'codigo_proveedor': codigo_proveedor_filtro,
-            'estado': estado_filtro
-        }
+        # ... (manejo de error de filtros existente) ...
+        pass # Asegúrate que filtros_activos se defina incluso en error
+        lista_estados_filtro = [] # Default a lista vacía en caso de error
+        filtros_activos['estado'] = []
 
     datos_combinados = {}
     lista_consolidada = []
@@ -2692,48 +2679,64 @@ def registro_fruta_mlb():
         # 6. Convertir, preparar datos y calcular estado
         lista_consolidada_preparada = [] 
         for codigo_guia, datos in datos_combinados.items():
-            # Calcular estado final (igual que antes)
+            entrada_data = datos.get('entrada') or {}
             if datos['salida']:
                 estado_actual = 'Cerrada'
             elif datos['neto']:
-                 estado_actual = 'Pesaje Neto Completo'
+                estado_actual = 'Pesaje Neto Completo'
             elif datos['clasificacion']:
-                 estado_actual = 'Clasificación Completa'
+                estado_actual = 'Clasificación Completa'
             elif datos['bruto']:
-                 estado_actual = 'Pesaje Bruto Completo'
+                estado_actual = 'Pesaje Bruto Completo'
             else:
-                 estado_actual = 'Entrada Registrada'
+                estado_actual = 'Entrada Registrada'
             
-            # Preparar diccionario (igual que antes)
-            entrada_data = datos.get('entrada') or {}
+            fecha_entrada, hora_entrada = convertir_timestamp_a_fecha_hora(entrada_data.get('timestamp_registro_utc'))
             bruto_data = datos.get('bruto') or {}
             clasif_data = datos.get('clasificacion') or {}
             neto_data = datos.get('neto') or {}
-            fecha_entrada, hora_entrada = convertir_timestamp_a_fecha_hora(entrada_data.get('timestamp_registro_utc'))
 
             registro_preparado = {
                 'codigo_guia': codigo_guia,
                 'fecha_entrada': fecha_entrada,
                 'hora_entrada': hora_entrada,
                 'codigo_proveedor': entrada_data.get('codigo_proveedor', 'N/A'),
-                'nombre_proveedor': entrada_data.get('nombre_proveedor', 'N/A'), # Añadir nombre proveedor
+                'nombre_proveedor': entrada_data.get('nombre_proveedor', 'N/A'),
                 'cantidad_racimos': entrada_data.get('cantidad_racimos', 0),
                 'peso_bruto': bruto_data.get('peso_bruto'), 
-                'tipo_pesaje': bruto_data.get('tipo_pesaje', 'N/A'), # <- Añadir tipo_pesaje
+                'tipo_pesaje': bruto_data.get('tipo_pesaje', 'N/A'),
                 'peso_neto': neto_data.get('peso_neto'),
                 'tiene_clasificacion': bool(clasif_data), 
-                'estado': estado_actual,
+                'estado': estado_actual, 
+                'is_active': entrada_data.get('is_active', 1) 
             }
             lista_consolidada_preparada.append(registro_preparado)
             
-        # --- PASO 9: Aplicar filtro de estado (si existe) --- 
-        if estado_filtro:
-            logger.info(f"Aplicando filtro de estado: '{estado_filtro}'")
-            lista_filtrada_final = [r for r in lista_consolidada_preparada if r['estado'] == estado_filtro]
-            logger.info(f"Registros después del filtro de estado: {len(lista_filtrada_final)}")
+        # MODIFICADO: Lógica de filtro de estado para manejar lista_estados_filtro
+        lista_filtrada_final = []
+        if not lista_estados_filtro: # Si no se selecciona ningún estado 
+            # COMPORTAMIENTO POR DEFECTO: Mostrar solo las guías ACTIVAS
+            lista_filtrada_final = [r for r in lista_consolidada_preparada if r['is_active'] == 1]
+            logger.info("No se aplicó filtro de estado (mostrando solo activas por defecto).")
         else:
-            lista_filtrada_final = lista_consolidada_preparada # Sin filtro de estado
-            logger.info("No se aplicó filtro de estado.")
+            # Lógica existente para cuando SÍ se seleccionan estados
+            logger.info(f"Aplicando filtro de estado múltiple: {lista_estados_filtro}")
+            codigos_ya_anadidos = set()
+            
+            if 'Inactiva' in lista_estados_filtro:
+                for r in lista_consolidada_preparada:
+                    if r['is_active'] == 0 and r['codigo_guia'] not in codigos_ya_anadidos:
+                        lista_filtrada_final.append(r)
+                        codigos_ya_anadidos.add(r['codigo_guia'])
+            
+            otros_estados_seleccionados = [s for s in lista_estados_filtro if s != 'Inactiva']
+            if otros_estados_seleccionados:
+                for r in lista_consolidada_preparada:
+                    if r['is_active'] == 1 and r['estado'] in otros_estados_seleccionados and r['codigo_guia'] not in codigos_ya_anadidos:
+                        lista_filtrada_final.append(r)
+                        codigos_ya_anadidos.add(r['codigo_guia'])
+            
+            logger.info(f"Registros después del filtro de estado múltiple: {len(lista_filtrada_final)}")
 
         # Ordenar la lista FINAL filtrada
         lista_filtrada_final.sort(
@@ -2822,8 +2825,112 @@ def registro_fruta_mlb():
     # Pasar la lista FILTRADA FINAL, los TOTALES, los FILTROS ACTIVOS y la LISTA DE PROVEEDORES a la plantilla
     return render_template('misc/registro_fruta_mlb.html', 
                            titulo="Registro Consolidado de Fruta MLB", 
-                           registros=lista_filtrada_final, # Pasar la lista filtrada
+                           registros=lista_filtrada_final, 
                            totales=totales,
-                           filtros=filtros_activos, # Pasar los filtros usados
-                           lista_proveedores=lista_proveedores) # Pasar proveedores para el select
+                           filtros=filtros_activos, 
+                           lista_proveedores=lista_proveedores)
+
+def ensure_entry_records_schema_is_active_column():
+    """Asegura que la tabla entry_records tenga la columna is_active."""
+    conn = None
+    try:
+        # Usar get_db_connection si está disponible y es apropiado aquí,
+        # o conectar directamente si es más simple para este script de esquema.
+        # Asumiendo que get_db_connection de auth_utils es accesible o tienes uno local.
+        try:
+            from app.utils.auth_utils import get_db_connection
+            conn = get_db_connection()
+        except ImportError:
+            # Fallback a conexión directa si get_db_connection no está disponible
+            db_path = current_app.config.get('TIQUETES_DB_PATH', 'tiquetes.db')
+            conn = sqlite3.connect(db_path)
+            logger.info("Usando conexión directa a DB en ensure_entry_records_schema_is_active_column.")
+
+        if not conn:
+            logger.error("No se pudo conectar a la base de datos para verificar esquema de entry_records.")
+            return False
+
+        cursor = conn.cursor()
+        # Verificar si la columna is_active existe
+        cursor.execute("PRAGMA table_info(entry_records)")
+        columns = [column[1] for column in cursor.fetchall()]
+        if 'is_active' not in columns:
+            cursor.execute("ALTER TABLE entry_records ADD COLUMN is_active INTEGER DEFAULT 1")
+            conn.commit()
+            logger.info("Columna 'is_active' añadida a la tabla 'entry_records' con valor por defecto 1.")
+        else:
+            logger.info("Columna 'is_active' ya existe en la tabla 'entry_records'.")
+        return True
+    except sqlite3.Error as e:
+        logger.error(f"Error al verificar/añadir columna 'is_active' a 'entry_records': {e}")
+        if conn: # Intentar rollback si hubo error y la conexión existe
+            conn.rollback()
+        return False
+    except Exception as ex:
+        logger.error(f"Error inesperado en ensure_entry_records_schema_is_active_column: {ex}")
+        if conn:
+            conn.rollback()
+        return False
+    finally:
+        if conn:
+            conn.close()
+
+@bp.route('/guias/<path:codigo_guia>/toggle_active', methods=['POST'])
+@login_required
+def toggle_guia_active_status(codigo_guia):
+    """Cambia el estado is_active de una guía (activo/inactivo)."""
+    if not current_user.is_admin:
+        logger.warning(f"Intento no autorizado de cambiar estado de guía {codigo_guia} por usuario {current_user.username}")
+        return jsonify({'success': False, 'message': 'Permiso denegado.'}), 403
+
+    conn = None
+    try:
+        # Usar get_db_connection si la tienes centralizada y es apropiada para misc blueprint
+        # o conectar directamente.
+        try:
+            from app.utils.auth_utils import get_db_connection
+            conn = get_db_connection()
+        except ImportError:
+            db_path = current_app.config.get('TIQUETES_DB_PATH', 'tiquetes.db')
+            conn = sqlite3.connect(db_path)
+            logger.info("toggle_guia_active_status: Usando conexión directa a DB.")
+
+        if not conn:
+            logger.error("No se pudo conectar a la base de datos para cambiar estado de guía.")
+            return jsonify({'success': False, 'message': 'Error de conexión a la base de datos.'}), 500
+
+        cursor = conn.cursor()
+
+        # 1. Obtener el estado actual de is_active
+        cursor.execute("SELECT is_active FROM entry_records WHERE codigo_guia = ?", (codigo_guia,))
+        record = cursor.fetchone()
+
+        if not record:
+            logger.warning(f"No se encontró la guía {codigo_guia} para cambiar su estado.")
+            return jsonify({'success': False, 'message': 'Guía no encontrada.'}), 404
+
+        current_status = record[0] # is_active es la primera columna seleccionada
+        
+        # 2. Calcular el nuevo estado (invertir)
+        # Asegurarse de que current_status no sea None si la columna permite NULLs (aunque tiene DEFAULT 1)
+        new_status = 0 if (current_status == 1 or current_status is None) else 1
+
+        # 3. Actualizar la tabla
+        cursor.execute("UPDATE entry_records SET is_active = ? WHERE codigo_guia = ?", (new_status, codigo_guia))
+        conn.commit()
+
+        logger.info(f"Guía {codigo_guia} cambió su estado is_active a: {new_status} por usuario {current_user.username}")
+        return jsonify({'success': True, 'new_status': new_status, 'message': f'Guía {("activada" if new_status == 1 else "inactivada")} correctamente.'})
+
+    except sqlite3.Error as e:
+        logger.error(f"Error de base de datos al cambiar estado de guía {codigo_guia}: {e}")
+        if conn: conn.rollback()
+        return jsonify({'success': False, 'message': 'Error de base de datos.'}), 500
+    except Exception as ex:
+        logger.error(f"Error inesperado al cambiar estado de guía {codigo_guia}: {ex}")
+        if conn: conn.rollback()
+        return jsonify({'success': False, 'message': 'Error inesperado del servidor.'}), 500
+    finally:
+        if conn:
+            conn.close()
 

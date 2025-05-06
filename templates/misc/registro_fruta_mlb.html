@@ -2,6 +2,18 @@
 
 {% block title %}{{ titulo | default('Registro Consolidado de Fruta MLB') }}{% endblock %}
 
+{% block extra_head %}
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
+    <style>
+        /* Ajuste para que Select2 multiple no crezca demasiado en altura por defecto */
+        .select2-container--bootstrap-5 .select2-selection--multiple .select2-selection__rendered {
+            max-height: 100px; /* Puedes ajustar esto */
+            overflow-y: auto;
+        }
+    </style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid mt-4"> {# Use container-fluid for wider content #}
 
@@ -39,13 +51,17 @@
             </div>
             <div class="col-md-3">
                 <label for="estado" class="form-label small mb-1">Estado Proceso</label>
-                <select class="form-select form-select-sm" id="estado" name="estado">
-                    <option value="">-- Todos --</option>
-                    <option value="Entrada Registrada" {% if filtros.estado == 'Entrada Registrada' %}selected{% endif %}>Entrada Registrada</option>
-                    <option value="Pesaje Bruto Completo" {% if filtros.estado == 'Pesaje Bruto Completo' %}selected{% endif %}>Pesaje Bruto</option>
-                    <option value="Clasificación Completa" {% if filtros.estado == 'Clasificación Completa' %}selected{% endif %}>Clasificación</option>
-                    <option value="Pesaje Neto Completo" {% if filtros.estado == 'Pesaje Neto Completo' %}selected{% endif %}>Pesaje Neto</option>
-                    <option value="Cerrada" {% if filtros.estado == 'Cerrada' %}selected{% endif %}>Cerrada</option>
+                <select class="form-select form-select-sm" id="estado" name="estado" multiple>
+                    {# La opción "-- Todos --" no tiene mucho sentido con select múltiple si se usa placeholder 
+                       Considera eliminarla o manejarla de forma especial si Select2 lo permite 
+                       Por ahora, la comentamos para ver cómo se comporta Select2 con placeholder #}
+                    {# <option value="">-- Todos --</option> #}
+                    <option value="Entrada Registrada" {% if 'Entrada Registrada' in filtros.estado %}selected{% endif %}>Entrada Registrada</option>
+                    <option value="Pesaje Bruto Completo" {% if 'Pesaje Bruto Completo' in filtros.estado %}selected{% endif %}>Pesaje Bruto</option>
+                    <option value="Clasificación Completa" {% if 'Clasificación Completa' in filtros.estado %}selected{% endif %}>Clasificación</option>
+                    <option value="Pesaje Neto Completo" {% if 'Pesaje Neto Completo' in filtros.estado %}selected{% endif %}>Pesaje Neto</option>
+                    <option value="Cerrada" {% if 'Cerrada' in filtros.estado %}selected{% endif %}>Cerrada</option>
+                    <option value="Inactiva" {% if 'Inactiva' in filtros.estado %}selected{% endif %}>Inactiva</option>
                 </select>
             </div>
             <div class="col-md-2">
@@ -64,6 +80,7 @@
                     <th>Código Guía</th>
                     <th>Cod. Prov.</th>
                     <th>Nombre Proveedor</th>
+                    <th>Entradas</th>
                     <th class="text-end">Racimos</th>
                     <th class="text-end">P. Bruto (kg)</th>
                     <th class="text-end">P. Neto (kg)</th>
@@ -75,7 +92,7 @@
             <tbody>
                 {% if registros %}
                     {% for registro in registros %}
-                    <tr>
+                    <tr data-codigo-guia="{{ registro.codigo_guia }}" data-original-estado="{{ registro.estado }}"> {# Añadir data-attribute para JS #}
                         <td>{{ registro.fecha_entrada | default('N/A') }}</td>
                         <td>{{ registro.hora_entrada | default('N/A') }}</td>
                         <td>
@@ -83,50 +100,65 @@
                         </td>
                         <td>{{ registro.codigo_proveedor | default('N/A') }}</td>
                         <td>{{ registro.nombre_proveedor | default('N/A') }}</td>
+                        <td class="text-end">1</td>
                         <td class="text-end">{{ registro.cantidad_racimos | default(0) }}</td>
                         <td class="text-end">
                             {% if registro.peso_bruto %}
-                                <a href="{{ url_for('misc.ver_resultados_pesaje', codigo_guia=registro.codigo_guia) }}" target="_blank" title="Ver Detalle Pesaje Bruto">{{ registro.peso_bruto }}</a>
+                                <a href="{{ url_for('misc.ver_resultados_pesaje', codigo_guia=registro.codigo_guia) }}" target="_blank" title="Ver Detalle Pesaje Bruto">{{ registro.peso_bruto | format_es }}</a>
                             {% else %}
                                 -
                             {% endif %}
                         </td>
                         <td class="text-end">
                             {% if registro.peso_neto %}
-                                {{ registro.peso_neto }}
-                                {# TODO: Añadir link a ver_resultados_pesaje_neto si la ruta existe #}
-                                {# <a href="{{ url_for('pesaje.ver_resultados_pesaje_neto', codigo_guia=registro.codigo_guia) }}" target="_blank" title="Ver Detalle Pesaje Neto">{{ registro.peso_neto }}</a> #}
+                                {{ registro.peso_neto | format_es }}
                             {% else %}
                                 -
                             {% endif %}
                         </td>
                         <td>{{ registro.tipo_pesaje | default('N/A') }}</td>
-                        <td><span class="badge {% if registro.estado == 'Cerrada' %}bg-success{% elif registro.estado == 'Pesaje Neto Completo' %}bg-info{% elif registro.estado == 'Clasificación Completa' %}bg-primary{% elif registro.estado == 'Pesaje Bruto Completo' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">{{ registro.estado | default('N/A') }}</span></td>
-                        <td class="text-center">
+                        <td class="estado-cell"> {# Añadir clase para JS #}
+                            {% if registro.is_active == 0 %}
+                                <span class="badge bg-danger">Inactiva</span>
+                            {% else %}
+                                <span class="badge {% if registro.estado == 'Cerrada' %}bg-success{% elif registro.estado == 'Pesaje Neto Completo' %}bg-info{% elif registro.estado == 'Clasificación Completa' %}bg-primary{% elif registro.estado == 'Pesaje Bruto Completo' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">{{ registro.estado | default('N/A') }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center acciones-cell"> {# Añadir clase para JS #}
                             <div class="btn-group btn-group-sm" role="group">
-                                {% if registro.tiene_clasificacion %}
+                                {% if registro.tiene_clasificacion and registro.is_active == 1 %}
                                     <a href="{{ url_for('clasificacion.ver_detalles_clasificacion', url_guia=registro.codigo_guia) }}" target="_blank" class="btn btn-outline-primary" title="Ver Clasificación"><i class="fas fa-clipboard-list"></i></a>
                                 {% else %}
-                                     <button type="button" class="btn btn-outline-secondary" disabled title="Clasificación Pendiente"><i class="fas fa-clipboard-list"></i></button>
+                                     <button type="button" class="btn btn-outline-secondary" disabled title="{% if registro.is_active == 0 %}Guía Inactiva{% else %}Clasificación Pendiente{% endif %}"><i class="fas fa-clipboard-list"></i></button>
                                 {% endif %}
                                  <a href="{{ url_for('misc.ver_guia_centralizada', codigo_guia=registro.codigo_guia) }}" target="_blank" class="btn btn-outline-success" title="Ver Guía Centralizada"><i class="fas fa-eye"></i></a>
+                                
+                                {% if current_user.is_authenticated and current_user.is_admin %}
+                                    {% if registro.is_active == 1 %}
+                                        <button type="button" class="btn btn-outline-warning btn-sm btn-toggle-active" data-codigo-guia="{{ registro.codigo_guia }}" title="Inactivar Guía"><i class="fas fa-lock"></i></button>
+                                    {% else %}
+                                        <button type="button" class="btn btn-outline-success btn-sm btn-toggle-active" data-codigo-guia="{{ registro.codigo_guia }}" title="Activar Guía"><i class="fas fa-lock-open"></i></button>
+                                    {% endif %}
+                                {% endif %}
                             </div>
                         </td>
                     </tr>
                     {% endfor %}
                 {% else %}
                     <tr>
-                        <td colspan="11" class="text-center fst-italic text-muted py-3">No hay registros que coincidan con los filtros seleccionados.</td>
+                        <td colspan="12" class="text-center fst-italic text-muted py-3">No hay registros que coincidan con los filtros seleccionados.</td>
                     </tr>
                 {% endif %}
             </tbody>
              <tfoot>
                 <tr class="table-light">
-                    <th colspan="5" class="text-end">Totales:</th>
-                    <th class="text-end">{{ totales.racimos | default(0) }}</th>
-                    <th class="text-end">{{ "%.2f"|format(totales.bruto | default(0.0)) }}</th>
-                    <th class="text-end">{{ "%.2f"|format(totales.neto | default(0.0)) }}</th>
-                    <th colspan="3"></th> {# Columnas Tipo Pesaje, Estado, Acciones #}
+                    <th colspan="5" class="text-end">Totales:</th>   {# Abarca las primeras 5 columnas hasta Nombre Proveedor #}
+                    <th class="text-end">{{ registros|length }}</th> {# Total Entradas (bajo la 6ta columna "Entradas") #}
+                    <th class="text-end">{{ totales.racimos | default(0) }}</th>   {# Bajo Racimos (7ma) #}
+                    <th class="text-end">{{ totales.bruto | format_es }}</th> {# Bajo P. Bruto (8va) #}
+                    <th class="text-end">{{ totales.neto | format_es }}</th> {# Bajo P. Neto (9na) #}
+                    {# Las siguientes 3 columnas (Tipo Pesaje, Estado, Acciones) quedan vacías en el total #}
+                    <th colspan="3"></th> 
                 </tr>
             </tfoot>
         </table>
@@ -137,18 +169,113 @@
 
 {% block extra_js %}
 <!-- sections/footer_scripts.html -->
-<script>
-    document.getElementById('btnPrint').addEventListener('click', function() {
-        window.print();
-    });
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
-    // Opcional: Si quieres usar Select2 para el dropdown de proveedores
-    // $(document).ready(function() {
-    //     $('#codigo_proveedor').select2({
-    //         placeholder: "-- Todos --",
-    //         allowClear: true,
-    //         theme: "bootstrap-5" // Asegúrate de tener el tema CSS de select2 para Bootstrap 5
-    //     });
-    // });
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // NUEVO: Inicializar Select2 para el filtro de estado
+        const estadoSelect = document.getElementById('estado');
+        if (estadoSelect) {
+            $(estadoSelect).select2({
+                theme: 'bootstrap-5',
+                placeholder: '-- Seleccione Estado(s) --',
+                allowClear: true, // Permite deseleccionar todo con una 'x'
+                width: '100%' // Asegura que ocupe el ancho del contenedor
+            });
+        }
+        
+        // Script para btnPrint (movido dentro de DOMContentLoaded)
+        const btnPrint = document.getElementById('btnPrint');
+        if (btnPrint) {
+            btnPrint.addEventListener('click', function() {
+                window.print();
+            });
+        }
+
+        // Script para manejar el botón de activar/inactivar guía (movido dentro de DOMContentLoaded)
+        const tableBody = document.querySelector('.table tbody');
+        if (tableBody) {
+            tableBody.addEventListener('click', function(event) {
+                const targetButton = event.target.closest('.btn-toggle-active');
+                if (!targetButton) {
+                    return;
+                }
+                const codigoGuia = targetButton.dataset.codigoGuia;
+                if (!codigoGuia) {
+                    console.error('No se encontró codigo_guia en el botón.');
+                    return;
+                }
+                const currentRow = targetButton.closest('tr');
+                const estadoCell = currentRow.querySelector('.estado-cell');
+                const originalEstadoBadgeHTML = currentRow.dataset.originalEstadoBadge || '<span class="badge bg-secondary">N/A</span>';
+                
+                fetch(`/guias/${codigoGuia}/toggle_active`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(errData => {
+                            throw new Error(errData.message || `Error del servidor: ${response.status}`);
+                        }).catch(() => {
+                            throw new Error(response.statusText || `Error del servidor: ${response.status}`);
+                        });
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        if (estadoCell) {
+                            if (data.new_status === 0) { 
+                                estadoCell.innerHTML = '<span class="badge bg-danger">Inactiva</span>';
+                            } else { 
+                                estadoCell.innerHTML = originalEstadoBadgeHTML;
+                            }
+                        }
+                        if (data.new_status === 0) { 
+                            targetButton.classList.remove('btn-outline-warning');
+                            targetButton.classList.add('btn-outline-success');
+                            targetButton.title = 'Activar Guía';
+                            targetButton.innerHTML = '<i class="fas fa-lock-open"></i>';
+                        } else { 
+                            targetButton.classList.remove('btn-outline-success');
+                            targetButton.classList.add('btn-outline-warning');
+                            targetButton.title = 'Inactivar Guía';
+                            targetButton.innerHTML = '<i class="fas fa-lock"></i>';
+                        }
+                        const clasificacionButton = currentRow.querySelector('a[href*="clasificacion.ver_detalles_clasificacion"], button[title*="Clasificación"]');
+                        if (clasificacionButton) {
+                            if (data.new_status === 0) { 
+                                if (clasificacionButton.tagName === 'A') { 
+                                    const newButton = document.createElement('button');
+                                    newButton.type = 'button';
+                                    newButton.className = 'btn btn-outline-secondary';
+                                    newButton.disabled = true;
+                                    newButton.title = 'Guía Inactiva';
+                                    newButton.innerHTML = '<i class="fas fa-clipboard-list"></i>';
+                                    clasificacionButton.parentNode.replaceChild(newButton, clasificacionButton);
+                                } else {
+                                    clasificacionButton.disabled = true;
+                                    clasificacionButton.title = 'Guía Inactiva';
+                                }
+                            } else { 
+                                // No se revierte automáticamente el botón de clasificación aquí por simplicidad.
+                                // Se actualizará al recargar/filtrar.
+                                if (clasificacionButton.disabled) {
+                                     // clasificacionButton.disabled = false; // Ejemplo
+                                }
+                            }
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error al cambiar estado de la guía:', error);
+                    alert('Error: ' + error.message);
+                });
+            });
+        }
+    });
 </script>
 {% endblock %} 

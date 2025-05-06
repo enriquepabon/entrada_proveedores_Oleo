@@ -6,7 +6,7 @@ import db_schema
 import secrets
 from werkzeug.middleware.proxy_fix import ProxyFix
 # Importar la función del filtro
-from .utils.common import format_datetime_filter
+from .utils.common import format_datetime_filter, format_number_es
 # Importar Flask-Login
 from flask_login import LoginManager
 
@@ -226,12 +226,35 @@ def create_app(test_config=None):
     with app.app_context():
         try:
             db_schema.create_tables()
-            logger.info("Tablas de la base de datos verificadas/creadas correctamente.")
-        except Exception as e:
-            logger.error(f"Error creando/verificando tablas DB: {e}")
-            # Podrías decidir si la app puede continuar sin DB o lanzar un error más grave
+            logger.info("Tablas de la base de datos verificadas/creadas correctamente (db_schema.create_tables).")
+            
+            # --- NUEVO: Llamar a las funciones de verificación de esquema extendido ---
+            try:
+                from app.utils.auth_utils import ensure_users_schema_admin_column
+                if ensure_users_schema_admin_column():
+                    logger.info("Esquema de tabla 'users' (columna is_admin) verificado/actualizado.")
+                else:
+                    logger.warning("Hubo un problema al verificar/actualizar esquema de 'users' (columna is_admin).")
+            except ImportError:
+                logger.error("No se pudo importar ensure_users_schema_admin_column.")
+            except Exception as e_user_schema:
+                logger.error(f"Error inesperado al asegurar esquema de users: {e_user_schema}")
 
-        # Asegurar que la tabla clasificaciones tenga la estructura correcta
+            try:
+                from app.blueprints.misc.routes import ensure_entry_records_schema_is_active_column
+                if ensure_entry_records_schema_is_active_column():
+                    logger.info("Esquema de tabla 'entry_records' (columna is_active) verificado/actualizado.")
+                else:
+                    logger.warning("Hubo un problema al verificar/actualizar esquema de 'entry_records' (columna is_active).")
+            except ImportError:
+                logger.error("No se pudo importar ensure_entry_records_schema_is_active_column.")
+            except Exception as e_entry_schema:
+                logger.error(f"Error inesperado al asegurar esquema de entry_records: {e_entry_schema}")
+            # --- FIN NUEVO ---
+
+        except Exception as e:
+            logger.error(f"Error creando/verificando tablas DB principales: {e}")
+
         try:
             from app.blueprints.misc.routes import ensure_clasificaciones_schema
             ensure_clasificaciones_schema()
@@ -239,9 +262,10 @@ def create_app(test_config=None):
         except Exception as e:
             logger.error(f"Error verificando tabla clasificaciones: {str(e)}")
     
-    # --- Registrar el filtro Jinja2 ---
+    # --- Registrar filtros Jinja2 --- 
     app.add_template_filter(format_datetime_filter, 'format_datetime')
-    # ----------------------------------
+    app.add_template_filter(format_number_es, 'format_es') # NUEVO REGISTRO
+    # --- FIN Registro filtros --- 
     
     # --- Añadir logging de cookies (CORREGIDO) --- 
     # setup_logging_cookies(app)  # <-- Comentar o eliminar

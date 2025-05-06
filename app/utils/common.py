@@ -1086,3 +1086,52 @@ def get_utc_timestamp_str():
     
     return datetime.now(pytz.utc).strftime('%Y-%m-%d %H:%M:%S')
 
+# --- NUEVA FUNCIÓN DE FORMATO DE NÚMERO ---
+def format_number_es(value):
+    """
+    Formats a number using Spanish locale conventions (dot for thousands, comma for decimal).
+    Handles potential None, string, or numeric types reliably without locale settings.
+    """
+    if value is None:
+        return '-' # O '' si prefieres vacío
+
+    try:
+        # Convertir input a float robustly
+        if isinstance(value, str):
+            try:
+                # Try replacing comma decimal first for inputs like "1234,56"
+                number = float(value.replace('.', '').replace(',', '.'))
+            except ValueError:
+                 # Try direct conversion if the above fails (e.g., input "1234.56")
+                 number = float(value)
+        else:
+            number = float(value) # Input is likely already int or float
+
+        # Separate integer and decimal parts, handling sign
+        is_negative = number < 0
+        num_str = "{:.2f}".format(abs(number)) # Work with absolute value, 2 decimal places
+        
+        parts = num_str.split('.')
+        integer_part_abs = parts[0]
+        decimal_part = parts[1] if len(parts) > 1 else '00'
+
+        # Add thousands separators to the integer part
+        integer_part_formatted = ""
+        n = len(integer_part_abs)
+        for i, digit in enumerate(reversed(integer_part_abs)):
+            if i > 0 and i % 3 == 0:
+                integer_part_formatted += '.'
+            integer_part_formatted += digit
+        
+        final_integer_part = integer_part_formatted[::-1] # Reverse back
+
+        # Combine parts with Spanish separators and add sign back if needed
+        result = f"{final_integer_part},{decimal_part}"
+        return f"-{result}" if is_negative else result
+
+    except (ValueError, TypeError):
+        # If conversion or formatting fails, return the original value as string
+        logger.warning(f"Could not format number '{value}' as Spanish locale number.")
+        return str(value) 
+# --- FIN NUEVA FUNCIÓN ---
+
