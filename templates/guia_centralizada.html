@@ -299,11 +299,12 @@
                 {% if datos_guia.fecha_salida and datos_guia.hora_salida %}
                     {% set porcentaje_actualizado = 100 %}
                 {% endif %}
-                <div class="progress-bar {% if porcentaje_actualizado < 30 %}bg-primary{% elif porcentaje_actualizado < 60 %}bg-primary{% elif porcentaje_actualizado < 80 %}bg-info{% elif porcentaje_actualizado < 100 %}bg-warning{% else %}bg-success{% endif %}" 
-                     role="progressbar" 
-                     style="width: {{ porcentaje_actualizado }}%;" 
-                     aria-valuenow="{{ porcentaje_actualizado }}" 
-                     aria-valuemin="0" 
+                {% set bar_style = "width: " ~ porcentaje_actualizado ~ "%;" %}
+                <div class="progress-bar {% if porcentaje_actualizado < 30 %}bg-primary{% elif porcentaje_actualizado < 60 %}bg-primary{% elif porcentaje_actualizado < 80 %}bg-info{% elif porcentaje_actualizado < 100 %}bg-warning{% else %}bg-success{% endif %}"
+                     role="progressbar"
+                     style="{{ bar_style }}"
+                     aria-valuenow="{{ porcentaje_actualizado }}"
+                     aria-valuemin="0"
                      aria-valuemax="100">
                     {{ porcentaje_actualizado }}%
                 </div>
@@ -721,10 +722,12 @@
         </div>
         <div class="card-body">
             <div class="d-flex flex-wrap justify-content-center">
-                {# ---- NUEVO BOTÓN SIEMPRE VISIBLE ---- #}
+                {# ---- Botón Pesaje Neto Express (Condicional) ---- #}
+                {% if not salida_completada or (current_user and current_user.is_authenticated and current_user.is_admin) %}
                 <a href="{{ url_for('pesaje_neto.pesaje_neto', codigo_guia=codigo_guia) }}" class="btn btn-warning m-1" title="Acceso rápido a Pesaje Neto (omitir pasos intermedios si es necesario)">
                     <i class="fas fa-forward me-2"></i>Ir a Pesaje Neto (Express)
                 </a>
+                {% endif %}
                 {# ---- FIN NUEVO BOTÓN ---- #}
 
                 {% set tiene_pesaje_neto = datos_guia.pesaje_neto_completado or (datos_guia.peso_neto and datos_guia.peso_neto != 'Pendiente' and datos_guia.peso_neto != 'N/A') %}
