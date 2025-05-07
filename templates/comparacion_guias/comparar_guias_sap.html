@@ -79,6 +79,19 @@
                             </tr>
                         {% endfor %}
                     </tbody>
+                    {# --- NUEVO: Fila de Totales --- #}
+                    {% if resultados_comparacion %}{# Mostrar totales solo si hay resultados #}
+                    <tfoot class="table-light">
+                        <tr>
+                            <th colspan="3" class="text-end">Totales:</th> {# Abarca Doc.mat, Guía App, Fecha App #}
+                            <th class="text-end">{{ totales.peso_archivo | format_es }}</th>
+                            <th class="text-end">{{ totales.peso_app | format_es }}</th>
+                            <th class="text-end">{{ totales.diferencia | format_es }}</th>
+                            <th></th> {# Columna de Alerta vacía para totales #}
+                        </tr>
+                    </tfoot>
+                    {% endif %}
+                    {# --- FIN NUEVO --- #}
                 </table>
             </div>
         {% endif %}

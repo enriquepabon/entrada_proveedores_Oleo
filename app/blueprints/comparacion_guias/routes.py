@@ -10,7 +10,12 @@ import xml.etree.ElementTree as ET # Para parsear XML
 @bp.route('/', methods=['GET', 'POST'])
 @login_required
 def comparar_guias_sap_view():
-    resultados_comparacion = [] # Inicializar fuera del bloque try
+    resultados_comparacion = []
+    totales = { # Inicializar diccionario de totales
+        'peso_archivo': 0.0,
+        'peso_app': 0.0,
+        'diferencia': 0.0
+    }
 
     if request.method == 'POST':
         if 'archivo_sap' not in request.files:
@@ -242,6 +247,17 @@ def comparar_guias_sap_view():
                 flash('Formato de archivo no válido. Sube un archivo .xlsx, .xls o .xml.', 'danger')
                 return redirect(request.url)
 
+            # --- Calcular Totales DESPUÉS de procesar todas las filas/items ---
+            for resultado in resultados_comparacion:
+                if resultado['peso_neto_archivo'] is not None:
+                    totales['peso_archivo'] += resultado['peso_neto_archivo']
+                if resultado['peso_neto_app'] is not None:
+                    totales['peso_app'] += resultado['peso_neto_app']
+                # Sumar la diferencia solo si ambos pesos existen
+                if resultado['peso_neto_archivo'] is not None and resultado['peso_neto_app'] is not None:
+                    diff_numeric = resultado['peso_neto_archivo'] - resultado['peso_neto_app']
+                    totales['diferencia'] += diff_numeric
+
         except ImportError:
             flash('Error interno: No se pudo importar la librería necesaria para leer el archivo.', 'danger')
             current_app.logger.error("Error importando librería (pandas, io o xml.etree)", exc_info=True)
@@ -263,7 +279,12 @@ def comparar_guias_sap_view():
         elif not get_flashed_messages(category_filter=['danger', 'warning']):
             flash('No se encontraron datos procesables en el formato esperado dentro del archivo.', 'warning')
 
-        return render_template('comparar_guias_sap.html', resultados_comparacion=resultados_comparacion)
+        # Pasar tanto los resultados como los totales al template
+        return render_template('comparar_guias_sap.html', 
+                               resultados_comparacion=resultados_comparacion,
+                               totales=totales) # Añadir totales aquí
 
     # Método GET
-    return render_template('comparar_guias_sap.html', resultados_comparacion=[]) 
+    return render_template('comparar_guias_sap.html', 
+                           resultados_comparacion=[], 
+                           totales=totales) # Pasar totales también en GET (aunque sean 0) 
