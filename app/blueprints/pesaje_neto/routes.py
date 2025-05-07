@@ -294,13 +294,31 @@ def registrar_peso_neto_directo():
         if 'imagen' in request.files:
             imagen_file = request.files['imagen']
             if imagen_file and imagen_file.filename != '':
-                filename = secure_filename(imagen_file.filename)
+                original_filename = secure_filename(imagen_file.filename)
+                
+                # --- INICIO: Generar nombre de archivo único ---
+                # El timestamp_utc ya se obtiene antes con get_utc_timestamp_str()
+                # El codigo_guia ya se obtiene antes con request.form.get('codigo_guia')
+                timestamp_sanitized = timestamp_utc.replace(":", "-").replace(" ", "_") # ej: 2023-10-27_15-30-00
+                
+                name_part, ext_part = os.path.splitext(original_filename)
+                if not ext_part: # Asegurar que haya una extensión
+                    # Default a .png si no hay extensión (ej. captura de pantalla sin extensión explícita)
+                    ext_part = '.png' 
+                
+                # Construir el nuevo nombre de archivo único
+                # Asegurarse de que codigo_guia es válido para un nombre de archivo
+                safe_codigo_guia = "".join(c if c.isalnum() or c in ('_','-') else '_' for c in str(codigo_guia))
+                unique_filename = f"{safe_codigo_guia}_{timestamp_sanitized}{ext_part}"
+                # --- FIN: Generar nombre de archivo único ---
+
                 upload_folder = os.path.join(current_app.config['BASE_DIR'], 'static', 'fotos_pesaje_neto')
                 
                 logger.info(f"Intentando crear directorio: {upload_folder}")
                 os.makedirs(upload_folder, exist_ok=True) # Asegurar que el directorio exista
                 
-                save_path = os.path.join(upload_folder, filename)
+                # Usar unique_filename para guardar
+                save_path = os.path.join(upload_folder, unique_filename)
                 logger.info(f"Ruta de guardado completa para la imagen: {save_path}")
                 
                 try:
@@ -310,7 +328,8 @@ def registrar_peso_neto_directo():
                     # --- INICIO: Verificar existencia del archivo --- 
                     if os.path.exists(save_path):
                         logger.info(f"VERIFICADO: El archivo {save_path} existe en el disco después de guardar.")
-                        imagen_soporte_sap_path = os.path.join('fotos_pesaje_neto', filename).replace("\\\\", "/")
+                        # Usar unique_filename para la ruta en DB
+                        imagen_soporte_sap_path = os.path.join('fotos_pesaje_neto', unique_filename).replace("\\\\", "/")
                     else:
                         logger.error(f"ERROR DE VERIFICACIÓN: El archivo {save_path} NO se encontró en el disco después de guardar.")
                         imagen_soporte_sap_path = None # No guardar ruta si el archivo no está realmente allí
