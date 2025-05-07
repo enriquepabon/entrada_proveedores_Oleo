@@ -55,7 +55,7 @@ def comparar_guias_sap_view():
                 for index, row in df.iterrows():
                     # Obtener valores usando los nombres de columna limpios
                     codigo_sap_bruto = str(row[col_codigo_sap_excel]) if pd.notna(row[col_codigo_sap_excel]) else ''
-                    peso_neto_archivo_valor = row[col_peso_excel] # Puede ser número o string
+                    peso_neto_archivo_valor = row[col_peso_excel]
                     peso_neto_archivo_str = str(peso_neto_archivo_valor) if pd.notna(peso_neto_archivo_valor) else ''
 
                     # Extraer la parte antes del guion del código SAP
@@ -78,9 +78,8 @@ def comparar_guias_sap_view():
                         current_app.logger.warning(f"Peso vacío en archivo Excel para SAP bruto {codigo_sap_bruto} (fila {index+2})")
                     else:
                         try:
-                            # Intentar convertir directamente a float (pandas puede manejar tipos)
-                            # O aplicar lógica de limpieza si es necesario
-                            peso_neto_archivo = float(str(peso_neto_archivo_valor).replace('.', '').replace(',', '.')) # Mantener limpieza por si acaso
+                            # Corregir parseo para formato Excel: quitar comas de miles, mantener punto decimal
+                            peso_neto_archivo = float(str(peso_neto_archivo_valor).replace(',', ''))
                         except (ValueError, TypeError):
                             current_app.logger.warning(f"Peso inválido en archivo Excel para SAP bruto {codigo_sap_bruto}: '{peso_neto_archivo_str}' (fila {index+2})")
                             alerta_icono = 'peso_invalido'
