@@ -304,6 +304,8 @@ def register_blueprints(app):
     from app.blueprints.presupuesto import bp as presupuesto_bp
     # Importar el blueprint de autenticación
     from app.blueprints.auth import bp as auth_bp
+    # Importar el nuevo blueprint de comparación de guías
+    from app.blueprints.comparacion_guias import bp as comparacion_guias_bp
     
     # Registrar blueprints con sus prefijos de URL
     app.register_blueprint(entrada_bp)
@@ -318,6 +320,8 @@ def register_blueprints(app):
     app.register_blueprint(presupuesto_bp) # Ya tiene el prefijo definido en su __init__.py
     # Registrar el blueprint de autenticación
     app.register_blueprint(auth_bp, url_prefix='/auth')
+    # Registrar el nuevo blueprint de comparación de guías
+    app.register_blueprint(comparacion_guias_bp) # El prefijo ya está en su __init__.py
     
     logger.info("Todos los blueprints registrados correctamente.")
 
