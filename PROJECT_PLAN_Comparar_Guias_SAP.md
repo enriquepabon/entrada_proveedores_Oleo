@@ -1,13 +1,13 @@
-# Proyecto: Comparación de Guías SAP y Pesos Netos desde Archivo de Texto
+# Proyecto: Comparación de Guías SAP y Pesos Netos desde Archivo de Excel
 
 ## Objetivo del Proyecto
-Implementar una funcionalidad que permita a los usuarios subir un archivo de **texto delimitado por tabuladores (.txt, .tsv)** conteniendo códigos de guía de transporte SAP (`Doc. mat.`) y sus respectivos pesos netos (`Ctd.en UM entrada`). El sistema leerá este archivo, buscará las guías SAP en la base de datos de la aplicación, comparará los pesos netos y mostrará una tabla con los resultados, incluyendo el código de guía interno de la aplicación, la fecha de registro, los pesos de ambas fuentes y la diferencia, además de alertas por inconsistencias.
+Implementar una funcionalidad que permita a los usuarios subir un archivo de **Excel (.xlsx, .xls) o XML (.xml)** conteniendo códigos de guía de transporte SAP (columna `Txt.cab.doc.` en Excel, o etiqueta `<documentoMaterial>` en XML) y sus respectivos pesos netos (columna `Cantidad` en Excel, o etiqueta `<cantidad>` en XML). El sistema leerá este archivo, buscará las guías SAP en la base de datos de la aplicación, comparará los pesos netos y mostrará una tabla con los resultados, incluyendo el código de guía interno de la aplicación, la fecha de registro, los pesos de ambas fuentes y la diferencia, además de alertas por inconsistencias.
 
 ## Instrucciones Generales
 - El agente (AI) ejecutará cada paso.
 - El usuario (humano) probará la funcionalidad implementada en cada paso.
 - El usuario proporcionará retroalimentación y aprobará el paso antes de que el agente continúe con el siguiente.
-- Se utilizará la librería `pandas` para leer el archivo de texto. (`openpyxl` se mantiene en dependencias por si se requiere soporte Excel en el futuro, pero no es esencial para archivos .txt/.tsv).
+- Se utilizará la librería `pandas` para leer archivos Excel y `xml.etree.ElementTree` para archivos XML.
 - La funcionalidad residirá en un nuevo blueprint llamado `comparacion_guias` con el prefijo de URL `/comparacion-guias`.
 
 ## Pasos del Proyecto
@@ -27,7 +27,7 @@ Implementar una funcionalidad que permita a los usuarios subir un archivo de **t
         4.  Crear el archivo HTML: `app/templates/comparacion_guias/comparar_guias_sap.html`.
             *   Este template heredará de `base.html`.
             *   Incluirá un título (ej. "Comparar Guías SAP y Pesos Netos").
-            *   Contendrá un formulario (`<form method="POST" enctype="multipart/form-data">`) que permita al usuario seleccionar un archivo (`<input type="file" name="archivo_sap" accept=".txt, .tsv">`). (Nombre de input `archivo_sap` consistente con el código).
+            *   Contendrá un formulario (`<form method="POST" enctype="multipart/form-data">`) que permita al usuario seleccionar un archivo (`<input type="file" name="archivo_sap" accept=".xlsx,.xls,.xml">`). (Nombre de input `archivo_sap` consistente con el código).
             *   Tendrá un botón de envío ("Comparar Archivo").
             *   Incluirá una sección para mostrar mensajes de error o la tabla de resultados.
     -   **Usuario:**
@@ -54,29 +54,30 @@ Implementar una funcionalidad que permita a los usuarios subir un archivo de **t
         -   Navegar a `/comparacion-guias/`. Verificar que se muestre el formulario.
         -   Intentar enviar el formulario sin archivo y verificar el mensaje de error. Aprobar para continuar.
 
-- [x] **Paso 3: Procesamiento del Archivo de Texto y Comparación (Lógica Principal)**
+- [x] **Paso 3: Procesamiento del Archivo (Excel o XML) y Comparación (Lógica Principal)**
     -   **Agente:**
         1.  **En la ruta `POST /` en `app/blueprints/comparacion_guias/routes.py`:**
             *   Después de las validaciones del archivo:
-                *   Leer el archivo de texto usando `pd.read_csv(file, sep='\t')`. Usar un bloque `try-except` para capturar errores de lectura o formato.
-                *   Verificar si las columnas requeridas (`Doc. mat.` y `Ctd.en UM entrada`) existen en el DataFrame de pandas. Si no, mostrar un error flash y redirigir.
+                *   **Si es Excel:** Leer el archivo usando `pd.read_excel(file)`. Verificar columnas `Txt.cab.doc.` y `Cantidad`.
+                *   **Si es XML:** Parsear el archivo usando `ET.parse(file)`. Buscar elementos `<item>` (o similar) y dentro de ellos `<documentoMaterial>` y `<cantidad>` (o los nombres de etiqueta que el usuario especifique).
+                *   Usar un bloque `try-except` general para capturar errores de lectura o formato para ambos tipos.
                 *   Inicializar una lista `resultados_comparacion = []`.
-                *   Iterar sobre las filas del DataFrame (`for index, row in df.iterrows():`).
-                    *   Obtener `codigo_sap_archivo = str(row['Doc. mat.'])` y `peso_neto_archivo_str = str(row['Ctd.en UM entrada'])`. (Asegurar conversión a string).
+                *   Iterar sobre las filas del DataFrame (Excel) o los elementos correspondientes (XML).
+                    *   Obtener `codigo_sap_bruto` (de `Txt.cab.doc.` o `<documentoMaterial>`) y luego extraer la parte antes del guion. Obtener `peso_neto_archivo_str` (de `Cantidad` o `<cantidad>`).
                     *   Inicializar `codigo_guia_app = '-'`, `fecha_registro_app = '-'`, `peso_neto_app_str = '-'`, `diferencia_peso_str = '-'`, `alerta_icono = ''`.
-                    *   **Validación del peso del archivo de texto:** Intentar convertir `peso_neto_archivo_str` (que podría tener comas como decimales) a float. Si falla, registrarlo para la alerta (`alerta_icono = 'peso_invalido'`) y continuar.
+                    *   **Validación del peso del archivo:** Intentar convertir `peso_neto_archivo_str` a float. Si falla, registrarlo para la alerta (`alerta_icono = 'peso_invalido'`) y continuar.
                     *   **Búsqueda en DB:**
                         *   Conectar a `tiquetes.db` (usar `get_db_connection()` de `app.utils.common` o `app.utils.auth_utils` si es aplicable, o conexión directa).
-                        *   Buscar en `pesajes_bruto` donde `codigo_guia_transporte_sap` coincida con `codigo_sap_archivo`.
+                        *   Buscar en `pesajes_bruto` donde `codigo_guia_transporte_sap` coincida con `codigo_sap_bruto`.
                         *   Si se encuentra, obtener el `codigo_guia` de `pesajes_bruto`.
                         *   Con ese `codigo_guia`, buscar en `entry_records` para obtener `timestamp_registro_utc` (y formatearlo usando `convertir_timestamp_a_fecha_hora` de `misc.routes` - considerar moverla a `common.py`).
                         *   Con ese `codigo_guia`, buscar en `pesajes_neto` para obtener `peso_neto`.
-                        *   Si `codigo_sap_archivo` no se encuentra en `pesajes_bruto`, marcar `alerta_icono = 'no_encontrado_db'`.
+                        *   Si `codigo_sap_bruto` no se encuentra en `pesajes_bruto`, marcar `alerta_icono = 'no_encontrado_db'`.
                     *   Si se encontraron ambos pesos y son numéricos, calcular la diferencia.
                     *   Añadir un diccionario a `resultados_comparacion` con todos los campos definidos para la tabla de resultados.
                 *   Renderizar de nuevo `comparar_guias_sap.html`, pasando `resultados_comparacion` a la plantilla.
     -   **Usuario:**
-        -   Preparar un archivo de texto delimitado por tabuladores de prueba con los formatos correctos.
+        -   Preparar un archivo de Excel o XML de prueba con los formatos correctos.
         -   Subir el archivo y verificar la lógica de procesamiento. Aprobar para continuar.
 
 - [x] **Paso 4: Mostrar Resultados en el Template**
@@ -89,7 +90,7 @@ Implementar una funcionalidad que permita a los usuarios subir un archivo de **t
             *   Para la columna "Alerta", mostrar un icono específico o mensaje basado en el valor de `alerta_icono` (ej. diferente para 'peso_invalido' vs 'no_encontrado_db').
             *   Formatear los números de peso usando el filtro `format_es`.
     -   **Usuario:**
-        -   Subir el archivo de texto de prueba.
+        -   Subir el archivo de Excel o XML de prueba.
         -   Verificar que la tabla de resultados se muestre correctamente con todos los datos.
         -   Verificar que las alertas aparezcan donde correspondan y sean distintivas.
         -   Verificar el formato de los números. Aprobar para finalizar. 
