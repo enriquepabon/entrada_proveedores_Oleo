@@ -1,7 +1,7 @@
 # Proyecto: Comparación de Guías SAP y Pesos Netos desde Archivo de Excel
 
 ## Objetivo del Proyecto
-Implementar una funcionalidad que permita a los usuarios subir un archivo de **Excel (.xlsx, .xls) o XML (.xml)** conteniendo códigos de guía de transporte SAP (columna `Txt.cab.doc.` en Excel, o etiqueta `<documentoMaterial>` en XML) y sus respectivos pesos netos (columna `Cantidad` en Excel, o etiqueta `<cantidad>` en XML). El sistema leerá este archivo, buscará las guías SAP en la base de datos de la aplicación, comparará los pesos netos y mostrará una tabla con los resultados, incluyendo el código de guía interno de la aplicación, la fecha de registro, los pesos de ambas fuentes y la diferencia, además de alertas por inconsistencias.
+Implementar una funcionalidad que permita a los usuarios subir un archivo de **Excel (.xlsx, .xls) o XML (.xml)** conteniendo códigos de guía de transporte SAP (columna `Guia de transporte` en Excel, o etiqueta `<Guia_de_transporte>` - pendiente de confirmación - en XML) y sus respectivos pesos netos (columna `Peso neto` en Excel, o etiqueta `<Peso_neto>` - pendiente de confirmación - en XML). El sistema leerá este archivo, buscará las guías SAP en la base de datos de la aplicación, comparará los pesos netos y mostrará una tabla con los resultados, incluyendo el código de guía interno de la aplicación, la fecha de registro, los pesos de ambas fuentes y la diferencia, además de alertas por inconsistencias.
 
 ## Instrucciones Generales
 - El agente (AI) ejecutará cada paso.
@@ -58,21 +58,21 @@ Implementar una funcionalidad que permita a los usuarios subir un archivo de **E
     -   **Agente:**
         1.  **En la ruta `POST /` en `app/blueprints/comparacion_guias/routes.py`:**
             *   Después de las validaciones del archivo:
-                *   **Si es Excel:** Leer el archivo usando `pd.read_excel(file)`. Verificar columnas `Txt.cab.doc.` y `Cantidad`.
-                *   **Si es XML:** Parsear el archivo usando `ET.parse(file)`. Buscar elementos `<item>` (o similar) y dentro de ellos `<documentoMaterial>` y `<cantidad>` (o los nombres de etiqueta que el usuario especifique).
+                *   **Si es Excel:** Leer el archivo usando `pd.read_excel(file)`. Verificar que la primera columna sea "Guia de transporte" y la segunda "Peso neto" (o usarlas por defecto si los nombres no coinciden).
+                *   **Si es XML:** Parsear el archivo usando `ET.parse(file)`. Buscar elementos `<item>` (o similar) y dentro de ellos `<Guia_de_transporte>` y `<Peso_neto>` (o los nombres de etiqueta que el usuario especifique/confirme).
                 *   Usar un bloque `try-except` general para capturar errores de lectura o formato para ambos tipos.
                 *   Inicializar una lista `resultados_comparacion = []`.
                 *   Iterar sobre las filas del DataFrame (Excel) o los elementos correspondientes (XML).
-                    *   Obtener `codigo_sap_bruto` (de `Txt.cab.doc.` o `<documentoMaterial>`) y luego extraer la parte antes del guion. Obtener `peso_neto_archivo_str` (de `Cantidad` o `<cantidad>`).
+                    *   Obtener `codigo_sap_archivo` (de la columna "Guia de transporte" o etiqueta `<Guia_de_transporte>`). Ya no se necesita procesar para quitar el "-AÑO". Obtener `peso_neto_archivo_str` (de la columna "Peso neto" o etiqueta `<Peso_neto>`).
                     *   Inicializar `codigo_guia_app = '-'`, `fecha_registro_app = '-'`, `peso_neto_app_str = '-'`, `diferencia_peso_str = '-'`, `alerta_icono = ''`.
                     *   **Validación del peso del archivo:** Intentar convertir `peso_neto_archivo_str` a float. Si falla, registrarlo para la alerta (`alerta_icono = 'peso_invalido'`) y continuar.
                     *   **Búsqueda en DB:**
                         *   Conectar a `tiquetes.db` (usar `get_db_connection()` de `app.utils.common` o `app.utils.auth_utils` si es aplicable, o conexión directa).
-                        *   Buscar en `pesajes_bruto` donde `codigo_guia_transporte_sap` coincida con `codigo_sap_bruto`.
+                        *   Buscar en `pesajes_bruto` donde `codigo_guia_transporte_sap` coincida con `codigo_sap_archivo`.
                         *   Si se encuentra, obtener el `codigo_guia` de `pesajes_bruto`.
                         *   Con ese `codigo_guia`, buscar en `entry_records` para obtener `timestamp_registro_utc` (y formatearlo usando `convertir_timestamp_a_fecha_hora` de `misc.routes` - considerar moverla a `common.py`).
                         *   Con ese `codigo_guia`, buscar en `pesajes_neto` para obtener `peso_neto`.
-                        *   Si `codigo_sap_bruto` no se encuentra en `pesajes_bruto`, marcar `alerta_icono = 'no_encontrado_db'`.
+                        *   Si `codigo_sap_archivo` no se encuentra en `pesajes_bruto`, marcar `alerta_icono = 'no_encontrado_db'`.
                     *   Si se encontraron ambos pesos y son numéricos, calcular la diferencia.
                     *   Añadir un diccionario a `resultados_comparacion` con todos los campos definidos para la tabla de resultados.
                 *   Renderizar de nuevo `comparar_guias_sap.html`, pasando `resultados_comparacion` a la plantilla.

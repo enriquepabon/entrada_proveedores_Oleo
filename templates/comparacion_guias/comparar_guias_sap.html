@@ -4,7 +4,10 @@
 {% block content %}
 <div class="container mt-4">
     <h2>Comparar Guías SAP con Datos de la Aplicación</h2>
-    <p>Sube un archivo de texto delimitado por tabuladores (.txt, .tsv) con las columnas "Doc. mat." (Guía SAP) y "Ctd.en UM entrada" (Peso Neto del archivo).</p>
+    <p>Sube un archivo Excel (.xlsx, .xls) o XML (.xml).<br>
+       Para Excel: asegúrate de que la primera columna sea "Guia de transporte" (código SAP) y la segunda columna sea "Peso neto".<br>
+       Para XML: utiliza las etiquetas <Guia_de_transporte> y <Peso_neto> (o las que me confirmes).
+    </p>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}

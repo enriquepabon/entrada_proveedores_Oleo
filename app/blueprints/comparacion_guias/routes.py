@@ -46,28 +46,53 @@ def comparar_guias_sap_view():
                 current_app.logger.info(f"Columnas después de limpiar espacios: {list(df.columns)}")
 
                 # Verificar columnas requeridas (ajustadas al nuevo formato)
-                # Corregir nombres de columnas esperadas según el archivo real
-                col_codigo_sap_excel = "Texto cab.documento" 
-                col_peso_excel = "Ctd.en UM entrada"
-                if col_codigo_sap_excel not in df.columns or col_peso_excel not in df.columns:
-                    flash(f'El archivo Excel debe contener las columnas "{col_codigo_sap_excel}" y "{col_peso_excel}". Columnas encontradas: {list(df.columns)}', 'danger')
+                col_codigo_sap_excel = "Guia de transporte"
+                col_peso_excel = "Peso neto"
+
+                # Verificar que el DataFrame tenga al menos dos columnas
+                if len(df.columns) < 2:
+                    flash(f'El archivo Excel debe contener al menos dos columnas. Se detectaron {len(df.columns)} columnas.', 'danger')
                     return redirect(request.url)
+
+                # Intentar encontrar por nombre, si no, usar por posición
+                # Columna para Guía SAP
+                if col_codigo_sap_excel not in df.columns:
+                    current_app.logger.warning(f"Columna '{col_codigo_sap_excel}' no encontrada. Usando la primera columna (índice 0) por defecto.")
+                    actual_col_codigo_sap = df.columns[0]
+                else:
+                    actual_col_codigo_sap = col_codigo_sap_excel
+
+                # Columna para Peso Neto
+                if col_peso_excel not in df.columns:
+                    current_app.logger.warning(f"Columna '{col_peso_excel}' no encontrada. Usando la segunda columna (índice 1) por defecto.")
+                    actual_col_peso = df.columns[1]
+                else:
+                    actual_col_peso = col_peso_excel
+
+                # Asegurar que la columna de código SAP se trate como string y limpiar el ".0"
+                if actual_col_codigo_sap in df.columns:
+                    # Primero convertir a string para manejar posibles floats leídos por Pandas
+                    df[actual_col_codigo_sap] = df[actual_col_codigo_sap].astype(str)
+                    # Eliminar el sufijo .0 si existe (común si Pandas leyó números como float)
+                    df[actual_col_codigo_sap] = df[actual_col_codigo_sap].apply(
+                        lambda x: x[:-2] if isinstance(x, str) and x.endswith('.0') and x[:-2].isdigit() else x
+                    )
+                    # También quitar cualquier espacio en blanco residual después de la conversión y limpieza
+                    df[actual_col_codigo_sap] = df[actual_col_codigo_sap].str.strip()
 
                 conn = get_db_connection()
                 cursor = conn.cursor()
 
                 # Iterar sobre las filas del DataFrame
                 for index, row in df.iterrows():
-                    # Obtener valores usando los nombres de columna limpios
-                    codigo_sap_bruto = str(row[col_codigo_sap_excel]) if pd.notna(row[col_codigo_sap_excel]) else ''
-                    peso_neto_archivo_valor = row[col_peso_excel]
+                    # Obtener valores usando los nombres de columna identificados
+                    # La columna SAP ya es string y ha sido limpiada, y strip() aplicado
+                    codigo_sap_bruto = row[actual_col_codigo_sap] if pd.notna(row[actual_col_codigo_sap]) else ''
+                    peso_neto_archivo_valor = row[actual_col_peso]
                     peso_neto_archivo_str = str(peso_neto_archivo_valor) if pd.notna(peso_neto_archivo_valor) else ''
 
-                    # Extraer la parte antes del guion del código SAP
-                    if '-' in codigo_sap_bruto:
-                        codigo_sap_archivo = codigo_sap_bruto.split('-')[0].strip()
-                    else:
-                        codigo_sap_archivo = codigo_sap_bruto.strip()
+                    # El código SAP ya no necesita ser procesado para quitar '-AÑO'
+                    codigo_sap_archivo = codigo_sap_bruto.strip()
 
                     # Inicializar datos para la tabla
                     codigo_guia_app = '-'
@@ -80,24 +105,24 @@ def comparar_guias_sap_view():
                     # 1. Validar y convertir peso del archivo
                     if not peso_neto_archivo_str:
                         alerta_icono = 'peso_invalido'
-                        current_app.logger.warning(f"Peso vacío en archivo Excel para SAP bruto {codigo_sap_bruto} (fila {index+2})")
+                        current_app.logger.warning(f"Peso vacío en archivo Excel para SAP {codigo_sap_archivo} (fila {index+2})")
                     else:
                         try:
                             # Corregir parseo para formato Excel: quitar comas de miles, mantener punto decimal
-                            peso_neto_archivo = float(str(peso_neto_archivo_valor).replace(',', ''))
+                            # Asegurarse que el valor sea tratado como string antes de reemplazar
+                            peso_neto_archivo = float(str(peso_neto_archivo_valor).replace('.', '').replace(',', '.'))
                         except (ValueError, TypeError):
-                            current_app.logger.warning(f"Peso inválido en archivo Excel para SAP bruto {codigo_sap_bruto}: '{peso_neto_archivo_str}' (fila {index+2})")
+                            current_app.logger.warning(f"Peso inválido en archivo Excel para SAP {codigo_sap_archivo}: '{peso_neto_archivo_str}' (fila {index+2})")
                             alerta_icono = 'peso_invalido'
 
                     # 2. Búsqueda en la Base de Datos
                     if alerta_icono != 'peso_invalido' and codigo_sap_archivo:
-                        current_app.logger.debug(f"Buscando en DB por codigo_guia_transporte_sap = '{codigo_sap_archivo}' (extraído de '{codigo_sap_bruto}')")
+                        current_app.logger.debug(f"Buscando en DB por codigo_guia_transporte_sap = '{codigo_sap_archivo}'")
                         cursor.execute("SELECT codigo_guia FROM pesajes_bruto WHERE codigo_guia_transporte_sap = ?", (codigo_sap_archivo,))
                         pesaje_bruto_result = cursor.fetchone()
 
                         if pesaje_bruto_result:
                             codigo_guia_app = pesaje_bruto_result['codigo_guia']
-                            # ... (lógica de búsqueda de fecha y peso neto se mantiene igual)
                             cursor.execute("SELECT timestamp_registro_utc FROM entry_records WHERE codigo_guia = ?", (codigo_guia_app,))
                             entry_result = cursor.fetchone()
                             if entry_result and entry_result['timestamp_registro_utc']:
@@ -118,7 +143,7 @@ def comparar_guias_sap_view():
                             current_app.logger.info(f"Guía SAP {codigo_sap_archivo} (fila {index+2}) no encontrada en pesajes_bruto")
                             alerta_icono = 'no_encontrado_db'
                     elif not codigo_sap_archivo:
-                        current_app.logger.warning(f"Código SAP extraído vacío en fila {index+2} (de '{codigo_sap_bruto}'). Fila ignorada.")
+                        current_app.logger.warning(f"Código SAP extraído vacío en fila {index+2}. Fila ignorada.")
                         continue
 
                     # 3. Calcular diferencia
@@ -153,8 +178,10 @@ def comparar_guias_sap_view():
                     
                     # Asumiendo estructura: <registros><item><documentoMaterial>...</documentoMaterial><cantidad>...</cantidad></item></registros>
                     tag_item = 'item' # Etiqueta para cada registro/item
-                    tag_codigo_sap = 'documentoMaterial' # Etiqueta para el código SAP bruto
-                    tag_peso = 'cantidad' # Etiqueta para la cantidad/peso
+                    # ACTUALIZACIÓN PENDIENTE PARA XML - ESPERANDO NOMBRES DE ETIQUETAS
+                    # Si no se proporcionan, usaré inferencias y podrás ajustarlas.
+                    tag_codigo_sap = 'Guia_de_transporte' # Placeholder - A ACTUALIZAR
+                    tag_peso = 'Peso_neto' # Placeholder - A ACTUALIZAR
 
                     for item_index, item_element in enumerate(root.findall(tag_item)):
                         codigo_sap_bruto_element = item_element.find(tag_codigo_sap)
@@ -163,11 +190,8 @@ def comparar_guias_sap_view():
                         codigo_sap_bruto = codigo_sap_bruto_element.text.strip() if codigo_sap_bruto_element is not None and codigo_sap_bruto_element.text else ''
                         peso_neto_archivo_str = peso_neto_archivo_element.text.strip() if peso_neto_archivo_element is not None and peso_neto_archivo_element.text else ''
                         
-                        # Extraer la parte antes del guion del código SAP
-                        if '-' in codigo_sap_bruto:
-                            codigo_sap_archivo = codigo_sap_bruto.split('-')[0].strip()
-                        else:
-                            codigo_sap_archivo = codigo_sap_bruto.strip()
+                        # El código SAP ya no necesita ser procesado para quitar '-AÑO'
+                        codigo_sap_archivo = codigo_sap_bruto.strip()
 
                         # Inicializar datos para la tabla
                         codigo_guia_app = '-'
@@ -180,17 +204,18 @@ def comparar_guias_sap_view():
                         # 1. Validar y convertir peso del archivo
                         if not peso_neto_archivo_str:
                             alerta_icono = 'peso_invalido'
-                            current_app.logger.warning(f"Peso vacío en archivo XML para SAP bruto {codigo_sap_bruto} (item {item_index+1})")
+                            current_app.logger.warning(f"Peso vacío en archivo XML para SAP {codigo_sap_archivo} (item {item_index+1})")
                         else:
                             try:
-                                peso_neto_archivo = float(peso_neto_archivo_str.replace('.', '').replace(',', '.'))
+                                # Asegurarse que el valor sea tratado como string antes de reemplazar
+                                peso_neto_archivo = float(str(peso_neto_archivo_str).replace('.', '').replace(',', '.'))
                             except (ValueError, TypeError):
-                                current_app.logger.warning(f"Peso inválido en XML para SAP bruto {codigo_sap_bruto}: '{peso_neto_archivo_str}' (item {item_index+1})")
+                                current_app.logger.warning(f"Peso inválido en XML para SAP {codigo_sap_archivo}: '{peso_neto_archivo_str}' (item {item_index+1})")
                                 alerta_icono = 'peso_invalido'
 
                         # 2. Búsqueda en la Base de Datos
                         if alerta_icono != 'peso_invalido' and codigo_sap_archivo:
-                            current_app.logger.debug(f"Buscando en DB por codigo_guia_transporte_sap = '{codigo_sap_archivo}' (extraído de '{codigo_sap_bruto}')")
+                            current_app.logger.debug(f"Buscando en DB por codigo_guia_transporte_sap = '{codigo_sap_archivo}'")
                             cursor.execute("SELECT codigo_guia FROM pesajes_bruto WHERE codigo_guia_transporte_sap = ?", (codigo_sap_archivo,))
                             pesaje_bruto_result = cursor.fetchone()
                             if pesaje_bruto_result:
