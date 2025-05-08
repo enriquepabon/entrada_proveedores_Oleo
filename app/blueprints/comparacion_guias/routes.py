@@ -281,16 +281,18 @@ def comparar_guias_sap_view():
 
             # --- Calcular Totales DESPUÉS de procesar todas las filas/items ---
             for resultado in resultados_comparacion:
-                # Solo sumar si la guía fue encontrada en la base de datos
-                if resultado['codigo_guia_app'] not in ('-', '', None):
-                    if resultado['peso_neto_archivo'] is not None:
-                        totales['peso_archivo'] += resultado['peso_neto_archivo']
-                    if resultado['peso_neto_app'] is not None:
-                        totales['peso_app'] += resultado['peso_neto_app']
-                    # Sumar la diferencia solo si ambos pesos existen
-                    if resultado['peso_neto_archivo'] is not None and resultado['peso_neto_app'] is not None:
-                        diff_numeric = resultado['peso_neto_archivo'] - resultado['peso_neto_app']
-                        totales['diferencia'] += diff_numeric
+                # Sumar todos los pesos del archivo (aunque la guía no exista)
+                if resultado['peso_neto_archivo'] is not None:
+                    totales['peso_archivo'] += resultado['peso_neto_archivo']
+                # Sumar peso app si existe, si no, sumar 0 si la guía no existe
+                if resultado['peso_neto_app'] is not None:
+                    totales['peso_app'] += resultado['peso_neto_app']
+                elif resultado['codigo_guia_app'] in ('-', '', None):
+                    totales['peso_app'] += 0
+                # Sumar la diferencia solo si ambos pesos existen
+                if resultado['peso_neto_archivo'] is not None and resultado['peso_neto_app'] is not None:
+                    diff_numeric = resultado['peso_neto_archivo'] - resultado['peso_neto_app']
+                    totales['diferencia'] += diff_numeric
 
         except ImportError:
             flash('Error interno: No se pudo importar la librería necesaria para leer el archivo.', 'danger')
