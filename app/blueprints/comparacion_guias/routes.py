@@ -85,9 +85,12 @@ def comparar_guias_sap_view():
 
                 # Iterar sobre las filas del DataFrame
                 for index, row in df.iterrows():
-                    # Obtener valores usando los nombres de columna identificados
                     # La columna SAP ya es string y ha sido limpiada, y strip() aplicado
                     codigo_sap_bruto = row[actual_col_codigo_sap] if pd.notna(row[actual_col_codigo_sap]) else ''
+                    # Validar que el código SAP no sea vacío, nan, o solo espacios
+                    if not codigo_sap_bruto or str(codigo_sap_bruto).strip().lower() == 'nan' or str(codigo_sap_bruto).strip() == '':
+                        current_app.logger.info(f"Fila {index+2} ignorada por código SAP vacío o nan: '{codigo_sap_bruto}'")
+                        continue
                     peso_neto_archivo_valor = row[actual_col_peso]
                     peso_neto_archivo_str = str(peso_neto_archivo_valor) if pd.notna(peso_neto_archivo_valor) else ''
 
@@ -188,6 +191,10 @@ def comparar_guias_sap_view():
                         peso_neto_archivo_element = item_element.find(tag_peso)
 
                         codigo_sap_bruto = codigo_sap_bruto_element.text.strip() if codigo_sap_bruto_element is not None and codigo_sap_bruto_element.text else ''
+                        # Validar que el código SAP no sea vacío, nan, o solo espacios
+                        if not codigo_sap_bruto or str(codigo_sap_bruto).strip().lower() == 'nan' or str(codigo_sap_bruto).strip() == '':
+                            current_app.logger.info(f"Item {item_index+1} ignorado por código SAP vacío o nan: '{codigo_sap_bruto}'")
+                            continue
                         peso_neto_archivo_str = peso_neto_archivo_element.text.strip() if peso_neto_archivo_element is not None and peso_neto_archivo_element.text else ''
                         
                         # El código SAP ya no necesita ser procesado para quitar '-AÑO'
@@ -274,14 +281,16 @@ def comparar_guias_sap_view():
 
             # --- Calcular Totales DESPUÉS de procesar todas las filas/items ---
             for resultado in resultados_comparacion:
-                if resultado['peso_neto_archivo'] is not None:
-                    totales['peso_archivo'] += resultado['peso_neto_archivo']
-                if resultado['peso_neto_app'] is not None:
-                    totales['peso_app'] += resultado['peso_neto_app']
-                # Sumar la diferencia solo si ambos pesos existen
-                if resultado['peso_neto_archivo'] is not None and resultado['peso_neto_app'] is not None:
-                    diff_numeric = resultado['peso_neto_archivo'] - resultado['peso_neto_app']
-                    totales['diferencia'] += diff_numeric
+                # Solo sumar si la guía fue encontrada en la base de datos
+                if resultado['codigo_guia_app'] not in ('-', '', None):
+                    if resultado['peso_neto_archivo'] is not None:
+                        totales['peso_archivo'] += resultado['peso_neto_archivo']
+                    if resultado['peso_neto_app'] is not None:
+                        totales['peso_app'] += resultado['peso_neto_app']
+                    # Sumar la diferencia solo si ambos pesos existen
+                    if resultado['peso_neto_archivo'] is not None and resultado['peso_neto_app'] is not None:
+                        diff_numeric = resultado['peso_neto_archivo'] - resultado['peso_neto_app']
+                        totales['diferencia'] += diff_numeric
 
         except ImportError:
             flash('Error interno: No se pudo importar la librería necesaria para leer el archivo.', 'danger')
