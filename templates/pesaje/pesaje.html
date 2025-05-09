@@ -145,7 +145,10 @@
             <!-- Paso 3: Ingreso de Peso -->
             <div id="paso_peso_virtual" class="mb-3" style="display: none;">
                 <label class="form-label">Peso Bruto (kg)</label>
-                <input type="number" class="form-control" id="peso_virtual" step="0.001" placeholder="Ingrese el peso">
+                <input type="number" class="form-control mb-2" id="peso_virtual" step="0.001" placeholder="Ingrese el peso">
+
+                <label class="form-label">Código Guía SAP (Opcional)</label>
+                <input type="text" class="form-control" id="codigo_guia_sap_manual" placeholder="Ingrese el código SAP">
             </div>
         </div>
         
@@ -733,6 +736,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             } else if (tipoPesaje === 'manual') {
                 pesoBruto = document.getElementById('peso_virtual').value;
+                const codigoGuiaSapManual = document.getElementById('codigo_guia_sap_manual').value; // LEER CÓDIGO SAP MANUAL
                  if (!pesoBruto) {
                     alert('Por favor, ingrese el peso manual.');
                     mostrarCarga(false);
@@ -748,6 +752,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 formData.append('tipo_pesaje', 'virtual'); // Explicitly set type
                 // Add justification if needed by the endpoint
                 formData.append('justificacion', document.getElementById('justificacion').value);
+                if (codigoGuiaSapManual) { // AÑADIR CÓDIGO SAP SI ESTÁ PRESENTE
+                    formData.append('codigo_guia_transporte_sap', codigoGuiaSapManual);
+                }
                 endpointUrl = '/pesaje/registrar_peso_virtual'; // Endpoint for virtual registration
 
             } else { // tipoPesaje === 'pepa'
