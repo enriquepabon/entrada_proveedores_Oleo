@@ -1,0 +1,154 @@
+<!-- templates/pesaje_neto/lista_pesaje_neto.html -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Lista de Pesajes Neto</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .main-container {
+            max-width: 1400px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+        .header-section {
+            background: white;
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        .filters-section {
+            background: white;
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        .list-section {
+            background: white;
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        .table-responsive {
+            overflow-x: auto;
+        }
+        .btn-action {
+            min-width: 100px;
+            margin: 0.25rem;
+        }
+        .back-link {
+            margin-bottom: 1.5rem;
+            display: inline-block;
+        }
+        /* Estilo para las celdas en la tabla */
+        .table td {
+            vertical-align: middle;
+        }
+    </style>
+</head>
+<body>
+<div class="main-container">
+    <div class="header-section">
+        <a href="{{ url_for('entrada.home') }}" class="back-link"> <!-- Ajusta esta ruta si es necesario -->
+            <i class="fas fa-arrow-left me-2"></i>Volver al Inicio
+        </a>
+        <h2>Lista de Pesajes Neto</h2>
+        <p class="text-muted">Filtre y busque registros de pesajes neto.</p>
+    </div>
+
+    <div class="filters-section">
+        <h4 class="mb-3">Filtros</h4>
+        <form method="get" action="{{ url_for('pesaje.lista_pesajes_neto') }}"> <!-- Asegúrate que esta ruta coincida -->
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label for="fecha_desde" class="form-label">Fecha Neto Desde</label>
+                    <input type="date" class="form-control" id="fecha_desde" name="fecha_desde" value="{{ filtros.fecha_desde }}">
+                </div>
+                <div class="col-md-3">
+                    <label for="fecha_hasta" class="form-label">Fecha Neto Hasta</label>
+                    <input type="date" class="form-control" id="fecha_hasta" name="fecha_hasta" value="{{ filtros.fecha_hasta }}">
+                </div>
+                <div class="col-md-4">
+                    <label for="codigo_proveedor" class="form-label">Código o Nombre Proveedor</label>
+                    <input type="text" class="form-control" id="codigo_proveedor" name="codigo_proveedor" placeholder="Código o parte del nombre" value="{{ filtros.codigo_proveedor }}">
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-filter me-2"></i>Filtrar
+                    </button>
+                </div>
+                 <div class="col-md-2 d-flex align-items-end">
+                    <a href="{{ url_for('pesaje.lista_pesajes_neto') }}" class="btn btn-outline-secondary w-100">
+                        <i class="fas fa-times me-2"></i>Limpiar
+                    </a>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <div class="list-section">
+        <h4 class="mb-4">Resultados ({{ pesajes_neto|length }} encontrados)</h4>
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Guía</th>
+                        <th>Proveedor</th>
+                        <th>Placa</th>
+                        <th>Fecha Pesaje Neto</th>
+                        <th>Hora Pesaje Neto</th>
+                        <th>Cant. Racimos</th>
+                        <th>Peso Bruto (kg)</th>
+                        <th>Peso Tara (kg)</th>
+                        <th>Peso Neto (kg)</th>
+                        <th>Cód. SAP</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for pesaje in pesajes_neto %}
+                    <tr>
+                        <td>{{ pesaje.codigo_guia }}</td>
+                        <td>
+                            <strong>{{ pesaje.codigo_proveedor }}</strong><br>
+                            <small class="text-muted">{{ pesaje.nombre_proveedor or "No disponible" }}</small>
+                        </td>
+                        <td>{{ pesaje.placa or "N/A" }}</td>
+                        <td>{{ pesaje.fecha_pesaje_neto or "N/A" }}</td>
+                        <td>{{ pesaje.hora_pesaje_neto or "N/A" }}</td>
+                        <td>{{ pesaje.cantidad_racimos or "N/A" }}</td>
+                        <td>{{ (pesaje.peso_bruto | int) if pesaje.peso_bruto is not none else "N/A" }}</td>
+                        <td>{{ (pesaje.peso_tara | int) if pesaje.peso_tara is not none else "N/A" }}</td>
+                        <td><strong>{{ (pesaje.peso_neto | int) if pesaje.peso_neto is not none else "N/A" }}</strong></td>
+                        <td>{{ pesaje.codigo_sap or "N/A" }}</td>
+                        <td>
+                            <a href="{{ url_for('misc.ver_guia_centralizada', codigo_guia=pesaje.codigo_guia) }}" class="btn btn-sm btn-info btn-action" title="Ver Guía Completa">
+                                <i class="fas fa-eye me-1"></i>Global
+                            </a>
+                            <a href="{{ url_for('pesaje_neto.ver_resultados_pesaje_neto', codigo_guia=pesaje.codigo_guia) }}" class="btn btn-sm btn-primary btn-action" title="Ver Detalle Pesaje Neto">
+                                <i class="fas fa-balance-scale-right me-1"></i>P. Neto
+                            </a>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="11" class="text-center">
+                            <i class="fas fa-info-circle me-2"></i>No se encontraron registros de pesaje neto con los filtros seleccionados.
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> 

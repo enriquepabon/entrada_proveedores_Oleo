@@ -128,7 +128,7 @@
                             {% if registro.is_active == 0 %}
                                 <span class="badge bg-danger">Inactiva</span>
                             {% else %}
-                                <span class="badge {% if registro.estado == 'Cerrada' %}bg-success{% elif registro.estado == 'Pesaje Neto Completo' %}bg-info{% elif registro.estado == 'Clasificación Completa' %}bg-primary{% elif registro.estado == 'Pesaje Bruto Completo' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">{{ registro.estado | default('N/A') }}</span>
+                                <span class="badge {% if registro.estado == 'Cerrada' %}bg-success{% elif registro.estado == 'Pesaje Neto Completo' %}bg-info{% elif registro.estado == 'Clasificación Completa' %}bg-primary{% elif registro.estado == 'Pesaje Bruto Completado' %}" style="background-color: #6f42c1; color: white;"{% else %}bg-secondary{% endif %}">{{ registro.estado | default('N/A') }}</span>
                             {% endif %}
                         </td>
                         <td class="text-center acciones-cell"> {# Añadir clase para JS #}
@@ -214,7 +214,9 @@
                 }
                 const currentRow = targetButton.closest('tr');
                 const estadoCell = currentRow.querySelector('.estado-cell');
-                const originalEstadoBadgeHTML = currentRow.dataset.originalEstadoBadge || '<span class="badge bg-secondary">Error</span>';
+                // Corrección: asegurar que el estado original se capture correctamente para 'Pesaje Bruto Completado'
+                const originalBadgeHTML = `<span class='badge ${ (currentRow.querySelector('.badge').getAttribute('style') || '').includes('6f42c1') ? "' style='background-color: #6f42c1; color: white;'" : (currentRow.querySelector('.badge').className.split(' ').find(cls => cls.startsWith('bg-')) || 'bg-secondary') }'>${currentRow.querySelector('.badge').textContent}</span>`;
+                currentRow.dataset.originalEstadoBadge = originalBadgeHTML;
                 
                 fetch(`/guias/${codigoGuia}/toggle_active`, {
                     method: 'POST',
@@ -238,7 +240,7 @@
                             if (data.new_status === 0) { 
                                 estadoCell.innerHTML = '<span class="badge bg-danger">Inactiva</span>';
                             } else { 
-                                estadoCell.innerHTML = originalEstadoBadgeHTML;
+                                estadoCell.innerHTML = originalBadgeHTML;
                             }
                         }
                         if (data.new_status === 0) { 
