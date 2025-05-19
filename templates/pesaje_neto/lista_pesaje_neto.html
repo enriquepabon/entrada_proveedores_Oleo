@@ -99,6 +99,7 @@
             <table class="table table-hover">
                 <thead class="table-light">
                     <tr>
+                        <th>Nº</th>
                         <th>Guía</th>
                         <th>Proveedor</th>
                         <th>Placa</th>
@@ -115,6 +116,7 @@
                 <tbody>
                 {% for pesaje in pesajes_neto %}
                     <tr>
+                        <td>{{ loop.index }}</td>
                         <td>{{ pesaje.codigo_guia }}</td>
                         <td>
                             <strong>{{ pesaje.codigo_proveedor }}</strong><br>
@@ -139,12 +141,25 @@
                     </tr>
                 {% else %}
                     <tr>
-                        <td colspan="11" class="text-center">
+                        <td colspan="12" class="text-center">
                             <i class="fas fa-info-circle me-2"></i>No se encontraron registros de pesaje neto con los filtros seleccionados.
                         </td>
                     </tr>
                 {% endfor %}
                 </tbody>
+                {% if pesajes_neto %}
+                <tfoot class="table-light fw-bold">
+                    <tr>
+                        <td class="text-end">{{ pesajes_neto|length }}</td>
+                        <td colspan="5" class="text-end">TOTALES:</td>
+                        <td>{{ totales.cantidad_racimos if totales else 'N/A' }}</td>
+                        <td>{{ (totales.peso_bruto | int) if totales and totales.peso_bruto is not none else 'N/A' }}</td>
+                        <td>{{ (totales.peso_tara | int) if totales and totales.peso_tara is not none else 'N/A' }}</td>
+                        <td>{{ (totales.peso_neto | int) if totales and totales.peso_neto is not none else 'N/A' }}</td>
+                        <td colspan="2"></td>
+                    </tr>
+                </tfoot>
+                {% endif %}
             </table>
         </div>
     </div>

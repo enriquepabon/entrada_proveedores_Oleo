@@ -939,30 +939,38 @@ def pesaje_neto(codigo):
 def lista_pesajes_neto():
     """
     Muestra la lista de registros de pesaje neto desde la base de datos SQLite.
+    Por defecto, filtra por la fecha actual si no se especifican rangos.
     """
     try:
         current_app.logger.info("Accediendo a la lista de pesajes neto.")
         
         # Leer filtros de la request
-        fecha_desde_str = request.args.get('fecha_desde')
-        fecha_hasta_str = request.args.get('fecha_hasta')
-        # Para el proveedor, permitimos buscar por código o nombre
+        fecha_desde_req = request.args.get('fecha_desde')
+        fecha_hasta_req = request.args.get('fecha_hasta')
         proveedor_term = request.args.get('codigo_proveedor', '').strip()
 
+        # --- FILTRO DE FECHA POR DEFECTO ---
+        if not fecha_desde_req and not fecha_hasta_req:
+            # Si no se proporcionan fechas, usar la fecha actual de Bogotá
+            hoy_bogota = datetime.now(BOGOTA_TZ).strftime('%Y-%m-%d')
+            fecha_desde_str = hoy_bogota
+            fecha_hasta_str = hoy_bogota
+            current_app.logger.info(f"No se especificaron fechas. Usando filtro por defecto: {hoy_bogota}")
+        else:
+            # Usar las fechas de la request si están presentes
+            fecha_desde_str = fecha_desde_req
+            fecha_hasta_str = fecha_hasta_req
+        # --- FIN FILTRO DE FECHA POR DEFECTO ---
+
         filtros_db = {}
-        if fecha_desde_str:
+        if fecha_desde_str: # Usar las variables procesadas (con default o de request)
             filtros_db['fecha_desde'] = fecha_desde_str
-        if fecha_hasta_str:
+        if fecha_hasta_str: # Usar las variables procesadas
             filtros_db['fecha_hasta'] = fecha_hasta_str
         if proveedor_term:
-            # La función get_pesajes_neto (de db_operations.py) deberá manejar este filtro.
-            # Si get_pesajes_neto espera 'codigo_proveedor' o 'nombre_proveedor' específicamente,
-            # podrías necesitar lógica adicional aquí para determinar cuál enviar o modificar get_pesajes_neto.
-            # Por ahora, se pasa como 'proveedor_term' y se asume que get_pesajes_neto lo maneja.
             filtros_db['proveedor_term'] = proveedor_term 
 
         current_app.logger.info(f"Filtros para get_pesajes_neto: {filtros_db}")
-        # Ahora get_pesajes_neto se importa desde db_operations.py (raíz)
         pesajes_neto_raw = get_pesajes_neto(filtros_db) 
         current_app.logger.info(f"Obtenidos {len(pesajes_neto_raw)} registros de pesaje neto de la BD.")
 
@@ -1020,15 +1028,72 @@ def lista_pesajes_neto():
 
         lista_final.sort(key=sort_key, reverse=True)
 
+        # --- CÁLCULO DE TOTALES ---
+        total_cantidad_racimos = 0
+        total_peso_bruto = 0.0
+        total_peso_neto = 0.0
+        total_peso_tara = 0.0 # NUEVA VARIABLE PARA TOTAL PESO TARA
+
+        for item in lista_final:
+            try:
+                # Convertir cantidad_racimos a int, tratando 'N/A' o errores como 0
+                cantidad_racimos_item = item.get('cantidad_racimos', '0')
+                if isinstance(cantidad_racimos_item, str) and cantidad_racimos_item.isdigit():
+                    total_cantidad_racimos += int(cantidad_racimos_item)
+                elif isinstance(cantidad_racimos_item, (int, float)):
+                    total_cantidad_racimos += int(cantidad_racimos_item)
+            except (ValueError, TypeError):
+                pass # Ignorar si no se puede convertir
+
+            try:
+                # Convertir peso_bruto a float, tratando 'N/A' o errores como 0.0
+                peso_bruto_item = item.get('peso_bruto', '0.0')
+                if isinstance(peso_bruto_item, str):
+                    total_peso_bruto += float(peso_bruto_item.replace(',', '.')) if peso_bruto_item.replace('.', '', 1).isdigit() else 0.0
+                elif isinstance(peso_bruto_item, (int, float)):
+                    total_peso_bruto += float(peso_bruto_item)
+            except (ValueError, TypeError):
+                pass # Ignorar si no se puede convertir
+
+            try:
+                # Convertir peso_neto a float, tratando 'N/A' o errores como 0.0
+                peso_neto_item = item.get('peso_neto', '0.0')
+                if isinstance(peso_neto_item, str):
+                    total_peso_neto += float(peso_neto_item.replace(',', '.')) if peso_neto_item.replace('.', '', 1).isdigit() else 0.0
+                elif isinstance(peso_neto_item, (int, float)):
+                    total_peso_neto += float(peso_neto_item)
+            except (ValueError, TypeError):
+                pass # Ignorar si no se puede convertir
+
+            try:
+                # Convertir peso_tara a float, tratando 'N/A' o errores como 0.0
+                peso_tara_item = item.get('peso_tara', '0.0')
+                if isinstance(peso_tara_item, str):
+                    total_peso_tara += float(peso_tara_item.replace(',', '.')) if peso_tara_item.replace('.', '', 1).isdigit() else 0.0
+                elif isinstance(peso_tara_item, (int, float)):
+                    total_peso_tara += float(peso_tara_item)
+            except (ValueError, TypeError):
+                pass # Ignorar si no se puede convertir
+        
+        totales = {
+            'cantidad_racimos': total_cantidad_racimos,
+            'peso_bruto': round(total_peso_bruto, 2),
+            'peso_neto': round(total_peso_neto, 2),
+            'peso_tara': round(total_peso_tara, 2) # AÑADIR TOTAL PESO TARA
+        }
+        current_app.logger.info(f"Totales calculados: {totales}")
+        # --- FIN CÁLCULO DE TOTALES ---
+
         current_app.logger.info(f"Renderizando plantilla con {len(lista_final)} registros de pesaje neto.")
         return render_template(
             'pesaje_neto/lista_pesaje_neto.html',
             pesajes_neto=lista_final,
-            filtros={
+            filtros={ 
                 'fecha_desde': fecha_desde_str or '', 
                 'fecha_hasta': fecha_hasta_str or '', 
                 'codigo_proveedor': proveedor_term or ''
-            }
+            },
+            totales=totales # Pasar los totales a la plantilla
         )
     except Exception as e:
         current_app.logger.error(f"Error en lista_pesajes_neto: {str(e)}", exc_info=True)
