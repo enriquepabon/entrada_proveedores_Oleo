@@ -1,0 +1,422 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ title }} - Sistema de Gestión MLB Extractora{% endblock %}
+
+{% block extra_css %}
+<style>
+    #cameraModal .modal-dialog {
+        max-width: 680px; /* Ajusta según necesidad */
+    }
+    #videoFeed {
+        width: 100%;
+        height: auto;
+        border: 1px solid #ccc;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">{{ title }}</h1>
+
+    <div id="messageArea" class="alert d-none" role="alert">
+        <!-- Los mensajes se insertarán aquí -->
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <form id="formRegistroGraneles" method="POST">
+                {{ csrf_token if csrf_token else '' }} 
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="placa" class="form-label">Placa del Vehículo</label>
+                        <input type="text" class="form-control" id="placa" name="placa" required>
+                    </div>
+                    <div class="col-md-6 align-self-end">
+                        <button type="button" id="btnBuscarPlaca" class="btn btn-info">Buscar/Validar Placa</button>
+                        <button type="button" id="btnTomarFoto" class="btn btn-secondary ms-2" data-bs-toggle="modal" data-bs-target="#cameraModal">Tomar Foto Placa</button> 
+                    </div>
+                </div>
+
+                <hr>
+                <h5 class="mt-3 mb-3">Datos de Autorización</h5>
+
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label for="producto" class="form-label">Producto</label>
+                        <input type="text" class="form-control" id="producto" name="producto" readonly>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="fecha_autorizacion" class="form-label">Fecha Autorización (GSheet)</label>
+                        <input type="text" class="form-control" id="fecha_autorizacion" name="fecha_autorizacion" readonly>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="trailer" class="form-label">Trailer</label>
+                        <input type="text" class="form-control" id="trailer" name="trailer" readonly>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label for="cedula_conductor" class="form-label">Cédula del Conductor</label>
+                        <input type="text" class="form-control" id="cedula_conductor" name="cedula_conductor" readonly>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="nombre_conductor" class="form-label">Nombre del Conductor</label>
+                        <input type="text" class="form-control" id="nombre_conductor" name="nombre_conductor" readonly>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label for="origen" class="form-label">Origen</label>
+                        <input type="text" class="form-control" id="origen" name="origen" readonly>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="destino" class="form-label">Destino</label>
+                        <input type="text" class="form-control" id="destino" name="destino" readonly>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="observacionesGranel" class="form-label">Observaciones</label>
+                    <textarea class="form-control" id="observacionesGranel" name="observacionesGranel" rows="2" readonly></textarea>
+                </div>
+                <input type="hidden" id="tipo_registro" name="tipo_registro" value="">
+
+                <div class="d-flex justify-content-end mt-4">
+                    <button type="button" id="btnLimpiarFormulario" class="btn btn-warning me-2" style="display: none;">Limpiar / Nueva Búsqueda</button>
+                    <button type="submit" id="btnRegistrarEntrada" class="btn btn-primary" disabled>Registrar Entrada</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para la Cámara -->
+<div class="modal fade" id="cameraModal" tabindex="-1" aria-labelledby="cameraModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="cameraModalLabel">Capturar Foto de Placa</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" id="btnCloseCameraModalTop"></button>
+            </div>
+            <div class="modal-body">
+                <video id="videoFeed" autoplay playsinline></video>
+                <canvas id="photoCanvas" style="display:none;"></canvas> <!-- Canvas oculto para procesar la imagen -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="btnCloseCameraModalBottom">Cerrar</button>
+                <button type="button" class="btn btn-primary" id="btnCapturePhoto">Capturar Foto</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const placaInput = document.getElementById('placa');
+        const btnBuscarPlaca = document.getElementById('btnBuscarPlaca');
+        const btnRegistrarEntrada = document.getElementById('btnRegistrarEntrada');
+        const btnLimpiarFormulario = document.getElementById('btnLimpiarFormulario');
+        const messageArea = document.getElementById('messageArea');
+        const formRegistroGraneles = document.getElementById('formRegistroGraneles');
+
+        // Referencia a los campos del formulario (GSheet y Observaciones)
+        const gsheetFields = {
+            producto: document.getElementById('producto'),
+            fecha_autorizacion: document.getElementById('fecha_autorizacion'),
+            trailer: document.getElementById('trailer'),
+            cedula_conductor: document.getElementById('cedula_conductor'),
+            nombre_conductor: document.getElementById('nombre_conductor'),
+            origen: document.getElementById('origen'),
+            destino: document.getElementById('destino')
+        };
+        const observacionesField = document.getElementById('observacionesGranel'); // Corregido el ID/name
+        const tipoRegistroField = document.getElementById('tipo_registro');
+
+        let originalGsheetData = {};
+        let gsheetDataModified = false;
+
+        function showMessage(message, type = 'danger') {
+            messageArea.textContent = message;
+            messageArea.className = `alert alert-${type} show`; 
+            messageArea.classList.remove('d-none');
+        }
+
+        function hideMessage() {
+            messageArea.classList.add('d-none');
+            messageArea.className = 'alert d-none';
+        }
+
+        function setFieldsReadOnly(isReadOnly) {
+            for (const key in gsheetFields) {
+                gsheetFields[key].readOnly = isReadOnly;
+            }
+            observacionesField.readOnly = isReadOnly; // Observaciones también se controla
+        }
+        
+        function clearFormFields() {
+            placaInput.value = '';
+            for (const key in gsheetFields) {
+                 gsheetFields[key].value = '';
+            }
+            observacionesField.value = '';
+            tipoRegistroField.value = '';
+            setFieldsReadOnly(true);
+            btnRegistrarEntrada.disabled = true;
+            placaInput.readOnly = false;
+            btnBuscarPlaca.disabled = false;
+            btnLimpiarFormulario.style.display = 'none';
+            hideMessage();
+            originalGsheetData = {}; // Resetear datos originales
+            gsheetDataModified = false; // Resetear flag de modificación
+            removeGsheetFieldListeners(); // Remover listeners antiguos
+        }
+
+        function handleGsheetFieldChange() {
+            if (!gsheetDataModified) { // Solo actuar si no se ha marcado ya como modificado
+                let changed = false;
+                for (const key in gsheetFields) {
+                    if (gsheetFields[key].value !== originalGsheetData[key]) {
+                        changed = true;
+                        break;
+                    }
+                }
+                if (changed) {
+                    tipoRegistroField.value = 'gsheet_modificado';
+                    observacionesField.value = 'Datos de Google Sheets modificados por el usuario.';
+                    gsheetDataModified = true; // Marcar como modificado para no repetir
+                    // Ya no es necesario remover listeners aquí, se hará en clearFormFields
+                }
+            }
+        }
+
+        function addGsheetFieldListeners() {
+            for (const key in gsheetFields) {
+                gsheetFields[key].addEventListener('input', handleGsheetFieldChange);
+            }
+        }
+
+        function removeGsheetFieldListeners() {
+            for (const key in gsheetFields) {
+                gsheetFields[key].removeEventListener('input', handleGsheetFieldChange);
+            }
+        }
+
+        btnLimpiarFormulario.addEventListener('click', clearFormFields);
+
+        btnBuscarPlaca.addEventListener('click', async function() {
+            const placaValue = placaInput.value.trim();
+            if (!placaValue) {
+                showMessage('Por favor, ingrese una placa.', 'warning');
+                return;
+            }
+            hideMessage();
+            btnBuscarPlaca.disabled = true;
+            gsheetDataModified = false; // Resetear flag al buscar nueva placa
+            removeGsheetFieldListeners(); // Remover listeners de búsqueda anterior
+
+            try {
+                const response = await fetch("{{ url_for('graneles.buscar_placa_granel') }}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector('input[name="csrf_token"]')?.value || ''
+                    },
+                    body: JSON.stringify({ placa: placaValue })
+                });
+                const result = await response.json();
+                if (response.ok && result.success) {
+                    const data = result.data;
+                    originalGsheetData = {}; // Limpiar antes de llenar
+                    for (const key in gsheetFields) {
+                        let gsheetKey = key;
+                        // Mapeo de nombres de campo del form a nombres de GSheet (si son diferentes)
+                        if (key === 'fecha_autorizacion') gsheetKey = 'Fecha';
+                        else if (key === 'cedula_conductor') gsheetKey = 'Cédula del Conductor';
+                        else if (key === 'nombre_conductor') gsheetKey = 'Nombre del Conductor';
+                        else gsheetKey = key.charAt(0).toUpperCase() + key.slice(1); // Capitalizar primera letra por defecto
+                        
+                        gsheetFields[key].value = data[gsheetKey] || '';
+                        originalGsheetData[key] = gsheetFields[key].value; // Guardar valor original
+                    }
+                    
+                    observacionesField.value = 'Datos cargados desde Google Sheets.';
+                    tipoRegistroField.value = 'gsheet';
+                    setFieldsReadOnly(false); // Hacer campos editables
+                    showMessage('Datos de la placa encontrados y cargados. Puede editarlos si es necesario.', 'success');
+                    btnRegistrarEntrada.disabled = false;
+                    placaInput.readOnly = true;
+                    btnLimpiarFormulario.style.display = 'inline-block';
+                    addGsheetFieldListeners(); // Añadir listeners para detectar cambios
+                } else {
+                    // Placa no encontrada o error en GSheet
+                    clearFormFields(); // Limpiar campos por si había datos previos
+                    placaInput.value = placaValue; // Restaurar la placa buscada
+                    showMessage(result.message || 'Placa no encontrada. Puede ingresar los datos manualmente.', 'warning');
+                    setFieldsReadOnly(false); // Habilitar para ingreso manual
+                    observacionesField.value = 'Registro manual: Placa no encontrada en GSheet.';
+                    tipoRegistroField.value = 'manual';
+                    btnRegistrarEntrada.disabled = false;
+                    placaInput.readOnly = true;
+                    btnLimpiarFormulario.style.display = 'inline-block';
+                }
+            } catch (error) {
+                console.error('Error buscando placa:', error);
+                showMessage('Error de conexión al buscar la placa. Intente de nuevo.', 'danger');
+                setFieldsReadOnly(true);
+                btnRegistrarEntrada.disabled = true;
+            }
+            btnBuscarPlaca.disabled = false;
+        });
+
+        btnRegistrarEntrada.addEventListener('click', async function(event) {
+            event.preventDefault();
+            hideMessage();
+            btnRegistrarEntrada.disabled = true;
+            const formData = new FormData(formRegistroGraneles);
+            // La placa ya está en el form, pero si estuviera fuera o se quisiera asegurar:
+            // formData.set('placa', placaInput.value); 
+            // tipo_registro y observacionesGranel ya están en formData por sus names
+
+            try {
+                const response = await fetch("{{ url_for('graneles.guardar_registro_granel') }}", {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': document.querySelector('input[name="csrf_token"]')?.value || '' 
+                    },
+                    body: formData
+                });
+                const result = await response.json();
+                if (response.ok && result.success) {
+                    const registroId = result.id_registro; 
+                    showMessage(`Registro guardado con éxito. ID: ${registroId}. Redirigiendo en unos segundos...`, 'success');
+                    
+                    const detalleUrl = `{{ url_for('graneles.vista_detalle_granel', id_registro_granel=0) }}`.replace('/0', `/${registroId}`);
+
+                    setTimeout(() => {
+                        window.location.href = detalleUrl;
+                    }, 2000); 
+                } else {
+                    showMessage(result.message || 'Error al guardar el registro.', 'danger');
+                    btnRegistrarEntrada.disabled = false;
+                }
+            } catch (error) {
+                console.error('Error guardando registro:', error);
+                showMessage('Error de conexión al guardar el registro. Intente de nuevo.', 'danger');
+                btnRegistrarEntrada.disabled = false;
+            }
+        });
+
+        // --- Lógica para la Cámara (sin cambios respecto a la anterior) ---
+        const btnTomarFoto = document.getElementById('btnTomarFoto');
+        const cameraModalElement = document.getElementById('cameraModal');
+        const videoFeed = document.getElementById('videoFeed');
+        const photoCanvas = document.getElementById('photoCanvas');
+        const btnCapturePhoto = document.getElementById('btnCapturePhoto');
+        let stream = null; 
+
+        async function startCamera() {
+            hideMessage();
+            try {
+                if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }); 
+                    videoFeed.srcObject = stream;
+                } else {
+                    showMessage('La API de cámara no es soportada por este navegador.', 'danger');
+                }
+            } catch (error) {
+                console.error('Error al acceder a la cámara:', error);
+                let userMessage = 'Error al acceder a la cámara. ';
+                if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+                    userMessage += 'Por favor, otorga permiso para usar la cámara.';
+                } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+                    userMessage += 'No se encontró una cámara conectada.';
+                } else {
+                    userMessage += `Detalle: ${error.message}`;
+                }
+                showMessage(userMessage, 'danger');
+            }
+        }
+
+        function stopCamera() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                videoFeed.srcObject = null;
+                stream = null;
+            }
+        }
+
+        cameraModalElement.addEventListener('shown.bs.modal', startCamera);
+        cameraModalElement.addEventListener('hidden.bs.modal', stopCamera);
+
+        btnCapturePhoto.addEventListener('click', async () => {
+            if (!stream || !videoFeed.srcObject) {
+                showMessage('El stream de la cámara no está activo.', 'warning');
+                return;
+            }
+            photoCanvas.width = videoFeed.videoWidth;
+            photoCanvas.height = videoFeed.videoHeight;
+            const context = photoCanvas.getContext('2d');
+            context.drawImage(videoFeed, 0, 0, photoCanvas.width, photoCanvas.height);
+            
+            const cameraModal = bootstrap.Modal.getInstance(cameraModalElement);
+            cameraModal.hide(); 
+
+            showMessage('Procesando imagen...', 'info');
+
+            photoCanvas.toBlob(async (blob) => {
+                if (!blob) {
+                    showMessage('Error al crear el blob de la imagen.', 'danger');
+                    return;
+                }
+                const formData = new FormData();
+                formData.append('imagefile', blob, 'placa_capturada.jpg'); 
+
+                try {
+                    const webhookUrl = 'https://hook.us2.make.com/a2yotw5cls6qxom2iacvyaoh2b9uk9ip';
+                    const response = await fetch(webhookUrl, {
+                        method: 'POST',
+                        body: formData 
+                    });
+
+                    if (response.ok) {
+                        const resultText = await response.text(); 
+                        let extractedPlaca = '';
+                        
+                        try {
+                            const jsonResult = JSON.parse(resultText);
+                            if (jsonResult.text) extractedPlaca = jsonResult.text;
+                            else if (jsonResult.placa) extractedPlaca = jsonResult.placa;
+                            else if (typeof jsonResult === 'string') extractedPlaca = jsonResult;
+                            else extractedPlaca = resultText; 
+                        } catch (e) {
+                            extractedPlaca = resultText; 
+                        }
+
+                        if (extractedPlaca && extractedPlaca.trim() !== '') {
+                            placaInput.value = extractedPlaca.trim();
+                            showMessage(`Placa reconocida: ${extractedPlaca.trim()}. Buscando datos...`, 'success');
+                            btnBuscarPlaca.click(); 
+                        } else {
+                            showMessage('No se pudo extraer el texto de la placa de la respuesta del webhook.', 'warning');
+                        }
+                    } else {
+                        const errorText = await response.text();
+                        showMessage(`Error del webhook (${response.status}): ${errorText || 'No se pudo procesar la imagen.'}`, 'danger');
+                    }
+                } catch (error) {
+                    console.error('Error enviando foto al webhook:', error);
+                    showMessage('Error de conexión al enviar la foto. Intente de nuevo.', 'danger');
+                }
+            }, 'image/jpeg', 0.9); 
+        });
+
+    });
+</script>
+{% endblock %} 

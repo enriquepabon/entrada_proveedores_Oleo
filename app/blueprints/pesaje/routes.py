@@ -20,6 +20,8 @@ import pytz
 from app.utils.image_processing import process_plate_image
 # Importar login_required
 from flask_login import login_required
+from db_utils import get_entry_record_by_guide_code, get_pesaje_bruto_by_codigo_guia
+from db_operations import get_pesajes_neto
 
 # Configurar logging
 logger = logging.getLogger(__name__)
@@ -939,37 +941,99 @@ def lista_pesajes_neto():
     Muestra la lista de registros de pesaje neto desde la base de datos SQLite.
     """
     try:
-        # Obtener los parámetros de filtro de la URL
-        fecha_inicio = request.args.get('fecha_inicio', '')
-        fecha_fin = request.args.get('fecha_fin', '')
-        codigo_guia = request.args.get('codigo_guia', '')
+        current_app.logger.info("Accediendo a la lista de pesajes neto.")
         
-        # Preparar filtros para la consulta a la base de datos
-        filtros = {}
-        if fecha_inicio:
-            filtros['fecha_desde'] = fecha_inicio
-        if fecha_fin:
-            filtros['fecha_hasta'] = fecha_fin
-        if codigo_guia:
-            filtros['codigo_guia'] = codigo_guia
+        # Leer filtros de la request
+        fecha_desde_str = request.args.get('fecha_desde')
+        fecha_hasta_str = request.args.get('fecha_hasta')
+        # Para el proveedor, permitimos buscar por código o nombre
+        proveedor_term = request.args.get('codigo_proveedor', '').strip()
+
+        filtros_db = {}
+        if fecha_desde_str:
+            filtros_db['fecha_desde'] = fecha_desde_str
+        if fecha_hasta_str:
+            filtros_db['fecha_hasta'] = fecha_hasta_str
+        if proveedor_term:
+            # La función get_pesajes_neto (de db_operations.py) deberá manejar este filtro.
+            # Si get_pesajes_neto espera 'codigo_proveedor' o 'nombre_proveedor' específicamente,
+            # podrías necesitar lógica adicional aquí para determinar cuál enviar o modificar get_pesajes_neto.
+            # Por ahora, se pasa como 'proveedor_term' y se asume que get_pesajes_neto lo maneja.
+            filtros_db['proveedor_term'] = proveedor_term 
+
+        current_app.logger.info(f"Filtros para get_pesajes_neto: {filtros_db}")
+        # Ahora get_pesajes_neto se importa desde db_operations.py (raíz)
+        pesajes_neto_raw = get_pesajes_neto(filtros_db) 
+        current_app.logger.info(f"Obtenidos {len(pesajes_neto_raw)} registros de pesaje neto de la BD.")
+
+        lista_final = []
+        for p_neto in pesajes_neto_raw:
+            codigo_guia = p_neto.get('codigo_guia')
+            if not codigo_guia:
+                current_app.logger.warning(f"Registro de pesaje neto sin código de guía: {p_neto}")
+                continue
+
+            entry_data = get_entry_record_by_guide_code(codigo_guia)
+            nombre_proveedor = entry_data.get('nombre_proveedor', "No disponible") if entry_data else "No disponible"
+            codigo_proveedor = entry_data.get('codigo_proveedor', p_neto.get('codigo_proveedor', "N/A")) if entry_data else p_neto.get('codigo_proveedor', "N/A")
+            # NUEVO: Obtener Placa y Cantidad de Racimos
+            placa = entry_data.get('placa', "N/A") if entry_data else "N/A"
+            cantidad_racimos = entry_data.get('cantidad_racimos', "N/A") if entry_data else "N/A"
+
+            datos_bruto = get_pesaje_bruto_by_codigo_guia(codigo_guia)
+            peso_bruto = datos_bruto.get('peso_bruto', "N/A") if datos_bruto else "N/A"
+            # NUEVO: Obtener Código SAP
+            codigo_sap = datos_bruto.get('codigo_guia_transporte_sap', "N/A") if datos_bruto else "N/A"
+
+            fecha_pesaje_neto_local, hora_pesaje_neto_local = "N/A", "N/A"
+            timestamp_utc_str = p_neto.get('timestamp_pesaje_neto_utc')
+            if timestamp_utc_str:
+                try:
+                    dt_utc_aware = UTC.localize(datetime.strptime(timestamp_utc_str, "%Y-%m-%d %H:%M:%S"))
+                    dt_bogota = dt_utc_aware.astimezone(BOGOTA_TZ)
+                    fecha_pesaje_neto_local = dt_bogota.strftime('%d/%m/%Y')
+                    hora_pesaje_neto_local = dt_bogota.strftime('%H:%M:%S')
+                except ValueError as e:
+                    current_app.logger.error(f"Error convirtiendo timestamp '{timestamp_utc_str}' para guía {codigo_guia}: {e}")
+            
+            lista_final.append({
+                'codigo_guia': codigo_guia,
+                'codigo_proveedor': codigo_proveedor,
+                'nombre_proveedor': nombre_proveedor,
+                'fecha_pesaje_neto': fecha_pesaje_neto_local,
+                'hora_pesaje_neto': hora_pesaje_neto_local,
+                'peso_bruto': peso_bruto, 
+                'peso_tara': p_neto.get('peso_tara', "N/A"), 
+                'peso_neto': p_neto.get('peso_neto', "N/A"),
+                # NUEVO: Añadir los campos al diccionario
+                'placa': placa,
+                'cantidad_racimos': cantidad_racimos,
+                'codigo_sap': codigo_sap
+            })
         
-        # Obtener datos de la base de datos
-        from db_operations import get_pesajes_neto
-        pesajes = get_pesajes_neto(filtros)
-        
-        # Preparar filtros para la plantilla
-        filtros_template = {
-            'fecha_inicio': fecha_inicio,
-            'fecha_fin': fecha_fin,
-            'codigo_guia': codigo_guia
-        }
-        
-        return render_template('pesajes_neto_lista.html', pesajes=pesajes, filtros=filtros_template)
-        
+        def sort_key(item):
+            try:
+                date_part = datetime.strptime(item['fecha_pesaje_neto'], '%d/%m/%Y').strftime('%Y-%m-%d')
+                return (date_part, item['hora_pesaje_neto'])
+            except (ValueError, TypeError):
+                return ('0000-00-00', '00:00:00') 
+
+        lista_final.sort(key=sort_key, reverse=True)
+
+        current_app.logger.info(f"Renderizando plantilla con {len(lista_final)} registros de pesaje neto.")
+        return render_template(
+            'pesaje_neto/lista_pesaje_neto.html',
+            pesajes_neto=lista_final,
+            filtros={
+                'fecha_desde': fecha_desde_str or '', 
+                'fecha_hasta': fecha_hasta_str or '', 
+                'codigo_proveedor': proveedor_term or ''
+            }
+        )
     except Exception as e:
-        logger.error(f"Error listando pesajes neto: {str(e)}")
-        flash(f"Error al cargar la lista de pesajes neto: {str(e)}", "error")
-        return redirect(url_for('home'))
+        current_app.logger.error(f"Error en lista_pesajes_neto: {str(e)}", exc_info=True)
+        flash(f"Error al cargar la lista de pesajes neto: {str(e)}", "danger")
+        return redirect(url_for('entrada.home'))
 
 
 @bp.route('/ver_resultados_pesaje/<codigo_guia>')

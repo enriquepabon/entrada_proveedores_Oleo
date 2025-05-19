@@ -1,0 +1,295 @@
+{% extends 'base.html' %}
+
+{% block title %}Detalle Registro Granel - {% if datos_granel %}{{ datos_granel.placa }}{% else %}Error{% endif %}{% endblock %}
+
+{% block extra_css %}
+<style>
+    body {
+        background-color: #f4f6f9; /* Un gris claro para el fondo general */
+    }
+    .granel-main-container {
+        max-width: 900px;
+        margin: 30px auto;
+        padding: 25px;
+        background-color: #ffffff;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+    .granel-header-title {
+        color: #333A4D; /* Azul oscuro/grisáceo */
+        border-bottom: 2px solid #A0C1D1; /* Azul claro */
+        padding-bottom: 10px;
+        margin-bottom: 25px;
+        font-weight: bold;
+        text-align: center;
+    }
+    .granel-info-card {
+        background-color: #E9F1F5; /* Azul muy pálido */
+        border: 1px solid #A0C1D1; /* Azul claro */
+        border-radius: 6px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    .granel-info-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 18px;
+    }
+    .granel-info-item {
+        background-color: #ffffff;
+        padding: 15px;
+        border-radius: 5px;
+        border: 1px solid #dee2e6;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+    }
+    .granel-info-item strong {
+        display: block;
+        color: #333A4D; /* Azul oscuro/grisáceo */
+        margin-bottom: 5px;
+        font-size: 0.95em;
+    }
+    .granel-info-item span {
+        font-size: 0.9em;
+        color: #555;
+    }
+    .qr-container { /* Estilo general para QR si se usa fuera de qr-code-container */
+        text-align: center;
+        margin-top: 25px;
+        padding: 20px;
+        background-color: #f8f9fa;
+        border-radius: 6px;
+        border: 1px solid #dee2e6;
+    }
+    .qr-code-container { /* Estilo específico para la sección del QR */
+        text-align: center;
+        padding: 15px;
+        background-color: #F8F9FA;
+        border: 1px solid #DEE2E6;
+        border-radius: 6px;
+        margin-top: 20px; /* Margen añadido */
+    }
+    .qr-code-container img {
+        max-width: 180px;
+        height: auto;
+        border: 1px solid #ccc;
+        padding: 5px;
+        background-color: white;
+        margin-bottom: 10px; /* Espacio para la URL y botones */
+    }
+    .qr-url {
+        font-size: 0.8rem;
+        word-break: break-all;
+        color: #007bff;
+        margin-bottom: 10px;
+    }
+    .qr-actions button {
+        font-size: 0.8rem;
+        margin-top: 5px;
+    }
+    .actions-container {
+        margin-top: 30px;
+        padding-top: 20px;
+        border-top: 1px solid #eee;
+        text-align: center;
+    }
+    .actions-container .btn {
+        margin: 5px 8px; /* Aumentado margen horizontal */
+    }
+    .no-data-message {
+        text-align: center;
+        padding: 40px;
+        background-color: #fff3cd;
+        border: 1px solid #ffeeba;
+        color: #856404;
+        border-radius: 6px;
+    }
+    .text-muted-custom { /* Renombrado de text-muted para evitar conflictos si Bootstrap lo usa diferente */
+        color: #5a6268;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="granel-main-container">
+    <h2 class="granel-header-title">
+        <i class="fas fa-truck-loading me-2"></i>Detalle del Registro de Granel
+    </h2>
+
+    {% if datos_granel %}
+        <div class="granel-info-card">
+            <h4 class="mb-3" style="color: #333A4D;">Información General</h4>
+            <div class="granel-info-grid">
+                <div class="granel-info-item">
+                    <strong>ID de Registro:</strong>
+                    <span class="text-muted-custom">{{ datos_granel.id }}</span>
+                </div>
+                <div class="granel-info-item">
+                    <strong>Placa del Vehículo:</strong>
+                    <span class="text-muted-custom">{{ datos_granel.placa | upper }}</span>
+                </div>
+                <div class="granel-info-item">
+                    <strong>Producto:</strong>
+                    <span class="text-muted-custom">{{ datos_granel.producto | default('No especificado') }}</span>
+                </div>
+                <div class="granel-info-item">
+                    <strong>Fecha Autorización GSheet:</strong>
+                    <span class="text-muted-custom">{{ datos_granel.fecha_autorizacion | default('N/A') }}</span>
+                </div>
+                <div class="granel-info-item">
+                    <strong>Trailer:</strong>
+                    <span class="text-muted-custom">{{ datos_granel.trailer | default('N/A') }}</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="granel-info-card">
+            <h4 class="mb-3" style="color: #333A4D;">Detalles del Conductor y Ruta</h4>
+            <div class="granel-info-grid">
+                <div class="granel-info-item">
+                    <strong>Nombre del Conductor:</strong>
+                    <span class="text-muted-custom">{{ datos_granel.nombre_conductor | default('No especificado') }}</span>
+                </div>
+                <div class="granel-info-item">
+                    <strong>Cédula del Conductor:</strong>
+                    <span class="text-muted-custom">{{ datos_granel.cedula_conductor | default('N/A') }}</span>
+                </div>
+                <div class="granel-info-item">
+                    <strong>Origen:</strong>
+                    <span class="text-muted-custom">{{ datos_granel.origen | default('No especificado') }}</span>
+                </div>
+                <div class="granel-info-item">
+                    <strong>Destino:</strong>
+                    <span class="text-muted-custom">{{ datos_granel.destino | default('No especificado') }}</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="granel-info-card">
+            <h4 class="mb-3" style="color: #333A4D;">Información de Registro del Sistema</h4>
+            <div class="granel-info-grid">
+                <div class="granel-info-item">
+                    <strong>Fecha de Registro:</strong>
+                    <span class="text-muted-custom">{{ datos_granel.fecha_registro_fmt | default('N/A') }}</span>
+                </div>
+                <div class="granel-info-item">
+                    <strong>Hora de Registro:</strong>
+                    <span class="text-muted-custom">{{ datos_granel.hora_registro_fmt | default('N/A') }}</span>
+                </div>
+                <div class="granel-info-item">
+                    <strong>Tipo de Registro:</strong>
+                    <span class="text-muted-custom">{{ datos_granel.tipo_registro | title | default('N/A') }}</span> {# 'gsheet' o 'manual' #}
+                </div>
+                <div class="granel-info-item">
+                    <strong>Registrado por:</strong>
+                    <span class="text-muted-custom">{{ datos_granel.usuario_registro | default('Sistema') }}</span> {# Mostrar el usuario #}
+                </div>
+            </div>
+        </div>
+        
+        {% if datos_granel.observaciones %}
+        <div class="granel-info-card">
+            <h4 class="mb-3" style="color: #333A4D;">Observaciones Adicionales</h4>
+            <div class="granel-info-item" style="background-color: #f8f9fa;"> {# Fondo ligeramente diferente para observaciones #}
+                <span class="text-muted-custom">{{ datos_granel.observaciones }}</span>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if datos_granel.qr_code_path %}
+            <div class="qr-code-container">
+                <h5 class="mb-3">Código QR</h5>
+                {# Cambio aquí para usar current_timestamp #}
+                <img id="qrImage" src="{{ url_for('static', filename=datos_granel.qr_code_path) }}?t={{ current_timestamp }}" alt="Código QR del Registro de Granel">
+                {% if datos_granel.qr_url %}
+                    <p class="qr-url" id="qrUrlText">{{ datos_granel.qr_url }}</p>
+                    <div class="qr-actions">
+                        <button class="btn btn-sm btn-outline-primary" id="btnCopiarUrlQr"><i class="fas fa-copy me-1"></i> Copiar URL</button>
+                        <button class="btn btn-sm btn-outline-secondary" id="btnImprimirQr"><i class="fas fa-print me-1"></i> Imprimir QR</button>
+                    </div>
+                {% endif %}
+            </div>
+        {% else %}
+            <div class="qr-container"> {# Usar qr-container general si no hay qr_code_path #}
+                <p class="text-warning">No se pudo generar el código QR para este registro.</p>
+            </div>
+        {% endif %}
+
+        <div class="actions-container">
+            <button onclick="window.print();" class="btn btn-primary">
+                <i class="fas fa-print me-2"></i>Imprimir Guía
+            </button>
+            <a href="{{ url_for('graneles.generar_pdf_granel', id_registro_granel=datos_granel.id) }}" class="btn btn-info"> {# Color cambiado #}
+                <i class="fas fa-file-pdf me-2"></i>Descargar PDF
+            </a>
+            {# Botón Añadido #}
+            <a href="{{ url_for('graneles.vista_guia_centralizada_granel', id_registro_granel=datos_granel.id) }}" class="btn btn-warning">
+                <i class="fas fa-route me-2"></i>Ver Guía Centralizada
+            </a>
+            <a href="{{ url_for('graneles.registro_entrada') }}" class="btn btn-success">
+                <i class="fas fa-plus-circle me-2"></i>Nuevo Registro Granel
+            </a>
+            <a href="{{ url_for('entrada.home') }}" class="btn btn-secondary">
+                <i class="fas fa-home me-2"></i>Volver al Inicio
+            </a>
+        </div>
+
+    {% else %}
+        <div class="no-data-message">
+            <h4 class="alert-heading">¡Error!</h4>
+            <p>No se encontraron datos para el registro de granel solicitado.</p>
+            <hr>
+            <p class="mb-0">Por favor, verifique el ID o intente de nuevo más tarde.</p>
+            <a href="{{ url_for('entrada.home') }}" class="btn btn-primary mt-3">Volver al Inicio</a>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const btnCopiarUrlQr = document.getElementById('btnCopiarUrlQr');
+    const btnImprimirQr = document.getElementById('btnImprimirQr');
+    const qrUrlTextElement = document.getElementById('qrUrlText');
+    const qrImageElement = document.getElementById('qrImage');
+
+    if (btnCopiarUrlQr && qrUrlTextElement) {
+        btnCopiarUrlQr.addEventListener('click', function() {
+            navigator.clipboard.writeText(qrUrlTextElement.innerText)
+                .then(() => {
+                    // Opcional: Muestra una notificación de "Copiado!"
+                    const originalText = btnCopiarUrlQr.innerHTML;
+                    btnCopiarUrlQr.innerHTML = '<i class="fas fa-check me-1"></i> Copiado!';
+                    setTimeout(() => {
+                        btnCopiarUrlQr.innerHTML = originalText;
+                    }, 2000);
+                })
+                .catch(err => {
+                    console.error('Error al copiar URL: ', err);
+                    alert('No se pudo copiar la URL. Por favor, cópiela manualmente.');
+                });
+        });
+    }
+
+    if (btnImprimirQr && qrImageElement && qrUrlTextElement) {
+        btnImprimirQr.addEventListener('click', function() {
+            const qrUrl = qrUrlTextElement.innerText;
+            const qrImgSrc = qrImageElement.src;
+            
+            const printWindow = window.open('', '_blank', 'width=400,height=450');
+            printWindow.document.write('<html><head><title>Imprimir QR</title><style>');
+            printWindow.document.write('body { text-align: center; margin-top: 30px; font-family: Arial, sans-serif; } ');
+            printWindow.document.write('img { max-width: 250px; max-height: 250px; border: 1px solid #ccc; padding: 10px; margin-bottom:10px; } ');
+            printWindow.document.write('p { font-size: 10pt; word-break: break-all; } ');
+            printWindow.document.write('</style></head><body>');
+            printWindow.document.write('<h3>Registro de Granel</h3>');
+            printWindow.document.write('<img src="' + qrImgSrc + '" alt="Código QR">');
+            printWindow.document.write('<p>' + qrUrl + '</p>');
+            printWindow.document.write('<script>setTimeout(function() { window.print(); window.close(); }, 250);</script>'); // Da tiempo a cargar imagen
+            printWindow.document.write('</body></html>');
+            printWindow.document.close(); 
+        });
+    }
+});
+</script>
+{% endblock %} 

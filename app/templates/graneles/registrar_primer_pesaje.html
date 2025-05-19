@@ -1,0 +1,463 @@
+{% extends 'base.html' %}
+
+{% block title %}Registrar Primer Pesaje Granel - ID {{ id_registro_granel }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .granel-form-container {
+        max-width: 900px; /* Más ancho para acomodar layout */
+        margin: 40px auto;
+        padding: 30px;
+        background-color: #fff;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .granel-form-header {
+        color: #0056b3; /* Azul oscuro de graneles */
+        border-bottom: 2px solid #e0e0e0;
+        padding-bottom: 15px;
+        margin-bottom: 25px;
+        text-align: center;
+        font-weight: bold;
+    }
+    .info-box {
+        background-color: #e9f1f5; /* Azul muy pálido */
+        border: 1px solid #a0c1d1; /* Azul claro */
+        border-radius: 6px;
+        padding: 20px;
+        margin-bottom: 25px;
+    }
+    .info-box strong {
+        color: #004085; /* Azul más oscuro */
+    }
+    .section-title {
+        font-weight: bold;
+        color: #333;
+        margin-bottom: 15px;
+        border-bottom: 1px solid #eee;
+        padding-bottom: 5px;
+    }
+    .image-preview-container {
+        border: 1px dashed #ccc;
+        padding: 15px;
+        text-align: center;
+        margin-top: 15px;
+        min-height: 150px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background-color: #f9f9f9;
+        border-radius: 5px;
+    }
+    .image-preview-container img,
+    .image-preview-container canvas {
+        max-width: 100%;
+        max-height: 200px; /* Limitar altura de preview */
+        display: none; /* Ocultar por defecto */
+    }
+    .image-preview-container .placeholder-text {
+        color: #aaa;
+    }
+    .loader {
+        border: 5px solid #f3f3f3; /* Light grey */
+        border-top: 5px solid #3498db; /* Blue */
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
+        animation: spin 1s linear infinite;
+        position: fixed; /* o absolute, dependiendo del contenedor */
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 10000; /* Asegurar que esté por encima de todo */
+        display: none; /* Oculto por defecto */
+    }
+
+    @keyframes spin {
+        0% { transform: translate(-50%, -50%) rotate(0deg); }
+        100% { transform: translate(-50%, -50%) rotate(360deg); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="granel-form-container">
+        <h2 class="granel-form-header"><i class="fas fa-balance-scale-left me-2"></i>Registrar Primer Pesaje - Granel</h2>
+
+        <div id="validationLoader" class="loader"></div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    {# Usar toasts para mensajes flash aquí #}
+                    <div class="toast align-items-center text-white bg-{{ 'success' if category == 'success_toast' else ('warning' if category == 'warning_toast' else 'danger') }} border-0" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="true" data-bs-delay="5000">
+                        <div class="d-flex">
+                            <div class="toast-body">{{ message }}</div>
+                            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="info-box row">
+            <h5 class="section-title col-12 mb-3"><i class="fas fa-info-circle me-2"></i>Información General</h5>
+            <div class="col-md-6">
+                <p class="mb-2"><strong>Registro de Entrada ID:</strong> <span id="infoIdRegistro">{{ datos_entrada.id }}</span></p>
+                <p class="mb-2"><strong>Placa:</strong> <span id="infoPlaca">{{ datos_entrada.placa }}</span></p>
+                <p class="mb-2"><strong>Producto:</strong> <span id="infoProducto">{{ datos_entrada.producto | default('N/A') }}</span></p>
+            </div>
+            <div class="col-md-6">
+                <p class="mb-2"><strong>Conductor:</strong> <span id="infoConductor">{{ datos_entrada.nombre_conductor | default('N/A') }}</span></p>
+                <p class="mb-2"><strong>Trailer:</strong> <span id="infoTrailer">{{ datos_entrada.trailer | default('N/A') }}</span></p>
+                {# Puedes añadir Origen/Destino si es relevante #}
+                {# <p class="mb-2"><strong>Origen:</strong> {{ datos_entrada.origen | default('N/A') }}</p> #}
+                {# <p class="mb-0"><strong>Destino:</strong> {{ datos_entrada.destino | default('N/A') }}</p> #}
+            </div>
+        </div>
+
+        <form id="pesajeForm" method="POST" action="{{ url_for('graneles.registrar_primer_pesaje_granel', id_registro_granel=id_registro_granel) }}" enctype="multipart/form-data">
+            {# CSRF Token eliminado #}
+            <input type="hidden" name="imagen_base64" id="imagen_base64"> {# Campo oculto para imagen de cámara/pantalla #}
+            <input type="hidden" name="codigo_sap_granel" id="codigo_sap_granel">
+            <input type="hidden" name="ruta_imagen_validada" id="ruta_imagen_validada">
+
+            <div class="mb-4">
+                <h5 class="section-title">Datos del Pesaje</h5>
+                <label for="peso_primer_kg" class="form-label"><strong>Peso Registrado (kg):</strong><span class="text-danger">*</span></label>
+                <input type="number" step="0.01" class="form-control {{ 'is-invalid' if error_field == 'peso_bruto' else '' }}" id="peso_primer_kg" name="peso_primer_kg" required disabled>
+                <div class="form-text">Este peso se llenará automáticamente después de validar la foto con la báscula externa.</div>
+                {% if error_field == 'peso_bruto' %}
+                    <div class="invalid-feedback">
+                        Por favor, ingrese un valor numérico válido para el peso.
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="mb-4">
+                <h5 class="section-title">Soporte Fotográfico</h5>
+                <p class="form-text mb-2">Adjunte una foto del tiquete de báscula o soporte del pesaje. Esta foto se enviará para validación.</p>
+                <div class="btn-group mb-3" role="group" aria-label="Opciones de carga de imagen">
+                    <button type="button" id="btnCapturarCamara" class="btn btn-outline-primary"><i class="fas fa-camera me-1"></i> Capturar con Cámara</button>
+                    <label for="foto_soporte_upload" class="btn btn-outline-primary mb-0"><i class="fas fa-upload me-1"></i> Subir Foto</label>
+                    <input type="file" class="form-control d-none" id="foto_soporte_upload" name="foto_soporte_upload" accept="image/*">
+                    <button type="button" id="btnCapturarPantalla" class="btn btn-outline-primary"><i class="fas fa-desktop me-1"></i> Capturar Pantalla</button>
+                </div>
+                <div class="mt-2 mb-3">
+                    <button type="button" id="btnValidarFotoBascula" class="btn btn-info w-100"><i class="fas fa-check-double me-1"></i> Validar Foto con Báscula Externa</button>
+                </div>
+
+                <div class="image-preview-container">
+                    <span class="placeholder-text">Previsualización de la imagen</span>
+                    <img id="imagePreview" src="#" alt="Previsualización de imagen"/>
+                    <canvas id="canvasPreview" width="640" height="480"></canvas> {# Para la cámara #}
+                </div>
+                <video id="videoElement" width="640" height="480" autoplay style="display: none; margin-top: 10px;"></video> {# Para la cámara #}
+            </div>
+
+            <hr>
+
+            <div class="d-flex justify-content-between">
+                <a href="{{ url_for('graneles.vista_guia_centralizada_granel', id_registro_granel=id_registro_granel) }}" class="btn btn-secondary">
+                    <i class="fas fa-times me-2"></i>Cancelar y Volver a Guía
+                </a>
+                <button type="submit" id="btnGuardarPesaje" class="btn btn-primary" disabled>
+                    <i class="fas fa-save me-2"></i>Guardar Primer Pesaje
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal para mostrar mensajes -->
+<div class="modal fade" id="infoModal" tabindex="-1" aria-labelledby="infoModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="infoModalLabel">Información</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="infoModalBody">
+        ...
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const videoElement = document.getElementById('videoElement');
+    const canvasPreview = document.getElementById('canvasPreview');
+    const imagePreview = document.getElementById('imagePreview');
+    const placeholderText = document.querySelector('.image-preview-container .placeholder-text');
+    const fileInput = document.getElementById('foto_soporte_upload');
+    const hiddenImageInput = document.getElementById('imagen_base64');
+    const pesajeForm = document.getElementById('pesajeForm');
+    const btnCapturarCamara = document.getElementById('btnCapturarCamara');
+    const btnCapturarPantalla = document.getElementById('btnCapturarPantalla');
+    const btnValidarFotoBascula = document.getElementById('btnValidarFotoBascula');
+    const btnGuardarPesaje = document.getElementById('btnGuardarPesaje');
+
+    const pesoPrimerKgInput = document.getElementById('peso_primer_kg');
+    const codigoSapGranelInput = document.getElementById('codigo_sap_granel');
+    const rutaImagenValidadaInput = document.getElementById('ruta_imagen_validada');
+    const validationLoader = document.getElementById('validationLoader');
+
+    const infoModal = new bootstrap.Modal(document.getElementById('infoModal'));
+    const infoModalBody = document.getElementById('infoModalBody');
+    let stream = null;
+    let imageBlob = null; // Para almacenar la imagen capturada (File or Blob)
+
+    function stopStream() {
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+            stream = null;
+            videoElement.style.display = 'none';
+            canvasPreview.style.display = 'none';
+            placeholderText.style.display = 'block';
+            imagePreview.style.display = 'none';
+        }
+    }
+
+    function showPreview(source) {
+        stopStream(); // Detener stream si está activo
+        videoElement.style.display = 'none';
+        placeholderText.style.display = 'none';
+        // Reset validation state on new image
+        btnGuardarPesaje.disabled = true;
+        pesoPrimerKgInput.value = '';
+        pesoPrimerKgInput.disabled = true;
+        pesoPrimerKgInput.readOnly = false; // Asegurar que NO sea readonly al cargar nueva imagen
+        codigoSapGranelInput.value = '';
+        rutaImagenValidadaInput.value = '';
+
+        if (source instanceof HTMLCanvasElement) {
+            canvasPreview.style.display = 'block';
+            imagePreview.style.display = 'none';
+            canvasPreview.toBlob(function(blob) {
+                imageBlob = blob;
+                const reader = new FileReader();
+                reader.onloadend = function() {
+                    hiddenImageInput.value = reader.result;
+                }
+                reader.readAsDataURL(blob);
+            }, 'image/jpeg', 0.9);
+        } else if (source instanceof HTMLImageElement) {
+            canvasPreview.style.display = 'none';
+            imagePreview.style.display = 'block';
+            if (source.src.startsWith('data:image')) {
+                 hiddenImageInput.value = source.src;
+                 fetch(source.src)
+                    .then(res => res.blob())
+                    .then(blob => { imageBlob = blob; });
+            } else {
+                hiddenImageInput.value = '';
+                // imageBlob is already set by fileInput listener if it's a file
+            }
+        } else {
+            canvasPreview.style.display = 'none';
+            imagePreview.style.display = 'none';
+            placeholderText.style.display = 'block';
+            hiddenImageInput.value = '';
+            imageBlob = null;
+        }
+    }
+
+    // Evento para Subir Foto
+    fileInput.addEventListener('change', function(event) {
+        const file = event.target.files[0];
+        if (file && file.type.startsWith('image/')) {
+            imageBlob = file; // Guardar el File object directly
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                imagePreview.src = e.target.result;
+                showPreview(imagePreview);
+            }
+            reader.readAsDataURL(file);
+        } else {
+            imageBlob = null;
+            showPreview(null);
+        }
+    });
+
+    // Evento para Capturar con Cámara
+    btnCapturarCamara.addEventListener('click', async () => {
+        stopStream();
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            videoElement.srcObject = stream;
+            videoElement.style.display = 'block';
+            placeholderText.style.display = 'none';
+            imagePreview.style.display = 'none';
+            canvasPreview.style.display = 'block'; // Mostrar canvas para dibujar frame
+
+            // Dibujar el frame del video en el canvas continuamente
+            const context = canvasPreview.getContext('2d');
+            function drawFrame() {
+                if (stream) {
+                    context.drawImage(videoElement, 0, 0, canvasPreview.width, canvasPreview.height);
+                    requestAnimationFrame(drawFrame);
+                }
+            }
+            drawFrame();
+            // Aquí no se llama a showPreview(canvasPreview) directly as yet.
+            // Se calls when the "photo" is taken (which is now just having the stream active)
+            // and the blob is generated at the moment of validation.
+            // For preview purposes, the canvas is updated in real time.
+            // When you want to "validate", the current frame of the canvas will be taken.
+            infoModalBody.textContent = "Cámara activada. Presiona 'Validar Foto' cuando estés listo.";
+            infoModal.show();
+
+        } catch (err) {
+            console.error("Error al acceder a la cámara: ", err);
+            infoModalBody.textContent = "No se pudo acceder a la cámara: " + err.message;
+            infoModal.show();
+            showPreview(null);
+        }
+    });
+
+    // Evento para Capturar Pantalla
+    btnCapturarPantalla.addEventListener('click', async () => {
+        stopStream();
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+            infoModalBody.textContent = "La captura de pantalla no es soportada por tu navegador.";
+            infoModal.show();
+            return;
+        }
+        try {
+            const displayStream = await navigator.mediaDevices.getDisplayMedia({video: {cursor: "always"}, audio: false});
+            videoElement.srcObject = displayStream;
+            videoElement.style.display = 'block'; // Mostrar el video para que el usuario vea qué se captura
+            placeholderText.style.display = 'none';
+            imagePreview.style.display = 'none';
+            canvasPreview.style.display = 'block';
+            
+            const track = displayStream.getVideoTracks()[0];
+            const imageCapture = new ImageCapture(track);
+            
+            // Capturar un frame y mostrarlo en el preview
+            // Esto es más como una "toma de foto" de la pantalla
+            const capturedBlob = await imageCapture.grabFrame();
+            imageBlob = capturedBlob; // Guardar el Blob
+
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                imagePreview.src = reader.result;
+                hiddenImageInput.value = reader.result; // Para el submit si no se hace nueva validación
+                showPreview(imagePreview);
+            };
+            reader.readAsDataURL(imageBlob);
+
+            track.onended = () => { // Cuando el usuario deja de compartir
+                stopStream();
+                videoElement.style.display = 'none';
+            };
+            infoModalBody.textContent = "Captura de pantalla iniciada. La imagen actual está en previsualización. Presiona 'Validar Foto'";
+            infoModal.show();
+
+        } catch (err) {
+            console.error("Error al capturar pantalla: ", err);
+            infoModalBody.textContent = "Error al capturar pantalla: " + err.message;
+            infoModal.show();
+            showPreview(null);
+        }
+    });
+
+    // Nueva función para validar la foto con la báscula externa
+    btnValidarFotoBascula.addEventListener('click', async () => {
+        let currentImageBlob = imageBlob; // Usar el blob de la carga/captura previa
+
+        // Si el stream de la cámara está activo, tomar un frame del canvas
+        if (stream && canvasPreview.style.display === 'block') {
+            await new Promise(resolve => {
+                canvasPreview.toBlob(blob => {
+                    currentImageBlob = blob;
+                    resolve();
+                }, 'image/jpeg', 0.9);
+            });
+        }
+
+        if (!currentImageBlob) {
+            infoModalBody.textContent = 'Por favor, primero captura o sube una imagen del tiquete de báscula.';
+            infoModal.show();
+            return;
+        }
+
+        validationLoader.style.display = 'block';
+        btnValidarFotoBascula.disabled = true;
+
+        const formData = new FormData();
+        formData.append('foto', currentImageBlob, 'soporte_pesaje.jpg');
+        formData.append('placa', document.getElementById('infoPlaca').textContent.trim());
+        formData.append('conductor', document.getElementById('infoConductor').textContent.trim());
+        formData.append('producto', document.getElementById('infoProducto').textContent.trim());
+        formData.append('trailer', document.getElementById('infoTrailer').textContent.trim());
+
+        try {
+            const response = await fetch(`{{ url_for('graneles.validar_foto_pesaje', id_registro_granel=id_registro_granel) }}`, {
+                method: 'POST',
+                body: formData // No CSRF token header needed if it's not set up globally for all POSTs
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                pesoPrimerKgInput.value = result.peso_kg;
+                pesoPrimerKgInput.disabled = false; // Asegurar que no esté deshabilitado
+                pesoPrimerKgInput.readOnly = true;  // Hacerlo de solo lectura
+                codigoSapGranelInput.value = result.codigo_sap_granel;
+                rutaImagenValidadaInput.value = result.ruta_imagen_soporte;
+                
+                btnGuardarPesaje.disabled = false;
+                infoModalBody.textContent = `Validación exitosa. Peso: ${result.peso_kg} Kg, Código SAP: ${result.codigo_sap_granel}. Puede guardar el pesaje.`;
+                infoModal.show();
+            } else {
+                infoModalBody.textContent = 'Error en la validación: ' + (result.message || 'No se pudo validar con la báscula externa.');
+                infoModal.show();
+                btnGuardarPesaje.disabled = true;
+                pesoPrimerKgInput.readOnly = false; // Permitir edición si falla la validación
+            }
+        } catch (error) {
+            console.error('Error al validar foto:', error);
+            infoModalBody.textContent = 'Error de red o servidor al intentar validar la foto.';
+            infoModal.show();
+            btnGuardarPesaje.disabled = true;
+        }
+        stopStream(); // Detener cámara si estaba activa después de la validación
+        validationLoader.style.display = 'none';
+        btnValidarFotoBascula.disabled = false;
+    });
+
+    // Manejo del submit del formulario
+    pesajeForm.addEventListener('submit', function(event) {
+        // Si el peso está deshabilitado pero tiene valor (de la validación), habilitarlo para el submit
+        if (pesoPrimerKgInput.disabled && pesoPrimerKgInput.value) {
+            pesoPrimerKgInput.disabled = false;
+        }
+
+        // Si no hay un 'foto_soporte_upload' (because it was used camera/screen and then validated),
+        // and we have a 'ruta_imagen_validada', we don't need to send 'imagen_base64' or 'foto_soporte_upload'
+        // The backend will prioritize 'ruta_imagen_validada'.
+        // However, if 'imagen_base64' has something (from a directly not validated capture or an upload without validation yet)
+        // and 'ruta_imagen_validada' is empty, 'imagen_base64' will be sent.
+        // If 'foto_soporte_upload' has a file, that file will be sent (if not validated).
+
+        // The backend logic for saving the image should be reviewed for this new flow.
+        // Ideally, if 'ruta_imagen_validada' is present, that's the one that's saved and any other image is ignored.
+    });
+
+    // Inicializar toasts
+    var toastElList = [].slice.call(document.querySelectorAll('.toast'))
+    var toastList = toastElList.map(function (toastEl) {
+        var toast = new bootstrap.Toast(toastEl);
+        toast.show();
+        return toast;
+    });
+
+</script>
+{% endblock %} 

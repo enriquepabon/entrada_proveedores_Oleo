@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Guía Centralizada de Graneles</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f4f7f6; /* Un tono ligeramente diferente para graneles */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .main-container {
+            max-width: 1300px;
+            margin: 40px auto;
+            padding: 25px;
+        }
+        .card {
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+            margin-bottom: 25px;
+            border: none;
+        }
+        .card-header {
+            background-color: #0056b3; /* Azul oscuro para cabeceras de graneles */
+            color: white;
+            border-bottom: none;
+            padding: 15px 20px;
+            border-radius: 10px 10px 0 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .card-header h4, .card-header h5 {
+            margin-bottom: 0;
+        }
+        .card-body {
+            padding: 25px;
+        }
+        .info-item {
+            margin-bottom: 12px;
+        }
+        .info-item strong {
+            color: #333;
+        }
+        .status-icon {
+            font-size: 1.5rem;
+            margin-right: 10px;
+        }
+        .status-completed .status-icon { color: #28a745; } /* Verde */
+        .status-pending .status-icon { color: #fd7e14; } /* Naranja */
+        .status-error .status-icon { color: #dc3545; } /* Rojo */
+        .status-default .status-icon { color: #6c757d; } /* Gris */
+
+        .qr-container {
+            background-color: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+            text-align: center;
+        }
+        .qr-image {
+            max-width: 220px;
+            margin: 15px auto;
+            border: 5px solid #eee;
+            padding: 5px;
+            border-radius: 8px;
+        }
+        .btn-custom {
+            background-color: #0056b3;
+            border-color: #0056b3;
+            color: white;
+            padding: 10px 20px;
+            font-size: 1rem;
+            border-radius: 6px;
+            transition: background-color 0.3s ease;
+        }
+        .btn-custom:hover {
+            background-color: #004494;
+            border-color: #003b80;
+        }
+        .action-buttons .btn {
+            margin: 5px;
+        }
+        .timeline-container {
+            position: relative;
+            padding-left: 40px; /* Espacio para la línea vertical */
+        }
+        .timeline-line {
+            position: absolute;
+            left: 20px;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            background-color: #e9ecef;
+            border-radius: 2px;
+        }
+        .timeline-step {
+            position: relative;
+            margin-bottom: 30px;
+        }
+        .timeline-icon {
+            position: absolute;
+            left: -20px; /* Alineado con la línea */
+            top: 0;
+            transform: translateX(-50%);
+            background-color: white;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 3px solid #e9ecef;
+            z-index: 1;
+        }
+        .timeline-step.completed .timeline-icon {
+            border-color: #28a745;
+            background-color: #28a745;
+            color: white;
+        }
+        .timeline-step.pending .timeline-icon {
+            border-color: #fd7e14;
+            background-color: #fd7e14;
+            color: white;
+        }
+        .timeline-content {
+            margin-left: 30px; /* Espacio después del icono */
+            padding: 15px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        .timeline-title {
+            font-weight: bold;
+            color: #0056b3;
+        }
+        .text-muted-custom {
+            color: #5a6a7a !important;
+        }
+        @media print {
+            body { background-color: white; margin: 0; padding: 0; font-size: 10pt; }
+            .main-container { width: 100%; max-width: 100%; margin: 0; padding: 10mm; box-sizing: border-box; }
+            .card, .qr-container { box-shadow: none; border: 1px solid #ccc; break-inside: avoid; }
+            .no-print, .action-buttons { display: none !important; }
+            .card-header { background-color: #0056b3 !important; color: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .qr-image { max-width: 150px; }
+            .timeline-line, .timeline-icon { display: none; } /* Simplificar timeline para impresión */
+            .timeline-container { padding-left: 0; }
+            .timeline-content { margin-left: 0; box-shadow: none; border: 1px solid #eee; }
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show no-print" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="card mb-4">
+            <div class="card-header">
+                <h4><i class="fas fa-truck me-2"></i>Guía Centralizada de Graneles</h4>
+                <div class="action-buttons no-print">
+                    <a href="{{ url_for('graneles.registro_entrada') }}" class="btn btn-light btn-sm"><i class="fas fa-plus-circle me-1"></i> Nuevo Registro Granel</a>
+                    <button onclick="window.print()" class="btn btn-light btn-sm"><i class="fas fa-print me-1"></i> Imprimir Guía</button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-8">
+                        <h5>ID de Guía: <span class="fw-bold text-primary">{{ datos_guia.id }}</span></h5>
+                        <hr>
+                        <div class="row">
+                            <div class="col-md-6 info-item"><strong>Placa:</strong> {{ datos_guia.placa | upper }}</div>
+                            <div class="col-md-6 info-item"><strong>Producto:</strong> {{ datos_guia.producto }}</div>
+                            <div class="col-md-6 info-item"><strong>Conductor:</strong> {{ datos_guia.nombre_conductor }} (C.C. {{ datos_guia.cedula_conductor }})</div>
+                            <div class="col-md-6 info-item"><strong>Trailer:</strong> {{ datos_guia.trailer | default('N/A') }}</div>
+                            <div class="col-md-6 info-item"><strong>Origen:</strong> {{ datos_guia.origen }}</div>
+                            <div class="col-md-6 info-item"><strong>Destino:</strong> {{ datos_guia.destino }}</div>
+                            <div class="col-md-6 info-item"><strong>Fecha Autorización GSheet:</strong> {{ datos_guia.fecha_autorizacion }}</div>
+                            <div class="col-md-6 info-item"><strong>Usuario Registro:</strong> {{ datos_guia.usuario_registro | default('N/A') }}</div>
+                             <div class="col-md-12 info-item"><strong>Observaciones:</strong> {{ datos_guia.observaciones | default('Ninguna') }}</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="qr-container">
+                            <h5 class="mb-3"><i class="fas fa-qrcode me-2"></i>QR de Seguimiento</h5>
+                            {% if qr_url %}
+                                <img src="{{ qr_url }}?t={{ current_timestamp }}" alt="Código QR del Registro {{ datos_guia.id }}" class="qr-image">
+                                <p class="text-muted-custom mt-2 mb-1"><small>URL: <a href="{{ qr_url_completa }}" target="_blank">{{ qr_url_completa }}</a></small></p>
+                                <div class="no-print mt-2">
+                                     <button onclick="copiarAlPortapapeles('{{ qr_url_completa }}')" class="btn btn-outline-secondary btn-sm">
+                                        <i class="fas fa-copy"></i> Copiar URL
+                                    </button>
+                                </div>
+                            {% else %}
+                                <p class="text-danger">QR no disponible</p>
+                            {% endif %}
+                            <p class="text-muted-custom mt-2 mb-0">ID de Registro: {{ datos_guia.id }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <h4>Estado del Proceso</h4>
+        <div class="timeline-container mt-4">
+            <div class="timeline-line"></div>
+
+            <!-- Paso 1: Registro de Entrada -->
+            <div class="timeline-step {{ 'completed' if datos_guia.id else 'pending' }}">
+                <div class="timeline-icon"><i class="fas fa-sign-in-alt"></i></div>
+                <div class="timeline-content">
+                    <h5 class="timeline-title">1. Registro de Entrada</h5>
+                    {% if datos_guia.id %}
+                        <p class="mb-1"><span class="status-icon status-completed"><i class="fas fa-check-circle"></i></span>Completado</p>
+                        <p class="text-muted-custom small mb-0">Registrado el: {{ datos_guia.fecha_registro_fmt }} a las {{ datos_guia.hora_registro_fmt }} por {{ datos_guia.usuario_registro | default('Sistema') }}</p>
+                        <p class="text-muted-custom small mb-0">Tipo de Registro: <span class="badge bg-info text-dark">{{ datos_guia.tipo_registro | replace('_', ' ') | title }}</span></p>
+                        <a href="{{ url_for('graneles.vista_detalle_granel', id_registro_granel=datos_guia.id) }}" class="btn btn-outline-primary btn-sm mt-2 no-print">Ver Detalles del Registro</a>
+                    {% else %}
+                        <p><span class="status-icon status-pending"><i class="fas fa-hourglass-half"></i></span>Pendiente</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Paso 2: Primer Pesaje Granel -->
+            <div class="timeline-step {{ 'completed' if datos_primer_pesaje else 'pending' }}">
+                <div class="timeline-icon"><i class="fas fa-balance-scale-left"></i></div>
+                <div class="timeline-content">
+                    <h5 class="timeline-title">2. Primer Pesaje Granel</h5>
+                    {% if datos_primer_pesaje %}
+                        <p class="mb-1"><span class="status-icon status-completed"><i class="fas fa-check-circle"></i></span>Completado</p>
+                        <p class="text-muted-custom small mb-1">Peso Registrado: <strong>{{ "{:,}".format(datos_primer_pesaje.peso_primer_kg | float) if datos_primer_pesaje.peso_primer_kg is not none else 'N/A' }} kg</strong></p>
+                        <p class="text-muted-custom small mb-1">Código SAP Granel: <strong>{{ datos_primer_pesaje.codigo_sap_granel | default('N/A') }}</strong></p>
+                        <p class="text-muted-custom small mb-0">Realizado el: {{ datos_primer_pesaje.fecha_pesaje_fmt }} a las {{ datos_primer_pesaje.hora_pesaje_fmt }} por {{ datos_primer_pesaje.usuario_pesaje | default('Sistema') }}</p>
+                        {% if datos_primer_pesaje.foto_soporte_url %}
+                            <a href="{{ datos_primer_pesaje.foto_soporte_url }}" target="_blank" class="btn btn-outline-info btn-sm mt-2 no-print"><i class="fas fa-camera me-1"></i> Ver Foto Soporte</a>
+                        {% endif %}
+                        <!-- Podría ir un botón para editar el pesaje si se implementa -->
+                    {% else %}
+                        <p><span class="status-icon status-pending"><i class="fas fa-hourglass-half"></i></span>Pendiente</p>
+                        <a href="{{ url_for('graneles.registrar_primer_pesaje_granel', id_registro_granel=datos_guia.id) }}" class="btn btn-warning btn-sm mt-2 no-print">
+                            <i class="fas fa-plus-circle me-1"></i> Registrar Primer Pesaje
+                        </a>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Paso 3: Control de Calidad del Producto -->
+            <div class="timeline-step {{ 'pending' }}"> <!-- Cambiar a 'completed' cuando se implemente y haya datos -->
+                <div class="timeline-icon"><i class="fas fa-flask"></i></div>
+                <div class="timeline-content">
+                    <h5 class="timeline-title">3. Control de Calidad del Producto</h5>
+                     <p><span class="status-icon status-pending"><i class="fas fa-hourglass-half"></i></span>Pendiente</p>
+                    <!--
+                    {% if datos_guia.control_calidad %}
+                        <p class="mb-1"><span class="status-icon status-completed"><i class="fas fa-check-circle"></i></span>Completado</p>
+                        <p class="text-muted-custom small mb-0">Resultado: {{ datos_guia.control_calidad.resultado }}</p>
+                        <p class="text-muted-custom small mb-0">Realizado el: {{ datos_guia.control_calidad.fecha }} a las {{ datos_guia.control_calidad.hora }}</p>
+                    {% else %}
+                        <p><span class="status-icon status-pending"><i class="fas fa-hourglass-half"></i></span>Pendiente</p>
+                    {% endif %}
+                    -->
+                </div>
+            </div>
+
+            <!-- Paso 4: Pesaje Vehículo Lleno -->
+            <div class="timeline-step {{ 'pending' }}"> <!-- Cambiar a 'completed' cuando se implemente y haya datos -->
+                <div class="timeline-icon"><i class="fas fa-balance-scale-right"></i></div>
+                <div class="timeline-content">
+                    <h5 class="timeline-title">4. Pesaje Vehículo Lleno</h5>
+                    <p><span class="status-icon status-pending"><i class="fas fa-hourglass-half"></i></span>Pendiente</p>
+                    <!--
+                    {% if datos_guia.pesaje_lleno %}
+                        <p class="mb-1"><span class="status-icon status-completed"><i class="fas fa-check-circle"></i></span>Completado</p>
+                        <p class="text-muted-custom small mb-0">Peso Lleno: {{ datos_guia.pesaje_lleno.peso_kg }} kg</p>
+                        <p class="text-muted-custom small mb-0">Peso Neto Producto: {{ datos_guia.pesaje_lleno.peso_neto_kg }} kg</p>
+                        <p class="text-muted-custom small mb-0">Realizado el: {{ datos_guia.pesaje_lleno.fecha }} a las {{ datos_guia.pesaje_lleno.hora }}</p>
+                    {% else %}
+                        <p><span class="status-icon status-pending"><i class="fas fa-hourglass-half"></i></span>Pendiente</p>
+                    {% endif %}
+                    -->
+                </div>
+            </div>
+
+            <!-- Paso 5: Salida del Vehículo -->
+            <div class="timeline-step {{ 'pending' }}"> <!-- Cambiar a 'completed' cuando se implemente y haya datos -->
+                <div class="timeline-icon"><i class="fas fa-sign-out-alt"></i></div>
+                <div class="timeline-content">
+                    <h5 class="timeline-title">5. Salida del Vehículo</h5>
+                    <p><span class="status-icon status-pending"><i class="fas fa-hourglass-half"></i></span>Pendiente</p>
+                    <!--
+                    {% if datos_guia.salida_vehiculo %}
+                        <p class="mb-1"><span class="status-icon status-completed"><i class="fas fa-check-circle"></i></span>Completado</p>
+                        <p class="text-muted-custom small mb-0">Realizada el: {{ datos_guia.salida_vehiculo.fecha }} a las {{ datos_guia.salida_vehiculo.hora }}</p>
+                    {% else %}
+                        <p><span class="status-icon status-pending"><i class="fas fa-hourglass-half"></i></span>Pendiente</p>
+                    {% endif %}
+                    -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function copiarAlPortapapeles(texto) {
+            navigator.clipboard.writeText(texto).then(function() {
+                alert('URL copiada al portapapeles.');
+            }, function(err) {
+                alert('Error al copiar la URL: ' + err);
+            });
+        }
+        // La función now_timestamp() en JavaScript ya no es necesaria para la URL del QR,
+        // pero se mantiene por si se usa en otro lado o para futuras funcionalidades.
+        function now_timestamp() {
+            return new Date().getTime();
+        }
+    </script>
+</body>
+</html> 

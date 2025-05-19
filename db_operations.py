@@ -742,15 +742,21 @@ def get_pesajes_neto(filtros=None):
                     logger.warning(f"[Pesajes Neto] Error procesando fecha_hasta '{filtros.get('fecha_hasta', 'N/A')}': {e}. Saltando filtro.")
 
             # Otros filtros
-            if filtros.get('codigo_guia'):
-                conditions.append("codigo_guia LIKE ?")
-                params.append(f"%{filtros['codigo_guia']}%")
-            if filtros.get('codigo_proveedor'):
-                conditions.append("codigo_proveedor LIKE ?")
-                params.append(f"%{filtros['codigo_proveedor']}%")
-            if filtros.get('nombre_proveedor'):
-                conditions.append("nombre_proveedor LIKE ?")
-                params.append(f"%{filtros['nombre_proveedor']}%")
+            proveedor_term_filter = filtros.get('proveedor_term')
+            if proveedor_term_filter:
+                # Asumiendo que las columnas codigo_proveedor y nombre_proveedor existen en la tabla pesajes_neto
+                # o que se hace un JOIN apropiado si vienen de otra tabla.
+                # Si no existen directamente, esta condición no funcionará como se espera.
+                # Esta lógica asume que la tabla pesajes_neto tiene estas columnas o se unen adecuadamente.
+                # Si 'nombre_proveedor' no está en 'pesajes_neto', necesitarás un JOIN con 'entry_records' o similar.
+                # Por ahora, se asume que existen o se unen.
+                # Si 'nombre_proveedor' no está directamente en la tabla 'pesajes_neto',
+                # esta parte del filtro necesitará un JOIN en la consulta principal.
+                # Por simplicidad, se añade la condición, pero puede requerir ajustar el SELECT y FROM.
+                # Ejemplo simplificado asumiendo que existen en la tabla:
+                conditions.append("(codigo_proveedor LIKE ? OR nombre_proveedor LIKE ?)")
+                params.extend([f"%{proveedor_term_filter}%", f"%{proveedor_term_filter}%"])
+                logger.info(f"[Pesajes Neto] Filtro por proveedor_term: '{proveedor_term_filter}'")
             
             if conditions:
                 query += " WHERE " + " AND ".join(conditions)

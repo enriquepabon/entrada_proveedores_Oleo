@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Registro de Granel - {{ datos_granel.placa }}</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 10pt;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            width: 100%;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #ccc;
+            padding-bottom: 10px;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 16pt;
+        }
+        .header p {
+            margin: 5px 0 0 0;
+            font-size: 10pt;
+        }
+        .content {
+            display: flex;
+            flex-direction: row;
+            justify-content: space-between;
+        }
+        .info-section {
+            width: 65%;
+        }
+        .qr-section {
+            width: 30%;
+            text-align: center;
+        }
+        .qr-section img {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #eee;
+            padding: 5px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 6px;
+            text-align: left;
+            vertical-align: top;
+        }
+        th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+            width: 35%;
+        }
+        td {
+            width: 65%;
+        }
+        .section-title {
+            font-size: 12pt;
+            font-weight: bold;
+            margin-top: 15px;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 3px;
+        }
+        .footer {
+            text-align: center;
+            font-size: 8pt;
+            color: #777;
+            margin-top: 20px;
+            border-top: 1px solid #ccc;
+            padding-top: 10px;
+        }
+        /* Ensure values are not cut off */
+        td span {
+            word-break: break-word;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Registro de Entrada de Granel</h1>
+            <p>ID de Registro: <strong>{{ datos_granel.id }}</strong> - Placa: <strong>{{ datos_granel.placa }}</strong></p>
+        </div>
+
+        <div class="content">
+            <div class="info-section">
+                <div class="section-title">Información General</div>
+                <table>
+                    <tr>
+                        <th>Producto:</th>
+                        <td><span>{{ datos_granel.producto | default('N/A', true) }}</span></td>
+                    </tr>
+                    <tr>
+                        <th>Fecha Autorización (GSheet):</th>
+                        <td><span>{{ datos_granel.fecha_autorizacion | default('N/A', true) }}</span></td>
+                    </tr>
+                    <tr>
+                        <th>Trailer:</th>
+                        <td><span>{{ datos_granel.trailer | default('N/A', true) }}</span></td>
+                    </tr>
+                </table>
+
+                <div class="section-title">Detalles del Conductor y Ruta</div>
+                <table>
+                    <tr>
+                        <th>Nombre del Conductor:</th>
+                        <td><span>{{ datos_granel.nombre_conductor | default('N/A', true) }}</span></td>
+                    </tr>
+                    <tr>
+                        <th>Cédula del Conductor:</th>
+                        <td><span>{{ datos_granel.cedula_conductor | default('N/A', true) }}</span></td>
+                    </tr>
+                    <tr>
+                        <th>Origen:</th>
+                        <td><span>{{ datos_granel.origen | default('N/A', true) }}</span></td>
+                    </tr>
+                    <tr>
+                        <th>Destino:</th>
+                        <td><span>{{ datos_granel.destino | default('N/A', true) }}</span></td>
+                    </tr>
+                </table>
+
+                <div class="section-title">Información de Registro del Sistema</div>
+                <table>
+                    <tr>
+                        <th>Fecha de Registro:</th>
+                        <td><span>{{ datos_granel.fecha_registro_fmt | default('N/A', true) }}</span></td>
+                    </tr>
+                    <tr>
+                        <th>Hora de Registro:</th>
+                        <td><span>{{ datos_granel.hora_registro_fmt | default('N/A', true) }}</span></td>
+                    </tr>
+                    <tr>
+                        <th>Usuario que Registró:</th>
+                        <td><span>{{ datos_granel.usuario_registro | default('N/A', true) }}</span></td>
+                    </tr>
+                    <tr>
+                        <th>Tipo de Registro:</th>
+                        <td><span>{{ datos_granel.tipo_registro | default('N/A', true) }}</span></td>
+                    </tr>
+                    <tr>
+                        <th>Observaciones:</th>
+                        <td><span>{{ datos_granel.observaciones | default('N/A', true) }}</span></td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="qr-section">
+                <div class="section-title">Código QR</div>
+                {% if datos_granel.qr_code_path_absolute %}
+                    <img src="{{ datos_granel.qr_code_path_absolute }}" alt="Código QR">
+                    {% if datos_granel.qr_url %}
+                        <p style="font-size: 7pt; word-break: break-all; margin-top: 5px;">URL: {{ datos_granel.qr_url }}</p>
+                    {% endif %}
+                {% else %}
+                    <p>QR no disponible</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Generado el {{ "now" | format_datetime('%d/%m/%Y %H:%M:%S') }} por el Sistema de Gestión MLB Extractora.</p>
+        </div>
+    </div>
+</body>
+</html> 

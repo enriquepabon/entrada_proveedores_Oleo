@@ -177,29 +177,76 @@ CREATE TABLE IF NOT EXISTS users (
 );
 """
 
+# --- NUEVO: Esquema para la tabla de Registro de Entrada de Graneles ---
+CREATE_REGISTRO_ENTRADA_GRANELES_TABLE = """
+CREATE TABLE IF NOT EXISTS RegistroEntradaGraneles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    producto TEXT,
+    fecha_autorizacion TEXT,
+    placa TEXT,
+    trailer TEXT,
+    cedula_conductor TEXT,
+    nombre_conductor TEXT,
+    origen TEXT,
+    destino TEXT,
+    timestamp_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    tipo_registro TEXT, -- ej: 'gsheet', 'manual'
+    observaciones TEXT,
+    usuario_registro TEXT -- NUEVO CAMPO PARA GUARDAR EL USUARIO QUE REGISTRA
+);
+"""
+
+# --- NUEVO: Esquema para la tabla de Primer Pesaje de Graneles ---
+CREATE_PRIMER_PESAJE_GRANEL_TABLE = """
+CREATE TABLE IF NOT EXISTS PrimerPesajeGranel (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_registro_granel INTEGER,
+    peso_primer_kg REAL,
+    codigo_sap_granel TEXT,
+    timestamp_primer_pesaje TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    usuario_pesaje TEXT,
+    foto_soporte_path TEXT,
+    FOREIGN KEY (id_registro_granel) REFERENCES RegistroEntradaGraneles(id)
+);
+"""
+
+# --- NUEVO: Esquema para la tabla de Control de Calidad de Graneles ---
+CREATE_CONTROL_CALIDAD_GRANEL_TABLE = """
+CREATE TABLE IF NOT EXISTS ControlCalidadGranel (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_registro_granel INTEGER,
+    parametros_calidad TEXT, -- Almacenar como JSON string
+    resultado_calidad TEXT, -- ej: 'Aprobado', 'Rechazado', 'Con Observaciones'
+    observaciones_calidad TEXT,
+    timestamp_calidad TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    usuario_calidad TEXT,
+    foto_soporte_calidad_path TEXT, -- Para la foto del control de calidad
+    FOREIGN KEY (id_registro_granel) REFERENCES RegistroEntradaGraneles(id)
+);
+"""
+
 def create_tables():
     """
     Crea las tablas necesarias en la base de datos si no existen.
     Utiliza la ruta definida en la configuración de la aplicación.
     """
-    conn = None # Initialize conn
-    db_path = None # Initialize db_path
+    conn = None 
+    db_path = None 
     try:
-        # Obtener la ruta de la base de datos desde la configuración de la app
         db_path = current_app.config['TIQUETES_DB_PATH']
         logger.info(f"[create_tables] DEBUG: Intentando usar DB path: {db_path}")
 
-        # Asegurar que el directorio de la base de datos exista
         db_dir = os.path.dirname(db_path)
         if db_dir and not os.path.exists(db_dir):
             os.makedirs(db_dir)
             logger.info(f"Directorio de base de datos creado: {db_dir}")
 
-        # Conectar a la base de datos usando la ruta configurada
         conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
+        # No establecer row_factory aquí para add_column_if_not_exists, PRAGMA table_info devuelve tuplas
+        # conn.row_factory = sqlite3.Row 
 
-        # --- Paso 1: Crear todas las tablas ---
+        cursor = conn.cursor() # Cursor principal para CREATE TABLE
+
         logger.info(f"Ejecutando CREATE TABLE IF NOT EXISTS para todas las tablas en {db_path}...")
         cursor.execute(CREATE_ENTRY_RECORDS_TABLE)
         cursor.execute(CREATE_PESAJES_BRUTO_TABLE)
@@ -224,93 +271,84 @@ def create_tables():
         # -- Fin bloque específico --
         cursor.execute(CREATE_PRESUPUESTO_MENSUAL_TABLE)
         cursor.execute(CREATE_USERS_TABLE)
-        conn.commit() # Commit after creating tables
-        logger.info("CREATE TABLE statements ejecutados.")
+        cursor.execute(CREATE_REGISTRO_ENTRADA_GRANELES_TABLE)
+        cursor.execute(CREATE_PRIMER_PESAJE_GRANEL_TABLE)
+        cursor.execute(CREATE_CONTROL_CALIDAD_GRANEL_TABLE)
+        conn.commit() # Commit después de todos los CREATE TABLE
+        logger.info("CREATE TABLE statements ejecutados y commit realizado.")
 
-        # --- Paso 2: Verificar y añadir columnas faltantes ---
+        # --- Helper function to add column if not exists --- (Modificada)
+        def add_column_if_not_exists(conn_local, table_name, column_name, column_definition):
+            cursor_local = None # Inicializar cursor_local
+            try:
+                # Usar un cursor dedicado para PRAGMA y ALTER dentro de esta función
+                cursor_local = conn_local.cursor()
+                cursor_local.execute(f"PRAGMA table_info({table_name})")
+                columns = [column_info[1] for column_info in cursor_local.fetchall()] # PRAGMA devuelve tuplas
+                
+                if column_name not in columns:
+                    logger.info(f"Intentando añadir columna faltante '{column_name}' ({column_definition}) a la tabla {table_name}...")
+                    try:
+                        alter_sql = f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_definition}"
+                        cursor_local.execute(alter_sql)
+                        conn_local.commit() # Commit inmediato después de ALTER exitoso
+                        logger.info(f"Columna '{column_name}' añadida y commit realizado para {table_name}.")
+                    except sqlite3.OperationalError as e_alter:
+                        if "duplicate column name" in str(e_alter).lower():
+                             logger.warning(f"Intento de ALTER fallido: La columna '{column_name}' ya parece existir en {table_name} (SQLite dice: {e_alter})")
+                        else:
+                            logger.error(f"Error operacional SQLite añadiendo '{column_name}' a {table_name}: {e_alter}")
+                            # No hacer rollback aquí, podría interferir con otras operaciones de create_tables
+                            # Dejar que el bloque principal de create_tables maneje el rollback general si es necesario.
+                # else:
+                    # logger.debug(f"Columna '{column_name}' ya existe en {table_name}.")
+            except sqlite3.Error as e_pragma:
+                 logger.error(f"Error SQLite general verificando/añadiendo columna '{column_name}' a {table_name} (PRAGMA o chequeo): {e_pragma}")
+            finally:
+                if cursor_local:
+                    cursor_local.close()
+
         logger.info(f"Verificando/Añadiendo columnas faltantes en {db_path}...")
 
-        # --- Helper function to add column if not exists ---
-        def add_column_if_not_exists(table_name, column_name, column_definition):
-            try:
-                # Check if the column exists using PRAGMA
-                cursor.execute(f"PRAGMA table_info({table_name})")
-                columns = [column[1] for column in cursor.fetchall()]
-                if column_name not in columns:
-                    logger.info(f"Intentando añadir columna faltante '{column_name}' a la tabla {table_name}...")
-                    try:
-                        cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_definition}")
-                        logger.info(f"Columna '{column_name}' añadida exitosamente a {table_name}.")
-                        conn.commit() # Commit after successful addition
-                    except sqlite3.OperationalError as e:
-                        if "duplicate column name" in str(e).lower():
-                             logger.warning(f"La columna '{column_name}' parece ya existir en {table_name} (error ALTER: {e})")
-                        else:
-                            logger.error(f"Error operacional SQLite añadiendo '{column_name}' a {table_name}: {e}")
-                            raise e # Re-raise other operational errors
-                # else:
-                    # logger.debug(f"Columna '{column_name}' ya existe en {table_name}.") # Optional debug log
+        # --- Aplicar verificaciones/adiciones para cada tabla y columna --- 
+        # (Ejemplo para entry_records)
+        # add_column_if_not_exists(conn, 'entry_records', 'nueva_col_test', 'TEXT')
 
-            except sqlite3.Error as e:
-                 logger.error(f"Error SQLite verificando/añadiendo columna '{column_name}' a {table_name}: {e}")
-                 # Consider re-raising depending on severity: raise e
+        # --- Verificaciones para RegistroEntradaGraneles --- 
+        add_column_if_not_exists(conn, 'RegistroEntradaGraneles', 'producto', 'TEXT')
+        add_column_if_not_exists(conn, 'RegistroEntradaGraneles', 'fecha_autorizacion', 'TEXT')
+        add_column_if_not_exists(conn, 'RegistroEntradaGraneles', 'placa', 'TEXT')
+        add_column_if_not_exists(conn, 'RegistroEntradaGraneles', 'trailer', 'TEXT')
+        add_column_if_not_exists(conn, 'RegistroEntradaGraneles', 'cedula_conductor', 'TEXT')
+        add_column_if_not_exists(conn, 'RegistroEntradaGraneles', 'nombre_conductor', 'TEXT')
+        add_column_if_not_exists(conn, 'RegistroEntradaGraneles', 'origen', 'TEXT')
+        add_column_if_not_exists(conn, 'RegistroEntradaGraneles', 'destino', 'TEXT')
+        add_column_if_not_exists(conn, 'RegistroEntradaGraneles', 'timestamp_registro', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP') # El default puede que no se aplique con ALTER
+        add_column_if_not_exists(conn, 'RegistroEntradaGraneles', 'tipo_registro', 'TEXT')
+        add_column_if_not_exists(conn, 'RegistroEntradaGraneles', 'observaciones', 'TEXT')
+        add_column_if_not_exists(conn, 'RegistroEntradaGraneles', 'usuario_registro', 'TEXT') # Clave aquí
 
-        # --- Aplicar verificaciones/adiciones para cada tabla ---
+        # --- Verificaciones para PrimerPesajeGranel ---
+        add_column_if_not_exists(conn, 'PrimerPesajeGranel', 'id_registro_granel', 'INTEGER')
+        add_column_if_not_exists(conn, 'PrimerPesajeGranel', 'peso_primer_kg', 'REAL')
+        add_column_if_not_exists(conn, 'PrimerPesajeGranel', 'codigo_sap_granel', 'TEXT')
+        add_column_if_not_exists(conn, 'PrimerPesajeGranel', 'timestamp_primer_pesaje', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
+        add_column_if_not_exists(conn, 'PrimerPesajeGranel', 'usuario_pesaje', 'TEXT')
+        add_column_if_not_exists(conn, 'PrimerPesajeGranel', 'foto_soporte_path', 'TEXT')
 
-        # entry_records
-        add_column_if_not_exists('entry_records', 'fecha_creacion', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
-        add_column_if_not_exists('entry_records', 'timestamp_registro_utc', 'TEXT')
-        add_column_if_not_exists('entry_records', 'placa', 'TEXT')
-        add_column_if_not_exists('entry_records', 'transportador', 'TEXT')
-        add_column_if_not_exists('entry_records', 'codigo_transportador', 'TEXT')
-        add_column_if_not_exists('entry_records', 'cantidad_racimos', 'INTEGER')
-        add_column_if_not_exists('entry_records', 'acarreo', 'TEXT')
-        add_column_if_not_exists('entry_records', 'cargo', 'TEXT')
-        add_column_if_not_exists('entry_records', 'nota', 'TEXT')
-        add_column_if_not_exists('entry_records', 'image_filename', 'TEXT')
-        add_column_if_not_exists('entry_records', 'modified_fields', 'TEXT')
-        add_column_if_not_exists('entry_records', 'fecha_tiquete', 'TEXT')
-        add_column_if_not_exists('entry_records', 'pdf_filename', 'TEXT')
-        add_column_if_not_exists('entry_records', 'qr_filename', 'TEXT')
-
-        # pesajes_bruto
-        add_column_if_not_exists('pesajes_bruto', 'timestamp_pesaje_utc', 'TEXT')
-        add_column_if_not_exists('pesajes_bruto', 'fecha_creacion', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
-        add_column_if_not_exists('pesajes_bruto', 'codigo_guia_transporte_sap', 'TEXT')
-
-        # clasificaciones
-        add_column_if_not_exists('clasificaciones', 'timestamp_clasificacion_utc', 'TEXT')
-        add_column_if_not_exists('clasificaciones', 'fecha_creacion', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
-        add_column_if_not_exists('clasificaciones', 'total_racimos_detectados', 'INTEGER')
-        add_column_if_not_exists('clasificaciones', 'clasificacion_consolidada', 'TEXT')
-        # Añadir las columnas faltantes para el proceso automático
-        add_column_if_not_exists('clasificaciones', 'timestamp_fin_auto', 'TEXT')
-        add_column_if_not_exists('clasificaciones', 'tiempo_procesamiento_auto', 'REAL')
-
-        # pesajes_neto
-        add_column_if_not_exists('pesajes_neto', 'timestamp_pesaje_neto_utc', 'TEXT')
-        add_column_if_not_exists('pesajes_neto', 'fecha_creacion', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
-        add_column_if_not_exists('pesajes_neto', 'peso_producto', 'REAL')
-        add_column_if_not_exists('pesajes_neto', 'comentarios', 'TEXT')
-        add_column_if_not_exists('pesajes_neto', 'tipo_pesaje_neto', 'TEXT')
-        add_column_if_not_exists('pesajes_neto', 'respuesta_sap', 'TEXT')
-        add_column_if_not_exists('pesajes_neto', 'peso_bruto', 'REAL')
-
-        # salidas
-        add_column_if_not_exists('salidas', 'timestamp_salida_utc', 'TEXT')
-        add_column_if_not_exists('salidas', 'fecha_creacion', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
-        add_column_if_not_exists('salidas', 'comentarios_salida', 'TEXT')
-        add_column_if_not_exists('salidas', 'firma_salida', 'TEXT')
-
-        # fotos_clasificacion
-        add_column_if_not_exists('fotos_clasificacion', 'fecha_creacion', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
-
-        # presupuesto_mensual (ejemplo)
-        # add_column_if_not_exists('presupuesto_mensual', 'nueva_columna', 'TEXT')
-
-        # --- NUEVO: Añadir columna is_active a users si no existe ---
-        add_column_if_not_exists('users', 'is_active', 'INTEGER DEFAULT 0')
-        # --- FIN NUEVO ---
+        # --- Verificaciones para ControlCalidadGranel ---
+        add_column_if_not_exists(conn, 'ControlCalidadGranel', 'id_registro_granel', 'INTEGER')
+        add_column_if_not_exists(conn, 'ControlCalidadGranel', 'parametros_calidad', 'TEXT')
+        add_column_if_not_exists(conn, 'ControlCalidadGranel', 'resultado_calidad', 'TEXT')
+        add_column_if_not_exists(conn, 'ControlCalidadGranel', 'observaciones_calidad', 'TEXT')
+        add_column_if_not_exists(conn, 'ControlCalidadGranel', 'timestamp_calidad', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
+        add_column_if_not_exists(conn, 'ControlCalidadGranel', 'usuario_calidad', 'TEXT')
+        add_column_if_not_exists(conn, 'ControlCalidadGranel', 'foto_soporte_calidad_path', 'TEXT')
+        
+        # Commit final si hubo otras modificaciones por add_column_if_not_exists que no hicieron commit individual
+        # Aunque la versión modificada de add_column_if_not_exists hace commit individual para ALTERs.
+        # Este commit es más para asegurar cualquier otra operación pendiente antes de cerrar.
+        # conn.commit() # Comentado si add_column_if_not_exists ya hace commits individuales para ALTERs.
 
         logger.info(f"Verificación/Adición de columnas completada para: {db_path}")
         return True
@@ -318,11 +356,14 @@ def create_tables():
         logger.error("Error: 'TIQUETES_DB_PATH' no está configurada en la aplicación Flask.")
         return False
     except sqlite3.Error as e:
-        # Log específico del error durante la creación o verificación
         logger.error(f"Error durante la creación/verificación del esquema de la BD ({db_path}): {e}")
-        logger.error(traceback.format_exc()) # Log completo del traceback
+        logger.error(traceback.format_exc())
+        if conn: 
+            conn.rollback() # Rollback general si hay un error mayor en create_tables
         return False
     finally:
+        if cursor: # Cerrar cursor principal
+            cursor.close()
         if conn:
             conn.close()
 

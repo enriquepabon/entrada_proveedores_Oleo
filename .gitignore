@@ -219,3 +219,13 @@ dmypy.json
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Archivos de texto grandes y específicos
+Enrique Pabon MLB Aplicativo May 5 2025.txt
+
+# Ignorar todos los archivos de base de datos SQLite excepto si se quiere alguno específico
+*.db
+# Si necesitas versionar tiquetes.db, descomenta la siguiente línea y comenta la anterior
+# !tiquetes.db 
+*.sqlite
+*.sqlite3

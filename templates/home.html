@@ -66,14 +66,27 @@
         <div class="col-12">
             <h2 class="section-title">Iniciar Proceso</h2>
         </div>
-        <div class="col-md-12">
-            <div class="card text-center">
-                <div class="card-body">
-                    <i class="fas fa-play-circle card-icon"></i>
-                    <h3 class="card-title">Registrar Nuevo Tiquete</h3>
-                    <p class="card-text">Inicia el proceso de registro de entrada de proveedores con un nuevo tiquete.</p>
-                    <a href="{{ url_for('entrada.index') }}" class="btn btn-primary btn-lg">
-                        <i class="fas fa-arrow-right me-2"></i>Ir a Registro
+        <div class="col-md-6">
+            <div class="card text-center h-100">
+                <div class="card-body d-flex flex-column">
+                    <i class="fas fa-apple-alt card-icon"></i>
+                    <h3 class="card-title">Registro de Fruta</h3>
+                    <p class="card-text flex-grow-1">Inicia el proceso de registro de entrada de fruta.</p>
+                    <a href="{{ url_for('entrada.index') }}" class="btn btn-primary btn-lg mt-auto">
+                        <i class="fas fa-arrow-right me-2"></i>Registrar Fruta
+                    </a>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card text-center h-100">
+                <div class="card-body d-flex flex-column">
+                    <i class="fas fa-truck card-icon"></i>
+                    <h3 class="card-title">Registro de Graneles</h3>
+                    <p class="card-text flex-grow-1">Inicia el proceso de registro de entrada de vehículos de graneles.</p>
+                    <span class="badge bg-warning text-dark mb-2">En Construcción</span>
+                    <a href="{{ url_for('graneles.registro_entrada') }}" class="btn btn-success btn-lg mt-auto">
+                        <i class="fas fa-arrow-right me-2"></i>Registrar Graneles
                     </a>
                 </div>
             </div>

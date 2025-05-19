@@ -19,7 +19,8 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 handler.setFormatter(formatter)
 
 # Asegurar que el directorio actual está en el path (ya no es tan crítico con rutas absolutas, pero no hace daño)
-sys.path.insert(0, os.getcwd()) # Consider removing or changing to sys.path.insert(0, BASE_DIR) if needed
+# sys.path.insert(0, os.getcwd()) # Consider removing or changing to sys.path.insert(0, BASE_DIR) if needed
+sys.path.insert(0, BASE_DIR) # Asegura que la raíz del proyecto esté en sys.path
 
 from app import create_app
 

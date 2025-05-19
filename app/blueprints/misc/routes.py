@@ -2683,15 +2683,29 @@ def registro_fruta_mlb():
             bruto_data = datos.get('bruto') or {}
             clasif_data = datos.get('clasificacion') or {}
             neto_data = datos.get('neto') or {}
-            
-            if datos['salida']:
+            salida_data = datos.get('salida') or {} # Asegurarse que salida_data también se obtiene
+
+            # ---- LOGS DE DEPURACIÓN ----
+            if codigo_guia == 'TU_CODIGO_DE_GUIA_DE_PRUEBA': # Reemplaza con un código de guía específico
+                current_app.logger.info(f"[DEBUG CLASIF] Guía: {codigo_guia}")
+                current_app.logger.info(f"[DEBUG CLASIF] clasif_data: {clasif_data}")
+                if clasif_data:
+                    current_app.logger.info(f"[DEBUG CLASIF] clasif_data.get('clasificacion_manual'): {clasif_data.get('clasificacion_manual')}")
+                    current_app.logger.info(f"[DEBUG CLASIF] clasif_data.get('clasificacion_automatica'): {clasif_data.get('clasificacion_automatica')}")
+                    current_app.logger.info(f"[DEBUG CLASIF] Condición Manual: {bool(clasif_data.get('clasificacion_manual'))}")
+                    current_app.logger.info(f"[DEBUG CLASIF] Condición Automática: {bool(clasif_data.get('clasificacion_automatica'))}")
+                    current_app.logger.info(f"[DEBUG CLASIF] Condición Combinada: {bool(clasif_data.get('clasificacion_manual') or clasif_data.get('clasificacion_automatica'))}")
+            # ---- FIN LOGS DE DEPURACIÓN ----
+
+            # Nueva lógica de estado más explícita
+            if salida_data:
                 estado_actual = 'Cerrada'
-            elif datos['neto']:
+            elif neto_data and neto_data.get('peso_neto') is not None: # Verificar que haya un peso neto
                 estado_actual = 'Pesaje Neto Completo'
-            elif datos['clasificacion']:
+            elif clasif_data and (clasif_data.get('clasificacion_manual') or clasif_data.get('clasificacion_automatica')): # Verifica manual O automática
                 estado_actual = 'Clasificación Completa'
-            elif datos['bruto']:
-                estado_actual = 'Pesaje Bruto Completo'
+            elif bruto_data and bruto_data.get('peso_bruto') is not None: # Verificar que haya un peso bruto
+                estado_actual = 'Pesaje Bruto Completado' 
             else:
                 estado_actual = 'Entrada Registrada'
             
