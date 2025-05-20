@@ -28,12 +28,16 @@
             <form id="formRegistroGraneles" method="POST">
                 {{ csrf_token if csrf_token else '' }} 
 
-                <div class="row mb-3">
-                    <div class="col-md-6">
+                <div class="row mb-3 align-items-end">
+                    <div class="col-md-4">
+                        <label for="fecha_busqueda" class="form-label">Fecha para Búsqueda</label>
+                        <input type="date" class="form-control" id="fecha_busqueda" name="fecha_busqueda">
+                    </div>
+                    <div class="col-md-4">
                         <label for="placa" class="form-label">Placa del Vehículo</label>
                         <input type="text" class="form-control" id="placa" name="placa" required>
                     </div>
-                    <div class="col-md-6 align-self-end">
+                    <div class="col-md-4">
                         <button type="button" id="btnBuscarPlaca" class="btn btn-info">Buscar/Validar Placa</button>
                         <button type="button" id="btnTomarFoto" class="btn btn-secondary ms-2" data-bs-toggle="modal" data-bs-target="#cameraModal">Tomar Foto Placa</button> 
                     </div>
@@ -120,6 +124,7 @@
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const placaInput = document.getElementById('placa');
+        const fechaBusquedaInput = document.getElementById('fecha_busqueda');
         const btnBuscarPlaca = document.getElementById('btnBuscarPlaca');
         const btnRegistrarEntrada = document.getElementById('btnRegistrarEntrada');
         const btnLimpiarFormulario = document.getElementById('btnLimpiarFormulario');
@@ -141,6 +146,13 @@
 
         let originalGsheetData = {};
         let gsheetDataModified = false;
+
+        // Establecer la fecha actual en el campo de fecha_busqueda
+        const today = new Date();
+        const yyyy = today.getFullYear();
+        const mm = String(today.getMonth() + 1).padStart(2, '0'); // Enero es 0
+        const dd = String(today.getDate()).padStart(2, '0');
+        fechaBusquedaInput.value = `${yyyy}-${mm}-${dd}`;
 
         function showMessage(message, type = 'danger') {
             messageArea.textContent = message;
@@ -208,15 +220,30 @@
             }
         }
 
-        btnLimpiarFormulario.addEventListener('click', clearFormFields);
+        btnLimpiarFormulario.addEventListener('click', function() {
+            clearFormFields();
+            // Resetear también la fecha de búsqueda al valor por defecto (hoy)
+            fechaBusquedaInput.value = `${yyyy}-${mm}-${dd}`;
+        });
 
         btnBuscarPlaca.addEventListener('click', async function() {
             const placaValue = placaInput.value.trim();
+            let fechaValue = fechaBusquedaInput.value;
+
             if (!placaValue) {
                 showMessage('Por favor, ingrese una placa.', 'warning');
                 return;
             }
-            hideMessage();
+            
+            // Si el campo de fecha está vacío, usar la fecha actual
+            if (!fechaValue) {
+                fechaValue = `${yyyy}-${mm}-${dd}`;
+                fechaBusquedaInput.value = fechaValue; // Actualizar el input por si acaso
+                showMessage('Fecha no seleccionada, usando fecha actual para la búsqueda.', 'info');
+            } else {
+                 hideMessage();
+            }
+            
             btnBuscarPlaca.disabled = true;
             gsheetDataModified = false; // Resetear flag al buscar nueva placa
             removeGsheetFieldListeners(); // Remover listeners de búsqueda anterior
@@ -228,7 +255,7 @@
                         'Content-Type': 'application/json',
                         'X-CSRFToken': document.querySelector('input[name="csrf_token"]')?.value || ''
                     },
-                    body: JSON.stringify({ placa: placaValue })
+                    body: JSON.stringify({ placa: placaValue, fecha: fechaValue })
                 });
                 const result = await response.json();
                 if (response.ok && result.success) {

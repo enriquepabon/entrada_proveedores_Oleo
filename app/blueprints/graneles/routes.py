@@ -81,11 +81,27 @@ def buscar_placa_granel():
     try:
         data = request.json
         placa = data.get('placa', '').strip().upper()
+        fecha_yyyymmdd = data.get('fecha') # Fecha vendrá en YYYY-MM-DD desde el input date
+
         if not placa:
             return jsonify({'success': False, 'message': 'La placa no puede estar vacía.'}), 400
 
-        logger.info(f"Buscando placa en Google Sheets: {placa}")
-        resultado = find_granel_record_by_placa(placa)
+        fecha_para_busqueda_ddmmyyyy = None
+        if fecha_yyyymmdd:
+            try:
+                # Convertir YYYY-MM-DD a dd/mm/aaaa
+                dt_obj = datetime.strptime(fecha_yyyymmdd, '%Y-%m-%d')
+                fecha_para_busqueda_ddmmyyyy = dt_obj.strftime('%d/%m/%Y')
+                logger.info(f"Buscando placa: {placa}, Fecha original: {fecha_yyyymmdd}, Fecha convertida para búsqueda: {fecha_para_busqueda_ddmmyyyy}")
+            except ValueError:
+                logger.warning(f"Formato de fecha inválido recibido: {fecha_yyyymmdd}. Se buscará solo por placa.")
+                # Si la fecha no es válida, podríamos retornar error o buscar solo por placa.
+                # Por ahora, buscaremos solo por placa si la fecha es inválida.
+        else:
+            # Si no se provee fecha, buscar solo por placa (comportamiento anterior)
+            logger.info(f"Buscando placa en Google Sheets: {placa} (sin fecha especificada por el usuario).")
+
+        resultado = find_granel_record_by_placa(placa, fecha_para_busqueda_ddmmyyyy)
 
         if resultado:
             logger.info(f"Placa '{placa}' encontrada en Google Sheets: {resultado}")
