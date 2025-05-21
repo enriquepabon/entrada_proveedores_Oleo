@@ -93,6 +93,27 @@ def registrar_clasificacion():
         else:
             logger.info(f"Campo de archivo '{file_key}' no encontrado en la solicitud.")
 
+    # Procesar foto de soporte manual
+    file_key_soporte = 'foto-soporte-manual'
+    if file_key_soporte in request.files:
+        file_soporte = request.files[file_key_soporte]
+        if file_soporte and file_soporte.filename and es_archivo_imagen(file_soporte.filename):
+            try:
+                # Usar un prefijo distintivo para la foto de soporte
+                filename_soporte = secure_filename(f"soporte_manual_{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{file_soporte.filename}")
+                save_path_abs_soporte = os.path.join(guia_fotos_dir_abs, filename_soporte)
+                file_soporte.save(save_path_abs_soporte)
+                save_path_rel_soporte = os.path.join(guia_fotos_dir_rel, filename_soporte).replace('\\', '/')
+                rutas_fotos_guardadas.append(save_path_rel_soporte) # Agregar a la misma lista
+                logger.info(f"Foto soporte manual '{filename_soporte}' guardada en '{save_path_abs_soporte}' (rel: {save_path_rel_soporte})")
+            except Exception as e:
+                logger.error(f"Error guardando foto soporte manual {file_soporte.filename}: {e}")
+                flash(f'Error guardando la foto soporte manual: {e}', 'warning')
+        elif file_soporte and file_soporte.filename:
+            logger.warning(f"Archivo soporte manual '{file_soporte.filename}' omitido (no es imagen).")
+    else:
+        logger.info(f"Campo de archivo '{file_key_soporte}' no encontrado en la solicitud.")
+
 
     # Recopilar datos de clasificación manual del formulario
     clasificacion_manual = {
@@ -506,8 +527,14 @@ def iniciar_procesamiento(url_guia):
 
             # Verificar si el archivo existe antes de añadirlo
             if abs_path and os.path.exists(abs_path):
-                fotos_paths_absolutas.append(abs_path)
-                logger.debug(f"Ruta absoluta encontrada y verificada: {abs_path}")
+                # <<< INICIO DE LA MODIFICACIÓN >>>
+                # Excluir la foto de soporte manual del procesamiento de Roboflow
+                if 'soporte_manual_' not in os.path.basename(abs_path).lower():
+                    fotos_paths_absolutas.append(abs_path)
+                    logger.debug(f"Ruta absoluta (para Roboflow) encontrada y verificada: {abs_path}")
+                else:
+                    logger.info(f"Foto de soporte manual excluida de Roboflow: {abs_path}")
+                # <<< FIN DE LA MODIFICACIÓN >>>
             elif abs_path:
                 logger.warning(f"Archivo de foto no encontrado en la ruta absoluta calculada: {abs_path} (Original: {ruta_relativa_o_url}) para guía {codigo_guia}")
             else:

@@ -350,8 +350,8 @@ def ver_resultados_clasificacion(url_guia):
     # Extraer datos para la plantilla
     codigo_guia = datos_combinados.get('codigo_guia', url_guia)
     # --- CORRECCIÓN DEFINITIVA: Usar directamente datos_guia --- 
-    codigo_proveedor = datos_guia.get('codigo_proveedor', 'N/A') if datos_guia else 'N/A'
-    nombre_proveedor = datos_guia.get('nombre_proveedor', 'N/A') if datos_guia else 'N/A'
+    codigo_proveedor = datos_guia.get('codigo_proveedor', 'N/A')
+    nombre_proveedor = datos_guia.get('nombre_proveedor', 'N/A')
     # --- FIN CORRECCIÓN DEFINITIVA ---
     peso_bruto = datos_combinados.get('peso_bruto', 'N/A')
     cantidad_racimos = (datos_guia.get('cantidad_racimos') or datos_guia.get('racimos') 
@@ -364,11 +364,11 @@ def ver_resultados_clasificacion(url_guia):
     hora_clasificacion = format_datetime_filter(timestamp_clasificacion_utc_str, '%H:%M:%S') if timestamp_clasificacion_utc_str else 'N/A'
 
     # Clasificación Manual (Prioridad: DB > Guía general)
-    clasificacion_manual = datos_combinados.get('clasificacion_manual', {}) # Ya debería ser dict
+    clasificacion_manual = datos_combinados.get('clasificacion_manual', {})
 
     # Clasificación Automática (Consolidada) (Solo de DB)
     # Usar 'clasificacion_automatica' como fuente principal ahora
-    clasificacion_automatica_consolidada = datos_combinados.get('clasificacion_automatica', {}) # Ya debería ser dict
+    clasificacion_automatica_consolidada = datos_combinados.get('clasificacion_automatica', {})
     total_racimos_detectados_db = datos_combinados.get('total_racimos_detectados') # Puede ser None
 
     # Verificar si hay detalles por foto disponibles (se buscará en el JSON)
@@ -442,6 +442,24 @@ def ver_resultados_clasificacion(url_guia):
     total_racimos_a_mostrar = total_racimos_detectados_db if total_racimos_detectados_db is not None else (total_racimos_detectados_json if hay_detalles_por_foto_json else 0)
     logger.info(f"Total de racimos que se mostrará: {total_racimos_a_mostrar}")
 
+    # Identificar la foto de soporte manual entre las fotos guardadas
+    url_foto_soporte_manual = None
+    # Las rutas de las fotos están en datos_combinados.get('fotos', [])
+    # según la lógica de get_clasificacion_by_codigo_guia y store_clasificacion
+    todas_las_fotos_guardadas = datos_combinados.get('fotos', [])
+    if isinstance(todas_las_fotos_guardadas, list):
+        for foto_path_rel in todas_las_fotos_guardadas:
+            if isinstance(foto_path_rel, str) and 'soporte_manual_' in foto_path_rel:
+                try:
+                    # Asumimos que foto_path_rel ya es una ruta relativa a 'static'
+                    # ej: 'uploads/codigo_guia/soporte_manual_...'
+                    url_foto_soporte_manual = url_for('static', filename=foto_path_rel)
+                    logger.info(f"Foto soporte manual encontrada: {url_foto_soporte_manual}")
+                    break # Encontramos la foto, no necesitamos seguir buscando
+                except Exception as e:
+                    logger.error(f"Error generando URL para foto soporte manual '{foto_path_rel}': {e}")
+    else:
+        logger.warning(f"'fotos' no es una lista en datos_combinados o no existe. Tipo: {type(todas_las_fotos_guardadas)}")
 
     # Calcular porcentajes para la clasificación manual
     clasificacion_manual_con_porcentajes = {}
@@ -496,6 +514,7 @@ def ver_resultados_clasificacion(url_guia):
                            total_racimos_detectados=total_racimos_a_mostrar,
                            hay_detalles_por_foto=hay_detalles_por_foto,
                            tiene_pesaje_neto=bool(datos_combinados.get('peso_neto')),
+                           url_foto_soporte_manual=url_foto_soporte_manual,
                            is_madre=is_madre,
                            hijas_str=hijas_str
                            )

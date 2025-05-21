@@ -318,6 +318,34 @@
                     <input type="number" class="form-control" id="podridos" name="podridos" min="0" step="0.01">
                 </div>
             </div>
+
+            <!-- Soporte Foto Clasificación Manual -->
+            <div class="mt-4">
+                <h6 class="mb-3">Soporte Foto Clasificación Manual</h6>
+                <div class="card">
+                    <div class="card-body">
+                        <div class="photo-status">
+                            <div class="status-indicator status-pending" id="status-foto-soporte-manual"></div>
+                            <span id="status-text-soporte-manual">Pendiente</span>
+                        </div>
+                        <div class="mb-3">
+                            <button class="btn btn-primary mb-2 w-100" id="btn-camara-soporte-manual">
+                                <i class="fas fa-camera"></i> Abrir Cámara (Soporte Manual)
+                            </button>
+                            <video id="video-soporte-manual" class="w-100 d-none"></video>
+                            <button class="btn btn-success mb-2 w-100 d-none" id="btn-capturar-soporte-manual">
+                                <i class="fas fa-camera"></i> Capturar Foto (Soporte Manual)
+                            </button>
+                            <input type="file" class="form-control" id="foto-soporte-manual" name="foto-soporte-manual" accept="image/*">
+                            <small class="text-muted">O seleccione una imagen desde su dispositivo</small>
+                        </div>
+                        <img id="preview-soporte-manual" class="photo-preview d-none">
+                        <button class="btn btn-secondary mt-2 d-none" id="btn-retomar-soporte-manual">
+                            Retomar Foto (Soporte Manual)
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Sección de Resultados -->
@@ -355,22 +383,38 @@
         const btnGuardar = document.getElementById('btn-guardar');
         const btnCancelar = document.getElementById('btn-cancelar');
         
-        // Botones y elementos de cámara para cada foto
-        for (let i = 1; i <= 3; i++) {
-            const btnCamara = document.getElementById(`btn-camara-${i}`);
-            const btnCapturar = document.getElementById(`btn-capturar-${i}`);
-            const btnRetomar = document.getElementById(`btn-retomar-${i}`);
-            const video = document.getElementById(`video-${i}`);
-            const preview = document.getElementById(`preview-${i}`);
-            const fileInput = document.getElementById(`foto-${i}`);
-            const statusIndicator = document.getElementById(`status-foto-${i}`);
-            const statusText = document.getElementById(`status-text-${i}`);
+        // Botones y elementos de cámara para cada foto (1 a 3 y soporte manual)
+        const photoSections = [
+            { index: 1, idPrefix: '' }, // Para foto-1, foto-2, foto-3
+            { index: 2, idPrefix: '' },
+            { index: 3, idPrefix: '' },
+            { index: 'soporte-manual', idPrefix: 'soporte-manual' } // Para foto-soporte-manual
+        ];
+
+        photoSections.forEach(sectionConfig => {
+            // Si el prefijo está vacío, usamos el índice directamente para los ID.
+            // Si no, usamos el prefijo completo.
+            const idSuffix = sectionConfig.idPrefix ? sectionConfig.idPrefix : sectionConfig.index;
+
+            const btnCamara = document.getElementById(`btn-camara-${idSuffix}`);
+            const btnCapturar = document.getElementById(`btn-capturar-${idSuffix}`);
+            const btnRetomar = document.getElementById(`btn-retomar-${idSuffix}`);
+            const video = document.getElementById(`video-${idSuffix}`);
+            const preview = document.getElementById(`preview-${idSuffix}`);
+            const fileInput = document.getElementById(`foto-${idSuffix}`);
+            const statusIndicator = document.getElementById(`status-foto-${idSuffix}`);
+            const statusText = document.getElementById(`status-text-${idSuffix}`);
             
+            if (!btnCamara) { // Saltar si el elemento principal no existe (ej. si el loop es genérico)
+                // console.warn(`Elementos para sección ${idSuffix} no encontrados, omitiendo.`);
+                return;
+            }
+
             let stream = null;
             
             // Evento para abrir la cámara
             btnCamara.addEventListener('click', async (event) => {
-                event.preventDefault(); // Prevenir comportamiento por defecto (redirección)
+                event.preventDefault();
                 try {
                     stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
                     video.srcObject = stream;
@@ -379,25 +423,23 @@
                     btnCamara.classList.add('d-none');
                     video.play();
                 } catch (err) {
-                    console.error("Error al acceder a la cámara:", err);
+                    console.error(`Error al acceder a la cámara (${idSuffix}):`, err);
                     alert("No se pudo acceder a la cámara. Por favor, usa la opción de cargar archivo.");
                 }
             });
             
             // Evento para capturar foto
             btnCapturar.addEventListener('click', (event) => {
-                event.preventDefault(); // Prevenir si estuviera dentro de un form
+                event.preventDefault();
                 const canvas = document.createElement('canvas');
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                 
-                // Convertir a imagen y mostrar preview
                 preview.src = canvas.toDataURL('image/jpeg');
                 preview.classList.remove('d-none');
                 
-                // Detener cámara y ocultar elementos
                 if (stream) {
                     stream.getTracks().forEach(track => track.stop());
                 }
@@ -405,37 +447,32 @@
                 btnCapturar.classList.add('d-none');
                 btnRetomar.classList.remove('d-none');
                 
-                // Actualizar estado
                 statusIndicator.classList.remove('status-pending');
                 statusIndicator.classList.add('status-completed');
                 statusText.textContent = 'Completada';
                 
-                // Crear archivo desde el canvas
                 canvas.toBlob(blob => {
-                    const file = new File([blob], `foto-${i}.jpg`, { type: 'image/jpeg' });
+                    const file = new File([blob], `foto-${idSuffix}.jpg`, { type: 'image/jpeg' });
                     const dataTransfer = new DataTransfer();
                     dataTransfer.items.add(file);
                     fileInput.files = dataTransfer.files;
                     
-                    // Disparar evento change para que otros scripts detecten el cambio
-                    const event = new Event('change', { bubbles: true });
-                    fileInput.dispatchEvent(event);
+                    const changeEvent = new Event('change', { bubbles: true });
+                    fileInput.dispatchEvent(changeEvent);
                 }, 'image/jpeg');
             });
             
             // Evento para retomar foto
             btnRetomar.addEventListener('click', (event) => {
-                event.preventDefault(); // Prevenir si estuviera dentro de un form
+                event.preventDefault();
                 preview.classList.add('d-none');
                 btnRetomar.classList.add('d-none');
                 btnCamara.classList.remove('d-none');
                 
-                // Reiniciar estado
                 statusIndicator.classList.remove('status-completed');
                 statusIndicator.classList.add('status-pending');
                 statusText.textContent = 'Pendiente';
                 
-                // Limpiar el input de archivo
                 fileInput.value = '';
             });
             
@@ -443,20 +480,31 @@
             fileInput.addEventListener('change', (e) => {
                 if (fileInput.files && fileInput.files[0]) {
                     const reader = new FileReader();
-                    reader.onload = (e) => {
-                        preview.src = e.target.result;
+                    reader.onload = (e_reader) => {
+                        preview.src = e_reader.target.result;
                         preview.classList.remove('d-none');
                         btnRetomar.classList.remove('d-none');
+                        btnCamara.classList.add('d-none'); // Ocultar botón de abrir cámara si se carga archivo
                         
-                        // Actualizar estado
                         statusIndicator.classList.remove('status-pending');
                         statusIndicator.classList.add('status-completed');
                         statusText.textContent = 'Completada';
                     };
                     reader.readAsDataURL(fileInput.files[0]);
+                } else { // Si se deselecciona el archivo
+                    if (!video.classList.contains('d-none')) { // Si la cámara está activa, no cambiar estado
+                        // No hacer nada si la cámara es la fuente
+                    } else {
+                        preview.classList.add('d-none');
+                        btnRetomar.classList.add('d-none');
+                        btnCamara.classList.remove('d-none'); // Mostrar botón de abrir cámara
+                        statusIndicator.classList.remove('status-completed');
+                        statusIndicator.classList.add('status-pending');
+                        statusText.textContent = 'Pendiente';
+                    }
                 }
             });
-        }
+        });
         
         // Cancelar y volver a la página anterior
         btnCancelar.addEventListener('click', () => {
@@ -515,6 +563,7 @@
                     foto1: document.getElementById('foto-1').files.length > 0 ? document.getElementById('foto-1').files[0].name : 'Ninguno',
                     foto2: document.getElementById('foto-2').files.length > 0 ? document.getElementById('foto-2').files[0].name : 'Ninguno',
                     foto3: document.getElementById('foto-3').files.length > 0 ? document.getElementById('foto-3').files[0].name : 'Ninguno',
+                    foto_soporte_manual: document.getElementById('foto-soporte-manual').files.length > 0 ? document.getElementById('foto-soporte-manual').files[0].name : 'Ninguno',
                 });
 
                 // Si confirma, permitir que el evento submit continúe su curso natural

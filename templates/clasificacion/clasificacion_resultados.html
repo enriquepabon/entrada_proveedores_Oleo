@@ -635,6 +635,18 @@
                             No hay datos de clasificación manual registrados.
                         </div>
                     {% endif %}
+
+                    <!-- Mostrar Foto Soporte Manual -->
+                    {% if url_foto_soporte_manual %}
+                    <div class="mt-4">
+                        <h5 class="mb-3">Soporte Foto Clasificación Manual</h5>
+                        <div class="text-center">
+                            <img src="{{ url_foto_soporte_manual }}" alt="Foto Soporte Manual" class="img-fluid rounded shadow-sm" style="max-height: 400px; border: 1px solid #dee2e6;">
+                        </div>
+                    </div>
+                    {% endif %}
+                    <!-- Fin Mostrar Foto Soporte Manual -->
+
                 </div>
             </div>
         </div>
