@@ -2,7 +2,7 @@ from flask import render_template, request, redirect, url_for, session, jsonify,
 import os
 import logging
 import traceback
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import glob
 import sqlite3
@@ -11,6 +11,8 @@ from app.blueprints.pesaje_neto import bp
 from app.utils.common import CommonUtils as Utils
 from flask_login import login_required
 from werkzeug.utils import secure_filename
+from db_operations import get_pesajes_neto, get_validacion_diaria_sap, get_resumen_validaciones_diarias
+from db_utils import get_entry_record_by_guide_code, get_pesaje_bruto_by_codigo_guia
 
 # Configurar logging
 logger = logging.getLogger(__name__)
@@ -727,6 +729,109 @@ def convertir_timestamp_a_fecha_hora(timestamp_utc):
     utc_dt = pytz.utc.localize(utc_dt)
     bogota_dt = utc_dt.astimezone(pytz.timezone('America/Bogota'))
     return bogota_dt.strftime('%d/%m/%Y'), bogota_dt.strftime('%H:%M:%S')
+
+@bp.route('/lista_pesajes_neto', methods=['GET'])
+@login_required
+def lista_pesajes_neto():
+    try:
+        # Inicializar variables
+        fecha_desde_str = request.args.get('fecha_desde')
+        fecha_hasta_str = request.args.get('fecha_hasta')
+        proveedor_term = request.args.get('proveedor')
+        db_path = current_app.config['TIQUETES_DB_PATH']
+        
+        # Obtener datos de la base de datos
+        lista_final, totales = get_pesajes_neto(fecha_desde_str, fecha_hasta_str, proveedor_term, db_path=db_path)
+        
+        # --- FIN CÁLCULO DE TOTALES ---
+
+        current_app.logger.info(f"VERSION MODIFICADA: Renderizando plantilla con {len(lista_final)} registros de pesaje neto.")
+        
+        # --- OBTENER INFORMACIÓN DE VALIDACIÓN SAP ---
+        validacion_sap_del_dia = None
+        current_app.logger.info(f"[PESAJE_NETO_LISTA] Verificando validacion_sap_del_dia. fecha_desde_str: {fecha_desde_str}") # LOG 1
+        if fecha_desde_str: # Si hay un filtro de fecha_desde
+            try:
+                current_app.logger.info(f"[PESAJE_NETO_LISTA] Intentando obtener validacion_sap_del_dia para: {fecha_desde_str}") # LOG 2
+                validacion_sap_del_dia = get_validacion_diaria_sap(fecha_desde_str, db_path=current_app.config['TIQUETES_DB_PATH'])
+                current_app.logger.info(f"[PESAJE_NETO_LISTA] validacion_sap_del_dia obtenida: {validacion_sap_del_dia}") # LOG 3
+                
+                if validacion_sap_del_dia:
+                    current_app.logger.info(f"[PESAJE_NETO_LISTA] Validación SAP encontrada para {fecha_desde_str}: {validacion_sap_del_dia.get('mensaje_webhook')}")
+                    
+                    ruta_foto_db = validacion_sap_del_dia.get('ruta_foto_validacion')
+                    current_app.logger.info(f"[PESAJE_NETO_LISTA] Ruta foto de DB: {ruta_foto_db}") # LOG DETALLADO
+
+                    if ruta_foto_db:
+                        # Eliminar el prefijo 'static/' si existe, ya que url_for lo añade.
+                        filename_for_url_for = ruta_foto_db
+                        if filename_for_url_for.startswith('static/'):
+                            filename_for_url_for = filename_for_url_for[len('static/'):]
+                        
+                        current_app.logger.info(f"[PESAJE_NETO_LISTA] Filename para url_for: {filename_for_url_for}") # LOG DETALLADO
+                        
+                        try:
+                            validacion_sap_del_dia['ruta_foto_validacion_url'] = url_for('static', filename=filename_for_url_for)
+                            current_app.logger.info(f"[PESAJE_NETO_LISTA] URL de foto generada: {validacion_sap_del_dia['ruta_foto_validacion_url']}") # LOG DETALLADO
+                        except Exception as e_url:
+                            current_app.logger.error(f"[PESAJE_NETO_LISTA] Error al generar url_for para la imagen '{filename_for_url_for}': {e_url}")
+                            validacion_sap_del_dia['ruta_foto_validacion_url'] = None # No mostrar si hay error
+                    else:
+                        current_app.logger.info(f"[PESAJE_NETO_LISTA] No hay ruta_foto_validacion en el registro de DB para {fecha_desde_str}.")
+                        validacion_sap_del_dia['ruta_foto_validacion_url'] = None
+
+                else:
+                    current_app.logger.info(f"No se encontró validación SAP para la fecha: {fecha_desde_str}")
+            except Exception as e_val_sap:
+                current_app.logger.error(f"Error al obtener validación SAP para {fecha_desde_str}: {e_val_sap}")
+                current_app.logger.error(traceback.format_exc()) # Log completo del error
+        # --- FIN OBTENER INFORMACIÓN DE VALIDACIÓN SAP ---
+
+        # --- NUEVO: OBTENER RESUMEN DE VALIDACIONES DIARIAS ---
+        resumen_validaciones_procesado = []
+        try:
+            current_app.logger.info("[PESAJE_NETO_LISTA] === ANTES DE LLAMAR A get_resumen_validaciones_diarias ===") # LOG 4
+            print("[PESAJE_NETO_LISTA] === ANTES DE LLAMAR A get_resumen_validaciones_diarias (VIA PRINT) ===") # Mantener print por si acaso
+            
+            resumen_validaciones_raw = get_resumen_validaciones_diarias(rango_dias=60, db_path=current_app.config['TIQUETES_DB_PATH'])
+            current_app.logger.info(f"[PESAJE_NETO_LISTA] Resumen de validaciones SAP recuperado (len): {len(resumen_validaciones_raw) if resumen_validaciones_raw is not None else 'None'}. Datos: {resumen_validaciones_raw}") # LOG 5
+            
+            for i, val_item in enumerate(resumen_validaciones_raw):
+                current_app.logger.info(f"[PESAJE_NETO_LISTA] Procesando resumen item {i}: {val_item}") # LOG 6
+                ruta_foto_db_resumen = val_item.get('ruta_foto_validacion')
+                if ruta_foto_db_resumen:
+                    filename_for_url = ruta_foto_db_resumen
+                    if filename_for_url.startswith('static/'):
+                        filename_for_url = filename_for_url[len('static/'):]
+                    try:
+                        val_item['ruta_foto_validacion_url'] = url_for('static', filename=filename_for_url)
+                    except Exception as e_url_resumen:
+                        current_app.logger.error(f"[PESAJE_NETO_LISTA] Error generando URL para foto de resumen '{filename_for_url}': {e_url_resumen}")
+                        val_item['ruta_foto_validacion_url'] = None
+                else:
+                    val_item['ruta_foto_validacion_url'] = None
+                resumen_validaciones_procesado.append(val_item)
+        except Exception as e_resumen_val:
+            current_app.logger.error(f"[PESAJE_NETO_LISTA] Error al obtener/procesar resumen de validaciones SAP: {e_resumen_val}")
+        # --- FIN NUEVO --- 
+
+        return render_template(
+            'pesaje_neto/lista_pesaje_neto.html',
+            pesajes_neto=lista_final,
+            filtros={ 
+                'fecha_desde': fecha_desde_str or '', 
+                'fecha_hasta': fecha_hasta_str or '', 
+                'codigo_proveedor': proveedor_term or ''
+            },
+            totales=totales, # Pasar los totales a la plantilla
+            validacion_sap=validacion_sap_del_dia, # Pasar la info de validación del día filtrado
+            resumen_validaciones_sap=resumen_validaciones_procesado # <--- Pasar el nuevo resumen
+        )
+    except Exception as e:
+        logger.error(f"Error al mostrar lista de pesajes neto: {str(e)}")
+        logger.error(traceback.format_exc())
+        flash(f"Error al mostrar lista de pesajes neto: {str(e)}", "error")
+        return render_template('error.html', message=f"Error al mostrar lista de pesajes neto: {str(e)}")
 
 
 

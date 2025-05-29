@@ -12,57 +12,64 @@ logger = logging.getLogger(__name__)
 
 def process_plate_image(image_path, filename):
     """
-    Procesa una imagen de placa usando el webhook de Make.com.
+    Procesa una imagen de placa usando el webhook actualizado.
     """
     try:
         # Verificar que el archivo existe
         if not os.path.exists(image_path):
             logger.error(f"No se encontró el archivo de imagen: {image_path}")
-            return {
-                'success': False,
-                'message': 'No se encontró el archivo de imagen'
-            }
+            return {"result": "error", "message": "No se encontró el archivo de imagen"}
         
         # Leer el archivo de imagen
-        with open(image_path, 'rb') as image_file:
-            files = {'imagen': (filename, image_file, 'image/jpeg')}
+        with open(image_path, 'rb') as f:
+            image_data = f.read()
             
-            # Enviar la imagen al webhook
-            response = requests.post(
-                'https://hook.us2.make.com/a2yotw5cls6qxom2iacvyaoh2b9uk9ip',
-                files=files
-            )
+        # Determinar el tipo de contenido basado en la extensión del archivo
+        content_type = 'image/jpeg'
+        if filename.lower().endswith('.png'):
+            content_type = 'image/png'
+        elif filename.lower().endswith('.gif'):
+            content_type = 'image/gif'
+        elif filename.lower().endswith('.bmp'):
+            content_type = 'image/bmp'
+        
+        headers = {
+            'Content-Type': content_type,
+            'Content-Length': str(len(image_data))
+        }
+        
+        # Obtener la URL del webhook desde misc.routes
+        from app.blueprints.misc.routes import PLACA_WEBHOOK_URL
+        
+        logger.info(f"Enviando imagen de placa al webhook: {PLACA_WEBHOOK_URL}")
+        logger.info(f"Tamaño de imagen: {len(image_data)} bytes, Content-Type: {content_type}")
+        
+        response = requests.post(PLACA_WEBHOOK_URL, data=image_data, headers=headers)
+        
+        logger.info(f"Respuesta del webhook de placa - Status: {response.status_code}")
+        logger.info(f"Headers de respuesta: {dict(response.headers)}")
+        logger.info(f"Respuesta raw del webhook de placa: '{response.text}'")
+        logger.info(f"Longitud de respuesta: {len(response.text)}")
             
-            # Verificar la respuesta
-            if response.status_code == 200:
-                try:
-                    result = response.json()
-                    logger.info(f"Respuesta del webhook de placa: {result}")
-                    return {
-                        'success': True,
-                        'plate_text': result.get('placa', 'No detectada'),
-                        'confidence': result.get('confianza', 0)
-                    }
-                except json.JSONDecodeError:
-                    logger.error("Error decodificando respuesta JSON del webhook")
-                    return {
-                        'success': False,
-                        'message': 'Error procesando respuesta del servidor'
-                    }
-            else:
-                logger.error(f"Error en webhook de placa: {response.status_code} - {response.text}")
-                return {
-                    'success': False,
-                    'message': 'Error en el servidor de procesamiento'
-                }
+        if response.status_code != 200:
+            logger.error(f"Error del webhook de placa: {response.text}")
+            return {"result": "error", "message": f"Error del webhook de placa: {response.text}"}
+            
+        plate_text = response.text.strip()
+        logger.info(f"Texto de placa después de strip(): '{plate_text}' (longitud: {len(plate_text)})")
+        
+        if not plate_text:
+            logger.error("Respuesta vacía del webhook de placa")
+            logger.error(f"Respuesta original antes de strip: '{repr(response.text)}'")
+            return {"result": "error", "message": "No se pudo detectar la placa."}
+        
+        logger.info(f"Placa detectada exitosamente: '{plate_text}'")
+        return {"result": "ok", "plate_text": plate_text}
                 
     except Exception as e:
         logger.error(f"Error procesando imagen de placa: {str(e)}")
         logger.error(traceback.format_exc())
-        return {
-            'success': False,
-            'message': f'Error: {str(e)}'
-        }
+        return {"result": "error", "message": str(e)}
 
 class Image_processingUtils:
     def __init__(self, app):

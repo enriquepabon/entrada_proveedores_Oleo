@@ -81,18 +81,18 @@ DB_PATH = 'tiquetes.db'
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG) # <-- Forzar nivel DEBUG para este logger
 
-# URLs de los Webhooks en Make.com
-PROCESS_WEBHOOK_URL = "https://hook.us2.make.com/asrfb3kv3cw4o4nd43wylyasfx5yq55f"
+# URLs de los Webhooks en Make.com y N8N
+PROCESS_WEBHOOK_URL = "https://primary-production-6eccf.up.railway.app/webhook/3e9b3d0b-4cad-4382-b904-8e686ca41f59"
 REGISTER_WEBHOOK_URL = "https://hook.us2.make.com/f63o7rmsuixytjfqxq3gjljnscqhiedl"
-REVALIDATION_WEBHOOK_URL = "https://hook.us2.make.com/bok045bvtwpj89ig58nhrmx1x09yh56u"
+REVALIDATION_WEBHOOK_URL = "https://primary-production-6eccf.up.railway.app/webhook/e42ff176-7d0a-4be2-b721-ac3f92795b01"
 ADMIN_NOTIFICATION_WEBHOOK_URL = "https://hook.us2.make.com/wpeskbay7k21c3jnthu86lyo081r76fe"
-PESAJE_WEBHOOK_URL = "https://hook.us2.make.com/srw5ti54ulwuxtvocrj2lypa5pmq3im4"
+PESAJE_WEBHOOK_URL = "https://primary-production-6eccf.up.railway.app/webhook/aa5b7caf-ee3b-40b9-8778-6f1ab8cda6fc"
 AUTORIZACION_WEBHOOK_URL = "https://hook.us2.make.com/py29fwgfrehp9il45832acotytu8xr5s"
 REGISTRO_PESO_WEBHOOK_URL = "https://hook.us2.make.com/agxyjbyswl2cg1bor1wdrlfcgrll0y15"
 CLASIFICACION_WEBHOOK_URL = "https://hook.us2.make.com/clasificacion_webhook_url"
 REGISTRO_CLASIFICACION_WEBHOOK_URL = "https://hook.us2.make.com/ydtogfd3mln2ixbcuam0xrd2m9odfgna"
-PLACA_WEBHOOK_URL = "https://hook.us2.make.com/a2yotw5cls6qxom2iacvyaoh2b9uk9ip"
-REGISTRO_PESO_NETO_WEBHOOK_URL = "https://hook.us2.make.com/agxyjbyswl2cg1bor1wdrlfcgrll0y15"  # Using the same URL as REGISTRO_PESO_WEBHOOK_URL for now
+PLACA_WEBHOOK_URL = "https://primary-production-6eccf.up.railway.app/webhook/4109b3f4-db19-440e-b153-59b685ba914d"
+REGISTRO_PESO_NETO_WEBHOOK_URL = "https://primary-production-6eccf.up.railway.app/webhook-test/fef5b25d-3313-46d1-9f38-1e13f1319020"  # Using the same URL as REGISTRO_PESO_WEBHOOK_URL for now
 
 codigos_autorizacion = {}
 

@@ -268,18 +268,45 @@ def process_tiquete_image(image_path, filename):
 def process_plate_image(image_path, filename):
     try:
         with open(image_path, 'rb') as f:
-            files = {'file': (filename, f, 'multipart/form-data')}
-            response = requests.post(PLACA_WEBHOOK_URL, files=files)
+            image_data = f.read()
+            
+        # Determinar el tipo de contenido basado en la extensión del archivo
+        content_type = 'image/jpeg'
+        if filename.lower().endswith('.png'):
+            content_type = 'image/png'
+        elif filename.lower().endswith('.gif'):
+            content_type = 'image/gif'
+        elif filename.lower().endswith('.bmp'):
+            content_type = 'image/bmp'
+        
+        headers = {
+            'Content-Type': content_type,
+            'Content-Length': str(len(image_data))
+        }
+        
+        logger.info(f"Enviando imagen de placa al webhook: {PLACA_WEBHOOK_URL}")
+        logger.info(f"Tamaño de imagen: {len(image_data)} bytes, Content-Type: {content_type}")
+        
+        response = requests.post(PLACA_WEBHOOK_URL, data=image_data, headers=headers)
+        
+        logger.info(f"Respuesta del webhook de placa - Status: {response.status_code}")
+        logger.info(f"Headers de respuesta: {dict(response.headers)}")
+        logger.info(f"Respuesta raw del webhook de placa: '{response.text}'")
+        logger.info(f"Longitud de respuesta: {len(response.text)}")
             
         if response.status_code != 200:
             logger.error(f"Error del webhook de placa: {response.text}")
             return {"result": "error", "message": f"Error del webhook de placa: {response.text}"}
             
         plate_text = response.text.strip()
+        logger.info(f"Texto de placa después de strip(): '{plate_text}' (longitud: {len(plate_text)})")
+        
         if not plate_text:
             logger.error("Respuesta vacía del webhook de placa")
+            logger.error(f"Respuesta original antes de strip: '{repr(response.text)}'")
             return {"result": "error", "message": "No se pudo detectar la placa."}
         
+        logger.info(f"Placa detectada exitosamente: '{plate_text}'")
         return {"result": "ok", "plate_text": plate_text}
         
     except Exception as e:

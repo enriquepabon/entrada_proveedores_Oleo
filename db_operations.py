@@ -7,9 +7,10 @@ import sqlite3
 import os
 import logging
 import json
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from flask import current_app
 import pytz
+import traceback
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -1179,162 +1180,253 @@ def get_salida_by_codigo_guia(codigo_guia):
         if conn:
             conn.close()
 
-#-----------------------
-# Operaciones Genéricas / Proveedor
-#-----------------------
-
-def get_provider_by_code(codigo_proveedor, codigo_guia_actual=None):
+# --- Nueva Función para Validaciones Diarias SAP ---
+def guardar_actualizar_validacion_sap(fecha_aplicable_validacion, timestamp_creacion_utc, 
+                                    peso_neto_total_validado, mensaje_webhook, 
+                                    exito_webhook, ruta_foto_validacion, 
+                                    filtros_aplicados_json, db_path=None):
     """
-    Busca información de un proveedor por su código en las tablas disponibles.
-    Uses TIQUETES_DB_PATH.
-    
+    Guarda o actualiza un registro de validación diaria SAP en la base de datos.
+    Usa fecha_aplicable_validacion como clave para determinar si insertar o actualizar.
+
     Args:
-        codigo_proveedor (str): Código del proveedor a buscar
-        codigo_guia_actual (str, optional): Código de guía actual para evitar mezclar datos de diferentes entregas
-        
+        fecha_aplicable_validacion (str): Fecha de la validación (YYYY-MM-DD).
+        timestamp_creacion_utc (str): Timestamp UTC de cuándo se creó/actualizó la validación.
+        peso_neto_total_validado (float): El peso neto total que se validó.
+        mensaje_webhook (str): El mensaje recibido del webhook.
+        exito_webhook (bool): True si la validación fue exitosa, False si no.
+        ruta_foto_validacion (str): Ruta relativa a la foto de validación guardada.
+        filtros_aplicados_json (str): String JSON de los filtros que estaban aplicados.
+        db_path (str, optional): Ruta a la base de datos. Si es None, usa current_app.config.
+
     Returns:
-        dict: Datos del proveedor o None si no se encuentra
+        bool: True si la operación fue exitosa, False en caso contrario.
     """
     conn = None
+    if db_path is None:
+        try:
+            db_path = current_app.config['TIQUETES_DB_PATH']
+        except RuntimeError: # Fuera del contexto de la aplicación
+            logger.error("guardar_actualizar_validacion_sap: No se pudo obtener db_path del contexto de la app y no se proporcionó.")
+            return False
+        except KeyError:
+            logger.error("guardar_actualizar_validacion_sap: 'TIQUETES_DB_PATH' no configurado en la app.")
+            return False
+
     try:
-        db_path = current_app.config['TIQUETES_DB_PATH']
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        # Verificar si ya existe un registro para esta fecha_aplicable_validacion
+        cursor.execute("SELECT id FROM validaciones_diarias_sap WHERE fecha_validacion = ?", 
+                       (fecha_aplicable_validacion,))
+        existing_record = cursor.fetchone()
+
+        params = {
+            "fecha_validacion": fecha_aplicable_validacion,
+            "timestamp_creacion_utc": timestamp_creacion_utc,
+            "peso_neto_total_validado": peso_neto_total_validado,
+            "mensaje_webhook": mensaje_webhook,
+            "exito_webhook": 1 if exito_webhook else 0,
+            "ruta_foto_validacion": ruta_foto_validacion,
+            "filtros_aplicados_json": filtros_aplicados_json
+        }
+
+        if existing_record:
+            # Actualizar el registro existente
+            # No actualizamos fecha_validacion (es la clave) ni fecha_creacion original del registro de DB
+            update_query = """
+                UPDATE validaciones_diarias_sap 
+                SET timestamp_creacion_utc = :timestamp_creacion_utc,
+                    peso_neto_total_validado = :peso_neto_total_validado,
+                    mensaje_webhook = :mensaje_webhook,
+                    exito_webhook = :exito_webhook,
+                    ruta_foto_validacion = :ruta_foto_validacion,
+                    filtros_aplicados_json = :filtros_aplicados_json
+                WHERE fecha_validacion = :fecha_validacion
+            """
+            cursor.execute(update_query, params)
+            logger.info(f"Validación SAP actualizada para fecha: {fecha_aplicable_validacion}")
+        else:
+            # Insertar nuevo registro (incluyendo fecha_validacion)
+            # SQLite asignará CURRENT_TIMESTAMP a fecha_creacion automáticamente si la columna tiene ese DEFAULT
+            insert_query = """
+                INSERT INTO validaciones_diarias_sap (
+                    fecha_validacion, timestamp_creacion_utc, peso_neto_total_validado, 
+                    mensaje_webhook, exito_webhook, ruta_foto_validacion, filtros_aplicados_json
+                ) VALUES (
+                    :fecha_validacion, :timestamp_creacion_utc, :peso_neto_total_validado, 
+                    :mensaje_webhook, :exito_webhook, :ruta_foto_validacion, :filtros_aplicados_json
+                )
+            """
+            cursor.execute(insert_query, params)
+            logger.info(f"Nueva validación SAP guardada para fecha: {fecha_aplicable_validacion}")
+        
+        conn.commit()
+        return True
+
+    except sqlite3.Error as e:
+        logger.error(f"Error de base de datos en guardar_actualizar_validacion_sap para fecha {fecha_aplicable_validacion}: {e}")
+        if conn:
+            conn.rollback()
+        return False
+    except Exception as e_general:
+        logger.error(f"Error general en guardar_actualizar_validacion_sap para fecha {fecha_aplicable_validacion}: {e_general}")
+        if conn:
+            conn.rollback() # Asegurar rollback en caso de error no SQLite
+        return False
+    finally:
+        if conn:
+            conn.close()
+
+# --- Fin Nueva Función --- 
+
+def get_validacion_diaria_sap(fecha_validacion, db_path=None):
+    """
+    Recupera un registro de validación diaria SAP por su fecha.
+
+    Args:
+        fecha_validacion (str): Fecha de la validación a buscar (YYYY-MM-DD).
+        db_path (str, optional): Ruta a la base de datos. Si es None, usa current_app.config.
+
+    Returns:
+        dict: Datos de la validación como diccionario, o None si no se encuentra.
+    """
+    conn = None
+    if db_path is None:
+        try:
+            db_path = current_app.config['TIQUETES_DB_PATH']
+        except RuntimeError:
+            logger.error("get_validacion_diaria_sap: No se pudo obtener db_path del contexto.")
+            return None
+        except KeyError:
+            logger.error("get_validacion_diaria_sap: 'TIQUETES_DB_PATH' no configurado.")
+            return None
+    
+    try:
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row # Para acceder a las columnas por nombre
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT * FROM validaciones_diarias_sap WHERE fecha_validacion = ?", 
+                       (fecha_validacion,))
+        row = cursor.fetchone()
+
+        if row:
+            # Convertir la fila a un diccionario
+            validacion = {key: row[key] for key in row.keys()}
+            # Convertir exito_webhook (INTEGER) a Boolean
+            if 'exito_webhook' in validacion and validacion['exito_webhook'] is not None:
+                validacion['exito_webhook'] = bool(validacion['exito_webhook'])
+            return validacion
+        else:
+            return None
+
+    except sqlite3.Error as e:
+        logger.error(f"Error de BD en get_validacion_diaria_sap para fecha {fecha_validacion}: {e}")
+        return None
+    except Exception as e_general:
+        logger.error(f"Error general en get_validacion_diaria_sap para fecha {fecha_validacion}: {e_general}")
+        return None
+    finally:
+        if conn:
+            conn.close()
+
+# --- Nueva Función para obtener un resumen de validaciones diarias --- 
+def get_resumen_validaciones_diarias(rango_dias=60, db_path=None):
+    """
+    Recupera un resumen de las validaciones diarias SAP de los últimos 'rango_dias'.
+
+    Args:
+        rango_dias (int): Número de días hacia atrás para obtener el resumen.
+        db_path (str, optional): Ruta a la base de datos. Si es None, usa current_app.config.
+
+    Returns:
+        list: Lista de diccionarios, cada uno representando una validación.
+              Ej: [{'fecha_validacion': 'YYYY-MM-DD', 'exito_webhook': True, 
+                    'mensaje_webhook': '...', 'ruta_foto_validacion': '...'}]
+              Retorna lista vacía en caso de error o si no hay datos.
+    """
+    logger.info(f"[GET_RESUMEN_VALIDACIONES] === Iniciando ejecución. Rango de días: {rango_dias}. DB Path inicial: {db_path} ===")
+    conn = None
+    if db_path is None:
+        try:
+            db_path = current_app.config['TIQUETES_DB_PATH']
+            logger.info(f"[GET_RESUMEN_VALIDACIONES] Usando db_path de current_app.config: {db_path}")
+        except RuntimeError: # Fuera de contexto de aplicación
+            logger.error("[GET_RESUMEN_VALIDACIONES] Error: No se pudo obtener db_path del contexto de la aplicación (RuntimeError).")
+            logger.info("[GET_RESUMEN_VALIDACIONES] Retornando lista vacía por RuntimeError.")
+            return [] 
+        except KeyError: # TIQUETES_DB_PATH no está en config
+            logger.error("[GET_RESUMEN_VALIDACIONES] Error: 'TIQUETES_DB_PATH' no está configurada en current_app.config (KeyError).")
+            logger.info("[GET_RESUMEN_VALIDACIONES] Retornando lista vacía por KeyError.")
+            return []
+        except Exception as e_cfg: # Otra excepción obteniendo config
+            logger.error(f"[GET_RESUMEN_VALIDACIONES] Error inesperado obteniendo db_path de current_app.config: {e_cfg}")
+            logger.info("[GET_RESUMEN_VALIDACIONES] Retornando lista vacía por error de configuración inesperado.")
+            return []
+    else:
+        logger.info(f"[GET_RESUMEN_VALIDACIONES] Usando db_path proporcionado directamente: {db_path}")
+
+    try:
+        logger.info(f"[GET_RESUMEN_VALIDACIONES] Intentando conectar a la base de datos: {db_path}")
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        
-        # Verificar si existe tabla de proveedores
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='proveedores'")
-        if cursor.fetchone():
-            cursor.execute("SELECT * FROM proveedores WHERE codigo = ?", (codigo_proveedor,))
-            row = cursor.fetchone()
-            if row: 
-                proveedor = {key: row[key] for key in row.keys()}
-                proveedor['es_dato_otra_entrega'] = False
-                logger.info(f"Proveedor encontrado en tabla proveedores: {codigo_proveedor}")
-                return proveedor
-        
-        if codigo_guia_actual:
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='entry_records'")
-            if cursor.fetchone():
-                cursor.execute("SELECT * FROM entry_records WHERE codigo_guia = ? LIMIT 1", (codigo_guia_actual,))
-                row = cursor.fetchone()
-                if row:
-                    proveedor = {key: row[key] for key in row.keys()}
-                    proveedor['codigo'] = proveedor.get('codigo_proveedor')
-                    proveedor['nombre'] = proveedor.get('nombre_proveedor')
-                    proveedor['es_dato_otra_entrega'] = False
-                    logger.info(f"Proveedor encontrado en entry_records para el mismo código de guía: {codigo_guia_actual}")
-                    return proveedor
-        
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='entry_records'")
-        if cursor.fetchone():
-            cursor.execute("SELECT * FROM entry_records WHERE codigo_proveedor = ? ORDER BY fecha_creacion DESC LIMIT 1", (codigo_proveedor,))
-            row = cursor.fetchone()
-            if row:
-                proveedor = {key: row[key] for key in row.keys()}
-                proveedor['codigo'] = proveedor.get('codigo_proveedor')
-                proveedor['nombre'] = proveedor.get('nombre_proveedor')
-                proveedor['timestamp_registro_utc'] = proveedor.get('timestamp_registro_utc', '')
-                proveedor['es_dato_otra_entrega'] = bool(codigo_guia_actual and proveedor.get('codigo_guia') != codigo_guia_actual)
-                if proveedor['es_dato_otra_entrega']:
-                    logger.warning(f"Proveedor encontrado en otra entrada (código guía: {proveedor.get('codigo_guia')})")
-                logger.info(f"Proveedor encontrado en entry_records: {codigo_proveedor}")
-                return proveedor
-            
-        tables_to_check = ['pesajes_bruto', 'clasificaciones', 'pesajes_neto']
-        for table in tables_to_check:
-            cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table}'")
-            if cursor.fetchone():
-                cursor.execute(f"PRAGMA table_info({table})")
-                columns = [row[1] for row in cursor.fetchall()]
-                if 'codigo_proveedor' in columns:
-                    if codigo_guia_actual and 'codigo_guia' in columns:
-                        query = f"SELECT * FROM {table} WHERE codigo_guia = ? LIMIT 1"
-                        cursor.execute(query, (codigo_guia_actual,))
-                        row = cursor.fetchone()
-                        if row and row['codigo_proveedor'] == codigo_proveedor:
-                            proveedor = {key: row[key] for key in row.keys()}
-                            proveedor['codigo'] = proveedor.get('codigo_proveedor')
-                            proveedor['nombre'] = proveedor.get('nombre_proveedor')
-                            proveedor['es_dato_otra_entrega'] = False
-                            logger.info(f"Proveedor encontrado en {table} para el mismo código de guía: {codigo_guia_actual}")
-                            return proveedor
-                    query = f"SELECT * FROM {table} WHERE codigo_proveedor = ? LIMIT 1"
-                    cursor.execute(query, (codigo_proveedor,))
-                    row = cursor.fetchone()
-                    if row:
-                        proveedor = {key: row[key] for key in row.keys()}
-                        proveedor['codigo'] = proveedor.get('codigo_proveedor')
-                        proveedor['nombre'] = proveedor.get('nombre_proveedor')
-                        proveedor['es_dato_otra_entrega'] = bool(codigo_guia_actual and 'codigo_guia' in columns and proveedor.get('codigo_guia') != codigo_guia_actual)
-                        if proveedor['es_dato_otra_entrega']:
-                            logger.warning(f"Datos encontrados en {table} de otra entrada (código guía: {proveedor.get('codigo_guia')})")
-                        logger.info(f"Proveedor encontrado en {table}: {codigo_proveedor}")
-                        return proveedor
-        
-        logger.warning(f"No se encontró información del proveedor: {codigo_proveedor}")
-        return None
-    except KeyError:
-        logger.error("Error: 'TIQUETES_DB_PATH' no está configurada en la aplicación Flask.")
-        return None
-    except sqlite3.Error as e:
-        logger.error(f"Error buscando proveedor por código: {e}")
-        return None
-    finally:
-        if conn:
-            conn.close()
+        logger.info(f"[GET_RESUMEN_VALIDACIONES] Conexión a DB establecida. Preparando para calcular rango de fechas.")
 
-def get_entry_records_by_provider_code(codigo_proveedor):
-    conn = None
-    try:
-        # Get DB path from app config
-        db_path = current_app.config['TIQUETES_DB_PATH']
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
-        c = conn.cursor()
-        
-        # Verificar si existe la tabla
-        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='entry_records'")
-        if not c.fetchone():
-            logger.warning(f"No existe la tabla entry_records para buscar registros del proveedor {codigo_proveedor}")
-            # Cerrar conexión si se abrió
-            if conn:
-                conn.close()
+        hoy_bogota = datetime.now(BOGOTA_TZ).date()
+        fecha_inicio_rango = (hoy_bogota - timedelta(days=rango_dias)).strftime('%Y-%m-%d')
+        logger.info(f"[GET_RESUMEN_VALIDACIONES] Calculando resumen para los últimos {rango_dias} días. Fecha de inicio del rango (YYYY-MM-DD): {fecha_inicio_rango}")
+
+        query = """
+            SELECT fecha_validacion, exito_webhook, mensaje_webhook, ruta_foto_validacion, timestamp_creacion_utc
+            FROM validaciones_diarias_sap 
+            WHERE fecha_validacion >= ? 
+            ORDER BY fecha_validacion DESC
+        """
+        logger.info(f"[GET_RESUMEN_VALIDACIONES] Ejecutando query: {query} con fecha_inicio_rango: {fecha_inicio_rango}")
+        cursor.execute(query, (fecha_inicio_rango,))
+        rows = cursor.fetchall()
+        logger.info(f"[GET_RESUMEN_VALIDACIONES] Consulta ejecutada. Número de filas encontradas: {len(rows)}")
+
+        resumen_validaciones = []
+        if not rows:
+            logger.info("[GET_RESUMEN_VALIDACIONES] No se encontraron filas, retornando lista vacía.")
             return []
+
+        for i, row_data in enumerate(rows):
+            try:
+                validacion_dict = dict(row_data) # Convertir sqlite3.Row a dict
+                
+                # Asegurar que todas las claves esperadas estén presentes, incluso si son None
+                validacion_dict.setdefault('fecha_validacion', None)
+                validacion_dict.setdefault('exito_webhook', None)
+                validacion_dict.setdefault('mensaje_webhook', None)
+                validacion_dict.setdefault('ruta_foto_validacion', None)
+                validacion_dict.setdefault('timestamp_creacion_utc', None)
+
+                resumen_validaciones.append(validacion_dict)
+            except Exception as e_row:
+                logger.error(f"[GET_RESUMEN_VALIDACIONES] Error procesando fila {i}: {e_row}. Fila: {row_data}")
         
-        # Consultar registros - Sólo buscar por codigo_proveedor (el campo codigo no existe)
-        c.execute("""
-            SELECT * FROM entry_records 
-            WHERE codigo_proveedor = ?
-            ORDER BY fecha_creacion DESC, id DESC
-        """, (codigo_proveedor,))
-        
-        records = []
-        for row in c.fetchall():
-            record = {}
-            for key in row.keys():
-                record[key] = row[key]
-            # Ensure the timestamp field is included
-            record['timestamp_registro_utc'] = record.get('timestamp_registro_utc', '') 
-            records.append(record)
-        
-        # Cerrar conexión antes de retornar
-        if conn:
-             conn.close()
-        logger.info(f"Encontrados {len(records)} registros para el proveedor {codigo_proveedor}")
-        return records
-    except KeyError:
-        logger.error("Error: 'TIQUETES_DB_PATH' no está configurada en la aplicación Flask.")
-        if conn: # Asegurar cierre en caso de error
-            conn.close()
+        logger.info(f"[GET_RESUMEN_VALIDACIONES] Procesadas {len(resumen_validaciones)} validaciones. Retornando resumen.")
+        return resumen_validaciones
+    
+    except sqlite3.Error as e:
+        logger.error(f"[GET_RESUMEN_VALIDACIONES] Error SQLite: {e}")
+        logger.error(traceback.format_exc())
+        logger.info("[GET_RESUMEN_VALIDACIONES] Retornando lista vacía debido a error SQLite.")
         return []
     except Exception as e:
-        logger.error(f"Error al obtener registros para el proveedor {codigo_proveedor}: {str(e)}")
-        # logger.error(traceback.format_exc()) # Comentado para reducir verbosidad, descomentar si es necesario
-        if conn:
-             conn.close()
+        logger.error(f"[GET_RESUMEN_VALIDACIONES] Error general en get_resumen_validaciones_diarias: {e}")
+        logger.error(traceback.format_exc())
+        logger.info("[GET_RESUMEN_VALIDACIONES] Retornando lista vacía debido a error general.")
         return []
     finally:
-        # Asegurar cierre final si aún está abierta (por si acaso)
         if conn:
             conn.close()
+            logger.info("[GET_RESUMEN_VALIDACIONES] Conexión DB cerrada.")
+        logger.info("[GET_RESUMEN_VALIDACIONES] === Finalizando ejecución ===")
+
+# --- Fin Nueva Función ---

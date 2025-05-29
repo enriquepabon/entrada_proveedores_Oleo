@@ -11,6 +11,7 @@ import requests
 import re
 import random
 import string
+import mimetypes
 from werkzeug.utils import secure_filename
 from app.blueprints.pesaje import bp
 from app.utils.common import CommonUtils as Utils
@@ -21,7 +22,7 @@ from app.utils.image_processing import process_plate_image
 # Importar login_required
 from flask_login import login_required
 from db_utils import get_entry_record_by_guide_code, get_pesaje_bruto_by_codigo_guia
-from db_operations import get_pesajes_neto
+from db_operations import get_pesajes_neto, guardar_actualizar_validacion_sap, get_validacion_diaria_sap, get_resumen_validaciones_diarias
 
 # Configurar logging
 logger = logging.getLogger(__name__)
@@ -61,18 +62,45 @@ def get_bogota_datetime():
 def process_plate_image(image_path, filename):
     try:
         with open(image_path, 'rb') as f:
-            files = {'file': (filename, f, 'multipart/form-data')}
-            response = requests.post(PLACA_WEBHOOK_URL, files=files)
+            image_data = f.read()
+            
+        # Determinar el tipo de contenido basado en la extensión del archivo
+        content_type = 'image/jpeg'
+        if filename.lower().endswith('.png'):
+            content_type = 'image/png'
+        elif filename.lower().endswith('.gif'):
+            content_type = 'image/gif'
+        elif filename.lower().endswith('.bmp'):
+            content_type = 'image/bmp'
+        
+        headers = {
+            'Content-Type': content_type,
+            'Content-Length': str(len(image_data))
+        }
+        
+        logger.info(f"Enviando imagen de placa al webhook: {PLACA_WEBHOOK_URL}")
+        logger.info(f"Tamaño de imagen: {len(image_data)} bytes, Content-Type: {content_type}")
+        
+        response = requests.post(PLACA_WEBHOOK_URL, data=image_data, headers=headers)
+        
+        logger.info(f"Respuesta del webhook de placa - Status: {response.status_code}")
+        logger.info(f"Headers de respuesta: {dict(response.headers)}")
+        logger.info(f"Respuesta raw del webhook de placa: '{response.text}'")
+        logger.info(f"Longitud de respuesta: {len(response.text)}")
             
         if response.status_code != 200:
             logger.error(f"Error del webhook de placa: {response.text}")
             return {"result": "error", "message": f"Error del webhook de placa: {response.text}"}
             
         plate_text = response.text.strip()
+        logger.info(f"Texto de placa después de strip(): '{plate_text}' (longitud: {len(plate_text)})")
+        
         if not plate_text:
             logger.error("Respuesta vacía del webhook de placa")
+            logger.error(f"Respuesta original antes de strip: '{repr(response.text)}'")
             return {"result": "error", "message": "No se pudo detectar la placa."}
         
+        logger.info(f"Placa detectada exitosamente: '{plate_text}'")
         return {"result": "ok", "plate_text": plate_text}
         
     except Exception as e:
@@ -695,26 +723,38 @@ def lista_pesajes():
             filtros['tipo_pesaje'] = tipo_pesaje
         
         # Obtener datos de la base de datos
-        from db_operations import get_pesajes_bruto, get_clasificacion_by_codigo_guia
-        pesajes = get_pesajes_bruto(filtros)
+        # Asumo que get_clasificacion_by_codigo_guia está disponible o la importarás si es necesario.
+        from db_operations import get_pesajes_bruto, get_clasificacion_by_codigo_guia 
         
-        # Verificar el estado de clasificación para cada pesaje
-        for pesaje in pesajes:
+        pesajes_brutos = get_pesajes_bruto(filtros)
+        
+        pesajes_para_template = []
+
+        for pesaje_item in pesajes_brutos: # Renombrada la variable de iteración
+            # Verificar el estado de clasificación para cada pesaje
             # Si no tiene estado_actual, asumimos que está en pesaje_completado
-            if not pesaje.get('estado_actual'):
-                pesaje['estado_actual'] = 'pesaje_completado'
+            if not pesaje_item.get('estado_actual'):
+                pesaje_item['estado_actual'] = 'pesaje_completado'
                 
             # Verificar si existe una clasificación para este código de guía
-            clasificacion = get_clasificacion_by_codigo_guia(pesaje['codigo_guia'])
-            if clasificacion:
-                # Si existe clasificación, actualizar el estado
-                pesaje['estado_actual'] = 'clasificacion_completada'
-            
+            # Asegúrate de que get_clasificacion_by_codigo_guia exista y esté importada
+            try:
+                clasificacion = get_clasificacion_by_codigo_guia(pesaje_item['codigo_guia'])
+                if clasificacion:
+                    # Si existe clasificación, actualizar el estado
+                    pesaje_item['estado_actual'] = 'clasificacion_completada'
+            except NameError: # Si get_clasificacion_by_codigo_guia no está definida
+                logger.warning("La función get_clasificacion_by_codigo_guia no está definida. No se pudo verificar el estado de clasificación.")
+            except Exception as e_clasif:
+                logger.error(f"Error al obtener clasificación para {pesaje_item['codigo_guia']}: {e_clasif}")
+
             # También verificar en el sistema de archivos (legado)
             clasificaciones_dir = os.path.join(current_app.static_folder, 'clasificaciones')
-            archivo_clasificacion = os.path.join(clasificaciones_dir, f"clasificacion_{pesaje['codigo_guia']}.json")
+            archivo_clasificacion = os.path.join(clasificaciones_dir, f"clasificacion_{pesaje_item['codigo_guia']}.json")
             if os.path.exists(archivo_clasificacion):
-                pesaje['estado_actual'] = 'clasificacion_completada'
+                pesaje_item['estado_actual'] = 'clasificacion_completada'
+            
+            pesajes_para_template.append(pesaje_item)
         
         # Preparar filtros para la plantilla
         filtros_template = {
@@ -725,13 +765,177 @@ def lista_pesajes():
             'tipo_pesaje': tipo_pesaje
         }
         
-        return render_template('pesajes_lista.html', pesajes=pesajes, filtros=filtros_template)
+        return render_template('pesajes_lista.html', 
+                               pesajes=pesajes_para_template, 
+                               filtros=filtros_template
+                              )
         
     except Exception as e:
         logger.error(f"Error listando pesajes: {str(e)}")
         flash(f"Error al cargar la lista de pesajes: {str(e)}", "error")
-        return redirect(url_for('home'))
+        # Redirigir a una ruta 'home' o 'entrada.home' si existen, o un fallback.
+        # Intentar con 'entrada.home' primero como en pesajes_neto/routes.py
+        home_redirect_url = None
+        try:
+            home_redirect_url = url_for('entrada.home')
+        except: # Si 'entrada.home' no existe, intentar con 'misc.upload_file' o similar
+            try:
+                home_redirect_url = url_for('misc.upload_file') 
+            except: # Fallback muy genérico si nada más funciona
+                home_redirect_url = "/" 
+        return redirect(home_redirect_url)
 
+
+@bp.route('/validar_pesos', methods=['POST'])
+@login_required
+def validar_pesos():
+    """
+    Endpoint para validar pesos con SAP mediante un webhook.
+    Recibe una foto, el total de peso neto y los filtros aplicados.
+    Guarda el resultado de la validación.
+    """
+    # Asegurarse de que la tabla de validaciones exista (llamar a una función de db_operations o db_utils)
+    # Ejemplo: from db_operations import ensure_validaciones_sap_schema
+    # ensure_validaciones_sap_schema(current_app.config['TIQUETES_DB_PATH'])
+
+    try:
+        foto = request.files.get('foto')
+        peso_neto_total_str = request.form.get('peso_neto_total')
+        
+        # Recibir los filtros del formulario
+        fecha_desde_filtro = request.form.get('fecha_desde_filtro') # Esperado YYYY-MM-DD
+        fecha_hasta_filtro = request.form.get('fecha_hasta_filtro')
+        codigo_proveedor_filtro = request.form.get('codigo_proveedor_filtro')
+
+        if not foto or not peso_neto_total_str or not fecha_desde_filtro:
+            logger.warning("Datos incompletos en /validar_pesos: falta foto, peso_neto_total o fecha_desde_filtro.")
+            return jsonify({"exito": False, "mensaje": "Datos incompletos: Se requiere foto, total de peso neto y al menos fecha desde del filtro."}), 400
+
+        if foto.filename == '':
+            logger.warning("Nombre de archivo de foto vacío en validación de pesos.")
+            return jsonify({"exito": False, "mensaje": "Debe seleccionar un archivo de imagen."}), 400
+
+        # --- Guardar Foto de Validación Permanentemente ---
+        upload_folder_validacion = os.path.join(current_app.static_folder, 'fotos_validaciones_sap')
+        os.makedirs(upload_folder_validacion, exist_ok=True)
+        
+        # Generar un nombre de archivo único, p.ej., basado en la fecha_desde_filtro y timestamp
+        timestamp_file_part = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+        original_filename, original_extension = os.path.splitext(secure_filename(foto.filename))
+        # Usar fecha_desde_filtro para el nombre del archivo para fácil identificación
+        safe_fecha_filtro = fecha_desde_filtro.replace("-","")
+        nombre_foto_validacion = f"validacion_sap_{safe_fecha_filtro}_{timestamp_file_part}{original_extension if original_extension else '.jpg'}"
+        ruta_foto_guardada_abs = os.path.join(upload_folder_validacion, nombre_foto_validacion)
+        ruta_foto_db = os.path.join('static', 'fotos_validaciones_sap', nombre_foto_validacion).replace("\\", "/")
+
+        try:
+            foto.save(ruta_foto_guardada_abs)
+            logger.info(f"Foto de validación SAP guardada en: {ruta_foto_guardada_abs}")
+        except Exception as e_save:
+            logger.error(f"Error al guardar la foto de validación SAP: {e_save}")
+            return jsonify({"exito": False, "mensaje": "Error al guardar la imagen de validación. Intente de nuevo."}), 500
+        # --- Fin Guardar Foto ---
+
+        webhook_url = "https://primary-production-6eccf.up.railway.app/webhook/13eb6b6c-e04d-41b1-9537-f6740e08c2c5" # URL de prueba
+        # files_payload = {'foto': open(ruta_foto_guardada_abs, 'rb')} # Original
+        
+        content_type, _ = mimetypes.guess_type(ruta_foto_guardada_abs)
+        if content_type is None:
+            content_type = 'application/octet-stream' # Fallback genérico si no se puede determinar
+
+        files_payload = {
+            'foto': (nombre_foto_validacion, open(ruta_foto_guardada_abs, 'rb'), content_type)
+        }
+        data_payload = {'peso_neto_total': peso_neto_total_str}
+        
+        logger.info(f"Intentando enviar a webhook {webhook_url}: foto '{nombre_foto_validacion}' (Content-Type: {content_type}), peso_neto_total '{peso_neto_total_str}'")
+        
+        exito_webhook_final = False
+        mensaje_webhook_final = "Error desconocido al contactar el webhook."
+        status_code_final = 500
+
+        try:
+            response_webhook = requests.post(webhook_url, files=files_payload, data=data_payload, timeout=30)
+            response_webhook.raise_for_status()
+            webhook_response_text = response_webhook.text
+            logger.info(f"Respuesta del webhook de validación: {webhook_response_text}")
+
+            if "EXITOSO!" in webhook_response_text.upper():
+                exito_webhook_final = True
+                mensaje_webhook_final = "EXITOSO! SAP Y APLICATIVO SE ENCUENTRAN ALINEADOS EN LA FECHA SELECCIONADA."
+                status_code_final = 200
+            elif "NO EXITOSO!" in webhook_response_text.upper():
+                exito_webhook_final = False
+                mensaje_webhook_final = "NO EXITOSO! HAY DIFERENCIAS EN EL PESO, FAVOR REVISAR Y VOLVER A INTENTAR!"
+                status_code_final = 200 # La petición al webhook fue ok, pero la validación lógica falló
+            else:
+                exito_webhook_final = False
+                mensaje_webhook_final = f"Respuesta del servicio de validación: {webhook_response_text}"
+                status_code_final = 200
+
+        except requests.exceptions.HTTPError as http_err:
+            logger.error(f"Error HTTP del webhook de validación SAP: {http_err} - Respuesta: {http_err.response.text if http_err.response else 'N/A'}")
+            exito_webhook_final = False
+            mensaje_webhook_final = f"Error ({http_err.response.status_code}) al contactar el servicio de validación. Intente más tarde."
+            status_code_final = http_err.response.status_code if http_err.response else 500
+        except requests.exceptions.RequestException as req_err:
+            logger.error(f"Error de conexión/red con el webhook de validación SAP: {req_err}")
+            exito_webhook_final = False
+            mensaje_webhook_final = "Error de conexión con el servicio de validación. Verifique su red y reintente."
+            status_code_final = 503
+        finally:
+            # Cerrar el archivo enviado en files_payload
+            if 'foto' in files_payload and hasattr(files_payload['foto'], 'close'):
+                files_payload['foto'].close()
+            # No eliminamos la foto aquí porque ahora es permanente.
+            pass 
+
+        # --- Guardar Resultado de Validación en DB ---
+        if status_code_final < 400: # Solo guardar si la comunicación con el webhook no fue un error crítico del lado del cliente/servidor
+            try:
+                filtros_json = json.dumps({
+                    "fecha_desde": fecha_desde_filtro,
+                    "fecha_hasta": fecha_hasta_filtro, # Asegúrate que esta variable tiene valor o es None/empty string
+                    "codigo_proveedor": codigo_proveedor_filtro # Asegúrate que esta variable tiene valor o es None/empty string
+                })
+                
+                # Convertir peso_neto_total_str a float, manejando posible error
+                try:
+                    peso_neto_total_float = float(peso_neto_total_str)
+                except (ValueError, TypeError):
+                    logger.error(f"Error al convertir peso_neto_total_str '{peso_neto_total_str}' a float. Usando 0.0")
+                    peso_neto_total_float = 0.0
+
+                # Usar la función de db_operations
+                exito_db = guardar_actualizar_validacion_sap(
+                    fecha_aplicable_validacion=fecha_desde_filtro, # Usamos fecha_desde como la clave del día
+                    timestamp_creacion_utc=datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
+                    peso_neto_total_validado=peso_neto_total_float,
+                    mensaje_webhook=mensaje_webhook_final,
+                    exito_webhook=exito_webhook_final,
+                    ruta_foto_validacion=ruta_foto_db,
+                    filtros_aplicados_json=filtros_json,
+                    db_path=current_app.config['TIQUETES_DB_PATH']
+                )
+                if exito_db:
+                    logger.info(f"Resultado de validación SAP para fecha {fecha_desde_filtro} guardado/actualizado en DB.")
+                else:
+                    logger.error(f"Fallo al guardar/actualizar resultado de validación SAP para fecha {fecha_desde_filtro} en DB.")
+                    # Podrías añadir un mensaje adicional si el guardado en DB falla pero el webhook fue ok
+                    # mensaje_webhook_final += " (Advertencia: El resultado no pudo ser guardado permanentemente)"
+
+            except Exception as e_db:
+                logger.error(f"Error al guardar el resultado de la validación SAP en la base de datos: {e_db}")
+                # No fallar la respuesta al usuario por esto, pero sí loggearlo.
+                # Se podría añadir un mensaje adicional indicando que el resultado no se pudo guardar.
+                # mensaje_webhook_final += " (Advertencia: El resultado no pudo ser guardado permanentemente)" # Opcional
+
+        return jsonify({"exito": exito_webhook_final, "mensaje": mensaje_webhook_final}), status_code_final
+
+    except Exception as e:
+        logger.error(f"Error catastrófico en validar_pesos: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({"exito": False, "mensaje": "Error interno del servidor al procesar la validación."}), 500
 
 
 @bp.route('/verificar_placa_pesaje', methods=['POST'])
@@ -1084,6 +1288,62 @@ def lista_pesajes_neto():
         current_app.logger.info(f"Totales calculados: {totales}")
         # --- FIN CÁLCULO DE TOTALES ---
 
+        # --- OBTENER INFORMACIÓN DE VALIDACIÓN SAP (AÑADIDO) ---
+        validacion_sap_del_dia = None
+        if fecha_desde_str: # Si hay un filtro de fecha_desde
+            try:
+                current_app.logger.info(f"[PESAJE/lista_pesajes_neto] Intentando obtener validacion_sap_del_dia para: {fecha_desde_str}")
+                validacion_sap_del_dia = get_validacion_diaria_sap(fecha_desde_str, db_path=current_app.config['TIQUETES_DB_PATH'])
+                if validacion_sap_del_dia:
+                    current_app.logger.info(f"[PESAJE/lista_pesajes_neto] Validación SAP encontrada para {fecha_desde_str}: {validacion_sap_del_dia.get('mensaje_webhook')}")
+                    ruta_foto_db = validacion_sap_del_dia.get('ruta_foto_validacion')
+                    if ruta_foto_db:
+                        filename_for_url_for = ruta_foto_db
+                        if filename_for_url_for.startswith('static/'):
+                            filename_for_url_for = filename_for_url_for[len('static/'):]
+                        try:
+                            validacion_sap_del_dia['ruta_foto_validacion_url'] = url_for('static', filename=filename_for_url_for)
+                        except Exception as e_url:
+                            current_app.logger.error(f"[PESAJE/lista_pesajes_neto] Error al generar url_for para la imagen '{filename_for_url_for}': {e_url}")
+                            validacion_sap_del_dia['ruta_foto_validacion_url'] = None
+                    else:
+                        validacion_sap_del_dia['ruta_foto_validacion_url'] = None
+                else:
+                    current_app.logger.info(f"[PESAJE/lista_pesajes_neto] No se encontró validación SAP para la fecha: {fecha_desde_str}")
+            except Exception as e_val_sap:
+                current_app.logger.error(f"[PESAJE/lista_pesajes_neto] Error al obtener validación SAP para {fecha_desde_str}: {e_val_sap}")
+        # --- FIN OBTENER INFORMACIÓN DE VALIDACIÓN SAP ---
+
+        # --- OBTENER RESUMEN DE VALIDACIONES DIARIAS (AÑADIDO) ---
+        resumen_validaciones_procesado = []
+        try:
+            current_app.logger.info("[PESAJE/lista_pesajes_neto] Intentando obtener resumen_validaciones_diarias.")
+            resumen_validaciones_raw = get_resumen_validaciones_diarias(rango_dias=60, db_path=current_app.config['TIQUETES_DB_PATH'])
+            current_app.logger.info(f"[PESAJE/lista_pesajes_neto] Resumen de validaciones SAP recuperado (len): {len(resumen_validaciones_raw) if resumen_validaciones_raw is not None else 'None'}.")
+            
+            if resumen_validaciones_raw:
+                for val_item in resumen_validaciones_raw:
+                    ruta_foto_db_resumen = val_item.get('ruta_foto_validacion')
+                    if ruta_foto_db_resumen:
+                        filename_for_url = ruta_foto_db_resumen
+                        if filename_for_url.startswith('static/'):
+                            filename_for_url = filename_for_url[len('static/'):]
+                        try:
+                            val_item['ruta_foto_validacion_url'] = url_for('static', filename=filename_for_url)
+                        except Exception as e_url_resumen:
+                            current_app.logger.error(f"[PESAJE/lista_pesajes_neto] Error generando URL para foto de resumen '{filename_for_url}': {e_url_resumen}")
+                            val_item['ruta_foto_validacion_url'] = None
+                    else:
+                        val_item['ruta_foto_validacion_url'] = None
+                    resumen_validaciones_procesado.append(val_item)
+            else:
+                current_app.logger.info("[PESAJE/lista_pesajes_neto] resumen_validaciones_raw es None o vacío.")
+
+        except Exception as e_resumen_val:
+            current_app.logger.error(f"[PESAJE/lista_pesajes_neto] Error al obtener/procesar resumen de validaciones SAP: {e_resumen_val}")
+            current_app.logger.error(traceback.format_exc())
+        # --- FIN OBTENER RESUMEN ---
+
         current_app.logger.info(f"Renderizando plantilla con {len(lista_final)} registros de pesaje neto.")
         return render_template(
             'pesaje_neto/lista_pesaje_neto.html',
@@ -1093,7 +1353,9 @@ def lista_pesajes_neto():
                 'fecha_hasta': fecha_hasta_str or '', 
                 'codigo_proveedor': proveedor_term or ''
             },
-            totales=totales # Pasar los totales a la plantilla
+            totales=totales, # Pasar los totales a la plantilla
+            validacion_sap=validacion_sap_del_dia, # (AÑADIDO)
+            resumen_validaciones_sap=resumen_validaciones_procesado # (AÑADIDO)
         )
     except Exception as e:
         current_app.logger.error(f"Error en lista_pesajes_neto: {str(e)}", exc_info=True)
